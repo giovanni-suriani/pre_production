@@ -11,8 +11,10 @@
  *  - toda acao manda pro servidor e REDESENHA com a resposta. A tela nunca
  *    mostra um estado que o disco nao tem — durante a gravacao, um placar
  *    otimista errado e pior do que um clique perdido.
- *  - o gabarito do rank e o sorteio do impostor ficam fechados por padrao.
- *    Quem apresenta olha pra esta tela ao vivo: nada se abre sem alguem pedir.
+ *  - o gabarito do rank nasce fechado: quem apresenta olha pra esta tela ao
+ *    vivo, e o que e premio nao se abre sem alguem pedir. O sorteio do
+ *    impostor e a excecao — sortear ja mostra o resultado (dar o clique e
+ *    pedir), e a tampa serve pra esconder DEPOIS.
  */
 
 let P = null;
@@ -24,6 +26,13 @@ const ROTEIRO = qs('roteiro');
    porque TODA acao redesenha a tela inteira: sem isto, cadastrar uma palavra
    fecharia o editor na cara de quem esta cadastrando a segunda. */
 const editorAberto = {};
+
+/* Quais sorteios de impostor estao TAPADOS, por jogo. Nasce vazio: sortear ja
+   mostra quem e, sem um segundo clique — na gravacao o passo a mais era so
+   atrito. A tampa continua existindo pra esconder de novo (reflexo, alguem
+   passando atras da tela), e por isso o estado fica aqui: toda acao redesenha,
+   e sem isto a tela reabriria o sorteio que acabaram de tapar. */
+const sorteioFechado = {};
 
 const el = (id) => document.getElementById(id);
 
@@ -107,7 +116,7 @@ function desenharMesa() {
   box.innerHTML = '';
   const j = jogoAtual();
   const sort = j ? (estado(j.id).sorteio || null) : null;
-  const mostrar = sort && sort.revelado;
+  const mostrar = !!(sort && (sort.impostores || []).length);
 
   for (const x of P.participantes || []) {
     const vidas = vidasDe(x);
@@ -560,8 +569,6 @@ function painelImpostor(j) {
     <div class="sorteio"></div>
     <div class="row">
       <button class="btn primary sortear">${s ? 'Sortear de novo' : 'Sortear'}</button>
-      ${s ? `<button class="btn revelar">${s.revelado
-        ? 'Esconder quem era' : 'Revelar quem era o impostor'}</button>` : ''}
     </div>`;
 
   const q = (s2) => card.querySelector(s2);
@@ -571,16 +578,20 @@ function painelImpostor(j) {
     box.appendChild(h('div', 'holofote vazio',
       'nada sorteado ainda neste jogo — clique em Sortear.'));
   } else {
-    /* O sorteio inteiro fica tapado e abre no clique: esta tela fica virada
-       pra quem apresenta, e nem a palavra nem os nomes podem aparecer de graca
-       num reflexo. Dentro, a lista e por pessoa — "joao (impostor) — bacon" —
-       porque e assim que quem apresenta le, uma pessoa de cada vez, e nao
-       cruzando duas colunas de cabeca. */
+    /* O sorteio nasce ABERTO: quem clicou em Sortear quer ler o resultado, e
+       o clique a mais so atrapalhava com a camera ligada. A tampa continua
+       ali pra tapar depois (reflexo, alguem passando atras da tela). Dentro,
+       a lista e por pessoa — "joao (impostor) — bacon" — porque e assim que
+       quem apresenta le, uma pessoa de cada vez, e nao cruzando duas colunas
+       de cabeca. */
     const impostores = new Set(s.impostores || []);
-    const palco = h('div', 'palco fechado');
-    const tampa = h('button', 'tampa', 'o sorteio: clique para mostrar');
+    const tapado = !!sorteioFechado[j.id];
+    const palco = h('div', 'palco' + (tapado ? ' fechado' : ''));
+    const tampa = h('button', 'tampa', tapado
+      ? 'o sorteio: clique para mostrar' : 'esconder o sorteio');
     tampa.onclick = () => {
       const fechado = palco.classList.toggle('fechado');
+      sorteioFechado[j.id] = fechado;
       tampa.textContent = fechado
         ? 'o sorteio: clique para mostrar' : 'esconder o sorteio';
     };
@@ -603,17 +614,17 @@ function painelImpostor(j) {
 
     const quem = (s.impostores || []).map((id) =>
       ((P.participantes || []).find((x) => x.id === id) || {}).nome || id);
-    box.appendChild(h('p', 'note', s.revelado
-      ? `<b>impostor(es):</b> ${esc(quem.join(', ')) || '—'} (marcado na mesa acima)`
-      : `sorteado às ${esc((s.em || '').replace('T', ' '))} — `
-        + `${quem.length} impostor(es) escolhido(s), escondidos.`));
+    box.appendChild(h('p', 'note',
+      `<b>impostor(es):</b> ${esc(quem.join(', ')) || '—'} `
+      + `(marcado na mesa acima) — sorteado às `
+      + `${esc((s.em || '').replace('T', ' '))}`));
   }
 
-  q('.sortear').onclick = () => agir('sortear', { jogo: j.id });
-  if (s) {
-    q('.revelar').onclick = () => agir('revelar-impostor',
-      { jogo: j.id, revelado: !s.revelado });
-  }
+  /* Sortear abre o resultado junto: quem apresenta clica uma vez e ja le. */
+  q('.sortear').onclick = () => {
+    sorteioFechado[j.id] = false;
+    return agir('sortear', { jogo: j.id });
+  };
 
   card.appendChild(blocoCronometro(j, 'Discussão'));
   return card;

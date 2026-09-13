@@ -287,12 +287,6 @@ def api_partida_sortear(slug: str, body: dict = Body(...)):
     return _acao(partidas.sortear_impostor, slug, body.get("jogo") or "")
 
 
-@app.post("/api/partidas/{slug}/revelar-impostor")
-def api_partida_revelar_imp(slug: str, body: dict = Body(...)):
-    return _acao(partidas.revelar_impostor, slug, body.get("jogo") or "",
-                 bool(body.get("revelado", True)))
-
-
 @app.post("/api/partidas/{slug}/errada-marcar")
 def api_partida_errada_marcar(slug: str, body: dict = Body(...)):
     """A bolinha do "So resposta errada": liga/desliga aquela pergunta."""

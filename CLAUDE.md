@@ -62,9 +62,11 @@ O que decidiu o desenho de lá, e que não se adivinha lendo o código:
 - **Pergunta jogada fora vai pra `dados\lixeira_perguntas.json`** com a
   resposta e o .txt de origem — lixeira única do serviço, porque as perguntas
   vêm dos mesmos arquivos e o descarte vale pro próximo episódio.
-- **Gabarito fechado é a regra, com duas exceções de propósito**: a Discussão e
-  o Só resposta errada mostram tema e resposta abertos — ali não é prêmio, é a
-  cola de quem apresenta.
+- **Gabarito fechado é a regra, com exceções de propósito**: a Discussão e o Só
+  resposta errada mostram tema e resposta abertos — ali não é prêmio, é a cola
+  de quem apresenta. E o **sorteio do impostor abre junto com o clique em
+  Sortear**: o clique já foi o pedido, e exigir um segundo pra destapar era só
+  atrito com a câmera ligada. A tampa esconde depois, não antes.
 - **`/static` vai com `Cache-Control: no-store`.** Sem isso o Chrome guarda o
   `.js` e a correção não aparece na tela — e você depura um conserto que já
   estava certo.

@@ -282,10 +282,9 @@ with sync_playwright() as pw:
 
     pg.click(".sortear")
     pg.wait_for_selector(".palco")
-    assert pg.locator(".palco.fechado").count() == 1, "o sorteio nasceu aberto"
-    assert not pg.locator(".palco .par").is_visible()
-    pg.click(".palco .tampa")
-    pg.wait_for_timeout(400)
+    # sortear ja mostra: o clique a mais pra descobrir quem era virava atrito
+    assert pg.locator(".palco.fechado").count() == 0, "o sorteio nasceu tapado"
+    assert pg.locator(".palco .par").is_visible()
     par = pg.inner_text(".palco .par")
     assert ("pamonha" in par and "quentao" in par)         or ("pe de moleque" in par and "canjica" in par)         or "cural" in par, par
     # a lista por pessoa: cada nome com o que ele ouviu, e so um impostor
@@ -294,12 +293,22 @@ with sync_playwright() as pw:
     foto("07_ingame_sorteio.png")
     imp = pg.inner_text(".cadaum .pessoa.imp")
     assert "(impostor)" in imp, imp
-    pg.click(".revelar")
-    pg.wait_for_timeout(600)
+    # a mesa ja marca quem e, sem segundo botao: o sorteio e a revelacao
+    assert pg.locator(".btn.revelar").count() == 0, "o botao Revelar voltou"
     assert pg.locator(".jogador.impostor").count() == 1
     foto("04_ingame_impostor.png")
-    print(f"[ok] sorteio tapado, abre no clique ({par.strip()}); "
-          f"cada um com a sua palavra; revelar marca a mesa")
+    # a tampa continua existindo pra esconder DEPOIS, e o tapado sobrevive
+    # ao redesenho que toda acao faz
+    pg.click(".palco .tampa")
+    pg.wait_for_timeout(300)
+    assert not pg.locator(".palco .par").is_visible()
+    pg.click(".mais")
+    pg.wait_for_timeout(600)
+    assert pg.locator(".palco.fechado").count() == 1, "o redesenho reabriu"
+    pg.click(".palco .tampa")
+    pg.wait_for_timeout(300)
+    print(f"[ok] sortear ja mostra ({par.strip()}) e marca a mesa, sem botao "
+          f"de revelar; a tampa esconde depois e sobrevive ao redesenho")
 
     # --- editar o conteudo DENTRO do in-game, sem sair da tela
     # impostor: acrescentar uma dupla sem sair do in-game

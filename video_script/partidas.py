@@ -297,19 +297,9 @@ def sortear_impostor(slug: str, jid: str) -> dict:
     est = _estado_jogo(p, jid)
     est["sorteio"] = {
         "principal": principal, "impostor": do_impostor,
-        "impostores": impostores, "em": store.agora(), "revelado": False,
+        "impostores": impostores, "em": store.agora(),
     }
     est.setdefault("log", []).append({"acao": "sortear", "em": store.agora()})
-    return _salvar(slug, p)
-
-
-def revelar_impostor(slug: str, jid: str, revelado: bool = True) -> dict:
-    """Abre (ou fecha) na tela quem era o impostor — o fim da rodada."""
-    p = _abrir(slug)
-    est = _estado_jogo(p, jid)
-    if not est.get("sorteio"):
-        raise ValueError("nada sorteado ainda neste jogo")
-    est["sorteio"]["revelado"] = bool(revelado)
     return _salvar(slug, p)
 
 

@@ -170,10 +170,13 @@ sorteios, com os mesmos jogadores.
   posicao). As duas revelam a linha e mostram no holofote. Chute que nao esta
   na lista vira "chute perdido" no log — material de edicao.
 - **Impostor**: sorteia a dupla da rodada e quem sao os impostores, **e grava** —
-  reabrir a tela no meio da rodada nao re-sorteia nem perde quem era. Fica
-  tapado ate clicar, e dentro da tampa a lista e **por pessoa** (`He (impostor)
-  — canjica`), porque e assim que quem apresenta le: um nome de cada vez, sem
-  cruzar duas colunas de cabeca.
+  reabrir a tela no meio da rodada nao re-sorteia nem perde quem era. O
+  resultado **abre junto com o sorteio**: quem clicou em Sortear quer ler quem
+  e, e o clique a mais pra destapar so atrapalhava com a camera ligada. A tampa
+  continua ali pra esconder DEPOIS (reflexo, alguem passando atras da tela), e
+  o que foi tapado sobrevive ao redesenho. A lista e **por pessoa** (`He
+  (impostor) — canjica`), porque e assim que quem apresenta le: um nome de cada
+  vez, sem cruzar duas colunas de cabeca.
   A discussao comeca em **2min** e anda de 30 em 30 (`+30s`/`-30s`); o ajuste
   fica gravado, o relogio correndo nao.
 - **So resposta errada**: as tres colunas, a bolinha e o `Embaralhar`. Nada
@@ -199,8 +202,10 @@ sorteios, com os mesmos jogadores.
 > placar otimista errado e pior do que um clique perdido. Um F5 no meio do
 > episodio volta na mesma partida, com o placar.
 
-O **gabarito nasce fechado** e so abre no que foi revelado; vale pro sorteio do
-impostor tambem. Nao e enfeite: quem apresenta olha pra esta tela ao vivo.
+O **gabarito do rank nasce fechado** e so abre no que foi revelado. Nao e
+enfeite: quem apresenta olha pra esta tela ao vivo. O sorteio do impostor nao
+segue essa regra — la o clique em Sortear ja e o pedido, e o resultado abre com
+ele.
 
 ## Arquivos
 
@@ -224,11 +229,12 @@ video_script\
 ## Detalhes que custam tempo se esquecidos
 
 - **O gabarito nao pode vazar na tela.** Linha fechada mostra `— — —`, nunca o
-  nome; o sorteio do impostor fica tapado ate o clique. Se mexer no
-  `painelRank`/`painelImpostor`, mantenha isso. As duas excecoes sao de
-  proposito, e nao esquecimento: a Discussao e o So resposta errada nao tem
-  gabarito nenhum a guardar — o tema e a resposta certa sao a cola de quem
-  apresenta.
+  nome. Se mexer no `painelRank`, mantenha isso. As excecoes sao de proposito,
+  e nao esquecimento: a Discussao e o So resposta errada nao tem gabarito
+  nenhum a guardar (o tema e a resposta certa sao a cola de quem apresenta), e
+  o **sorteio do impostor abre junto com o clique em Sortear** — ali o clique
+  JA foi o pedido; exigir um segundo era atrito no meio da gravacao. A tampa
+  do `painelImpostor` esconde depois, nao antes.
 - **Salvar o roteiro nao toca nos `attrs` dos jogos**, so no nome/ordem/duracao
   /notas. Quem edita atributo e a aba Jogos. Sem essa separacao, salvar o
   roteiro com um jogo aberto noutra aba apagaria a lista importada la.

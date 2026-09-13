@@ -165,11 +165,9 @@ so = p["estado"][ji]["sorteio"]
 assert (so["principal"], so["impostor"]) in (("pamonha", "quentao"),
                                              ("pipoca", "")), so
 assert len(so["impostores"]) == 1
-assert so["revelado"] is False
-ok(f"sorteio: todos='{so['principal']}' impostor='{so['impostor']}', escondido")
-p = req("POST", f"/api/partidas/{slug}/revelar-impostor", {"jogo": ji, "revelado": True})
-assert p["estado"][ji]["sorteio"]["revelado"] is True
-ok("revelar impostor")
+# nao ha mais etapa de revelar: sortear ja e a revelacao
+assert "revelado" not in so, so
+ok(f"sorteio: todos='{so['principal']}' impostor='{so['impostor']}'")
 
 cfg = req("GET", "/api/tipos")
 assert cfg["tempo_padrao"] == 120 and cfg["tempo_passo"] == 30
