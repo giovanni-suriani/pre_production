@@ -36,7 +36,9 @@ fala. O botao **Jogar roteiro** vai direto pra partida — os jogadores ja estao
 definidos aqui, entao nao ha mais tela de montar mesa.
 
 Um jogo sem conteudo cadastrado aparece marcado (`sem lista importada`, `sem
-palavras`, `sem quadros`): a aba 3 e a hora errada de descobrir isso.
+palavras`, `sem quadros`) — melhor ver aqui do que na hora de jogar. Mas se
+acontecer na hora de jogar, da pra resolver la mesmo: a aba 3 edita o conteudo
+sem sair da tela (ver abaixo).
 
 ### 2. Jogos (`/jogo?roteiro=X&jogo=Y`)
 Edita **um** jogo do roteiro — e onde o clique no jogo cai. Nao tem lista: a
@@ -103,6 +105,12 @@ sorteios, com os mesmos jogadores.
   fica gravado, o relogio correndo nao.
 - Trocar a mesa no roteiro no meio do episodio **nao** zera o placar: quem
   chega entra com vidas cheias, quem ja gastou continua gastado.
+- **Conteudo do jogo, editavel aqui mesmo** (`Editar aqui`, no fim do painel):
+  acrescentar/tirar palavra, subir/tirar quadro, acrescentar posicao no rank ou
+  substituir a lista inteira — sem ir pra aba Jogos e voltar. Descobrir que
+  faltou cadastrar alguma coisa e coisa que acontece com a camera ligada, e a
+  resposta certa e digitar ali, nao navegar. Grava no jogo do roteiro na hora.
+  Num jogo ainda vazio o editor ja abre sozinho.
 
 > **Toda acao grava em disco na hora e redesenha com a resposta do servidor.**
 > A tela nunca mostra um estado que o disco nao tem: durante a gravacao, um
@@ -148,6 +156,14 @@ video_script\
   isso o upload copia o arquivo pra `dados\quadros\` e devolve uma URL. Um
   cadastro antigo com caminho de disco continua no JSON e o in-game explica o
   que fazer, em vez de mostrar um retangulo quebrado.
+- **Estado de tela que precisa sobreviver ao redesenho** vai numa variavel de
+  modulo, nao no DOM. Toda acao do in-game redesenha a tela inteira: sem o
+  `editorAberto`, cadastrar uma palavra fecharia o editor na cara de quem esta
+  cadastrando a segunda.
+- **Substituir a lista do rank no meio da partida** nao mexe no que ja foi
+  revelado: os revelados sao guardados por numero de posicao. Mudar a ordem da
+  lista faz aquele numero apontar pra outro nome — o editor avisa, e "Zerar
+  este jogo" resolve.
 - **Contraste** — a regra desta casa, na regua do `turnsEditor`: cada nivel de
   caixa sobe de superficie (`--void` < `--slab` < `--riser` < `--lift`), e
   dentro de uma caixa o texto e `--chalk` ou `--ash`, nunca `--smoke`. Nada

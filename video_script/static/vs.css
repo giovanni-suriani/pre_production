@@ -272,6 +272,12 @@ body.page .chip:hover { border-color: var(--chalk); color: var(--chalk); }
 body.page .chip.on {
   background: var(--lift); border-color: var(--chalk); color: var(--chalk);
 }
+/* o × de tirar, dentro do chip (lista de palavras do impostor) */
+body.page .chip .x {
+  color: var(--ash); font-weight: 400; margin-left: 7px; cursor: pointer;
+  padding: 0 2px;
+}
+body.page .chip .x:hover { color: var(--alert); }
 
 /* item de lista (roteiros): sobe de superficie como o resto */
 body.page .item { background: var(--riser); border-color: var(--edge-2); }

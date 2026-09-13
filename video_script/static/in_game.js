@@ -20,6 +20,11 @@ let CFG = { tempo_padrao: 120, tempo_passo: 30 };
 let cron = null;                 // { timer, fim } do cronometro
 const ROTEIRO = qs('roteiro');
 
+/* Quais editores de conteudo estao abertos, por jogo. Fica fora do desenho
+   porque TODA acao redesenha a tela inteira: sem isto, cadastrar uma palavra
+   fecharia o editor na cara de quem esta cadastrando a segunda. */
+const editorAberto = {};
+
 const el = (id) => document.getElementById(id);
 
 async function inicio() {
@@ -148,16 +153,280 @@ function desenharJogo() {
   if (j.notas) cab.appendChild(h('p', 'note', esc(j.notas)));
   box.appendChild(cab);
 
-  if (j.pendencia) {
-    const av = h('section', 'card');
-    av.innerHTML = `<p class="note"><b>${esc(j.pendencia)}</b> — abra o jogo na
-      <a href="/jogo?roteiro=${encodeURIComponent(ROTEIRO)}&jogo=${encodeURIComponent(j.id)}">aba Jogos</a>
-      e cadastre o conteúdo.</p>`;
-    box.appendChild(av);
-    return;
-  }
+  /* Jogo sem conteudo NAO manda mais ninguem pra outra aba: o editor abre
+     sozinho aqui embaixo. Descobrir que faltou cadastrar a palavra e coisa que
+     acontece com a camera ligada, e a resposta certa e digitar ali mesmo, nao
+     navegar pra outra tela e voltar. */
+  if (j.pendencia && editorAberto[j.id] === undefined) editorAberto[j.id] = true;
+
   if (j.in_game === 'rank') box.appendChild(painelRank(j));
   else if (j.in_game === 'impostor') box.appendChild(painelImpostor(j));
+  box.appendChild(editorConteudo(j));
+}
+
+// ------------------------------------------------- editar o jogo aqui mesmo
+
+/* Grava os atributos no jogo do roteiro e recarrega a partida.
+   Os `attrs` vivem no roteiro, mas a partida os carrega junto — entao depois
+   de salvar e preciso reler a partida, ou a tela continuaria desenhando a
+   lista velha. */
+async function salvarAttrs(j, attrs) {
+  await apiPut(`/api/roteiros/${ROTEIRO}/jogos/${j.id}`,
+    { attrs: { ...(j.attrs || {}), ...attrs } });
+  P = await api(`/api/partidas/${ROTEIRO}`);
+  desenhar();
+}
+
+function editorConteudo(j) {
+  const card = h('section', 'card');
+  const aberto = !!editorAberto[j.id];
+  const quantos = j.in_game === 'rank'
+    ? `${((j.attrs || {}).lista || []).length} posições`
+    : j.tipo === 'impostor_palavra'
+      ? `${((j.attrs || {}).palavras || []).length} palavras`
+      : `${((j.attrs || {}).quadros || []).length} quadros`;
+
+  const cab = h('header');
+  cab.innerHTML = `
+    <h2>Conteúdo do jogo</h2>
+    <p class="sub">${esc(quantos)}${j.pendencia
+      ? ' · <b>cadastre antes de jogar</b>' : ''}</p>`;
+  card.appendChild(cab);
+
+  const alterna = h('button', 'btn', aberto ? 'Fechar o editor' : 'Editar aqui');
+  alterna.onclick = () => {
+    editorAberto[j.id] = !aberto;
+    desenharJogo();
+  };
+  const linha = h('div', 'row');
+  linha.appendChild(alterna);
+  linha.appendChild(h('span', 'note',
+    'muda o jogo no roteiro — sem sair desta tela'));
+  card.appendChild(linha);
+
+  if (!aberto) return card;
+  if (j.in_game === 'rank') card.appendChild(editorLista(j));
+  else if (j.tipo === 'impostor_palavra') card.appendChild(editorPalavras(j));
+  else if (j.tipo === 'impostor_quadro') card.appendChild(editorQuadros(j));
+  return card;
+}
+
+// --- adivinha rank: a lista, abaixo do gabarito
+
+function editorLista(j) {
+  const lista = (j.attrs || {}).lista || [];
+  const wrap = h('div', 'pilha');
+  wrap.innerHTML = `
+    <div class="field">
+      <span class="lbl">Acrescentar uma posição</span>
+      <div class="row">
+        <input type="number" class="aPos" min="1" placeholder="#"
+               style="width:80px" value="${lista.length + 1}">
+        <input type="text" class="aNome" placeholder="nome" style="flex:2;min-width:160px">
+        <input type="text" class="aExtra" placeholder="valor (opcional)" style="flex:1;min-width:120px">
+        <button class="btn primary aAdd">Acrescentar</button>
+      </div>
+      <p class="note">entra fechada no gabarito, como as outras</p>
+    </div>
+
+    <div class="field">
+      <span class="lbl">A lista inteira</span>
+      <textarea class="tudo" rows="8"></textarea>
+      <p class="note">uma por linha: <code>1. Nome — valor</code>. Aplicar
+        <b>substitui</b> a lista. As posições já reveladas continuam reveladas
+        pelo número — se você mudar a ordem, confira o gabarito, ou use
+        "Zerar este jogo" acima.</p>
+      <div class="row">
+        <input type="file" class="arq" accept=".txt,.csv,.md,text/plain" hidden>
+        <button class="btn impArq">Importar lista_do_rank.txt</button>
+        <span class="spacer"></span>
+        <button class="btn primary aplicar">Aplicar a lista</button>
+      </div>
+    </div>`;
+
+  const q = (s) => wrap.querySelector(s);
+  const texto = lista.map((i) =>
+    `${i.pos}. ${i.nome}${i.extra ? ` — ${i.extra}` : ''}`).join('\n');
+  q('.tudo').value = texto;
+
+  q('.aAdd').onclick = async () => {
+    const nome = q('.aNome').value.trim();
+    if (!nome) { toast('digite o nome', true); return; }
+    const pos = parseInt(q('.aPos').value || '0', 10) || (lista.length + 1);
+    if (lista.some((i) => Number(i.pos) === pos)) {
+      toast(`a posição ${pos} já existe na lista`, true);
+      return;
+    }
+    const novo = [...lista, { pos, nome, extra: q('.aExtra').value.trim() }]
+      .sort((a, b) => a.pos - b.pos);
+    try { await salvarAttrs(j, { lista: novo }); toast(`#${pos} ${nome} entrou`); }
+    catch (e) { oops(e); }
+  };
+
+  q('.aplicar').onclick = async () => aplicarTexto(q('.tudo').value, 'a lista');
+  q('.impArq').onclick = () => q('.arq').click();
+  q('.arq').onchange = () => {
+    const f = q('.arq').files[0];
+    if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => { q('.tudo').value = fr.result; aplicarTexto(fr.result, f.name); };
+    fr.readAsText(f, 'utf-8');
+  };
+
+  async function aplicarTexto(txt, de) {
+    try {
+      const r = await apiPost('/api/parse-lista-rank', { texto: txt });
+      if (!r.n) { toast('não achei nenhuma linha útil nesse texto', true); return; }
+      await salvarAttrs(j, { lista: r.itens });
+      toast(`${r.n} posições lidas de ${de}`);
+    } catch (e) { oops(e); }
+  }
+  return wrap;
+}
+
+// --- impostor na palavra
+
+function editorPalavras(j) {
+  const palavras = (j.attrs || {}).palavras || [];
+  const wrap = h('div', 'pilha');
+  wrap.innerHTML = `
+    <div class="field">
+      <span class="lbl">Acrescentar palavra</span>
+      <div class="row">
+        <input type="text" class="nova" placeholder="uma palavra — Enter para acrescentar" style="flex:1">
+        <button class="btn primary add">Acrescentar</button>
+      </div>
+    </div>
+    <div class="field">
+      <span class="lbl">Palavras (${palavras.length})</span>
+      <div class="chips lista"></div>
+      <p class="note hidden vazio">nenhuma ainda — o sorteio precisa de pelo
+        menos uma (duas, para o impostor receber outra).</p>
+    </div>
+    <div class="field">
+      <span class="lbl">…ou colar várias de uma vez</span>
+      <textarea class="tudo" rows="5" placeholder="uma por linha"></textarea>
+      <div class="row end">
+        <button class="btn aplicar">Substituir a lista</button>
+      </div>
+    </div>`;
+
+  const q = (s) => wrap.querySelector(s);
+  q('.tudo').value = palavras.join('\n');
+  q('.vazio').classList.toggle('hidden', palavras.length > 0);
+
+  const grade = q('.lista');
+  palavras.forEach((p, i) => {
+    const c = h('span', 'chip', `${esc(p)} <b class="x">×</b>`);
+    c.querySelector('.x').onclick = async () => {
+      try {
+        await salvarAttrs(j, { palavras: palavras.filter((_, k) => k !== i) });
+      } catch (e) { oops(e); }
+    };
+    grade.appendChild(c);
+  });
+
+  const acrescentar = async () => {
+    const v = q('.nova').value.trim();
+    if (!v) return;
+    if (palavras.some((p) => p.toLowerCase() === v.toLowerCase())) {
+      toast(`"${v}" já está na lista`, true);
+      return;
+    }
+    try { await salvarAttrs(j, { palavras: [...palavras, v] }); toast(`"${v}" entrou`); }
+    catch (e) { oops(e); }
+  };
+  q('.add').onclick = acrescentar;
+  q('.nova').onkeydown = (e) => { if (e.key === 'Enter') acrescentar(); };
+
+  q('.aplicar').onclick = async () => {
+    const novas = q('.tudo').value.split('\n').map((s) => s.trim()).filter(Boolean);
+    try { await salvarAttrs(j, { palavras: novas }); toast(`${novas.length} palavras`); }
+    catch (e) { oops(e); }
+  };
+  return wrap;
+}
+
+// --- impostor no quadro
+
+function editorQuadros(j) {
+  const lista = (j.attrs || {}).quadros || [];
+  const wrap = h('div', 'pilha');
+  wrap.innerHTML = `
+    <div class="field">
+      <span class="lbl">Acrescentar quadros</span>
+      <div class="row">
+        <input type="file" class="arq" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" multiple hidden>
+        <button class="btn primary pick">Escolher imagens…</button>
+        <span class="note">${lista.length} ${lista.length === 1 ? 'quadro' : 'quadros'}</span>
+      </div>
+      <p class="note">a imagem é copiada para dentro do projeto e passa a ser
+        servida pelo próprio serviço — por isso ela aparece aqui na tela.</p>
+    </div>
+    <div class="galeria"></div>
+    <div class="field">
+      <span class="lbl">…ou colar o endereço de uma imagem na web</span>
+      <div class="row">
+        <input type="text" class="url" placeholder="https://…" style="flex:1">
+        <button class="btn addUrl">Adicionar</button>
+      </div>
+    </div>`;
+
+  const q = (s) => wrap.querySelector(s);
+  const galeria = q('.galeria');
+  lista.forEach((src, i) => {
+    const c = h('div', 'thumb');
+    c.innerHTML = `
+      <img src="${esc(src)}" alt="quadro ${i + 1}">
+      <div class="cap">${esc(src.startsWith('/quadros/') ? src.split('/').pop() : src)}</div>
+      <button class="x" title="tirar este quadro">×</button>`;
+    c.querySelector('img').onerror = () => {
+      c.classList.add('quebrado');
+      c.querySelector('img').replaceWith(h('div', 'ruim', 'não carrega'));
+    };
+    c.querySelector('.x').onclick = async () => {
+      try {
+        await salvarAttrs(j, { quadros: lista.filter((_, k) => k !== i) });
+        toast('quadro removido');
+      } catch (e) { oops(e); }
+    };
+    galeria.appendChild(c);
+  });
+
+  q('.pick').onclick = () => q('.arq').click();
+  q('.arq').onchange = async () => {
+    const arquivos = [...q('.arq').files];
+    q('.arq').value = '';
+    let n = 0;
+    for (const f of arquivos) {
+      try {
+        const conteudo = await new Promise((ok, fail) => {
+          const fr = new FileReader();
+          fr.onload = () => ok(fr.result);
+          fr.onerror = () => fail(new Error(`não consegui ler ${f.name}`));
+          fr.readAsDataURL(f);
+        });
+        await apiPost(`/api/roteiros/${ROTEIRO}/jogos/${j.id}/quadros`,
+          { nome: f.name, conteudo });
+        n++;
+      } catch (e) { oops(e); }
+    }
+    // uma releitura só no fim: redesenhar a cada arquivo faria a tela piscar
+    P = await api(`/api/partidas/${ROTEIRO}`);
+    desenhar();
+    if (n) toast(`${n} quadro(s) acrescentado(s)`);
+  };
+
+  q('.addUrl').onclick = async () => {
+    const url = q('.url').value.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      toast('cole um endereço começando com http:// ou https://', true);
+      return;
+    }
+    try { await salvarAttrs(j, { quadros: [...lista, url] }); }
+    catch (e) { oops(e); }
+  };
+  return wrap;
 }
 
 // ----------------------------------------------------------- painel do rank
@@ -245,6 +514,10 @@ function painelRank(j) {
       linha.appendChild(x);
     }
     grade.appendChild(linha);
+  }
+  if (!lista.length) {
+    grade.appendChild(h('p', 'note',
+      'sem gabarito ainda — cadastre a lista no editor logo abaixo.'));
   }
 
   if ((est.erros || []).length) {

@@ -245,6 +245,65 @@ with sync_playwright() as pw:
     foto("07_ingame_quadro.png")
     print(f"[ok] in-game: quadro tapado, abre no clique e RENDERIZA ({src})")
 
+    # --- editar o conteudo DENTRO do in-game, sem sair da tela
+    # impostor na palavra
+    pg.locator("#gChips .chip").nth(1).click()
+    pg.wait_for_timeout(600)
+    pg.click("button:has-text('Editar aqui')")
+    pg.wait_for_selector(".nova")
+    pg.fill(".nova", "bolo de fuba")
+    pg.press(".nova", "Enter")
+    pg.wait_for_timeout(900)
+    assert "bolo de fuba" in pg.inner_text(".lista"), pg.inner_text(".lista")
+    assert "/jogo?" not in pg.url, "saiu da tela do in-game"
+    jid_pal = disco["jogos"][1]["id"]
+    attrs = req("GET", f"/api/roteiros/{slug}/jogos/{jid_pal}")["attrs"]
+    assert "bolo de fuba" in attrs["palavras"], attrs["palavras"]
+    print("[ok] in-game: palavra acrescentada ali mesmo, gravada no roteiro")
+
+    pg.locator(".lista .chip .x").first.click()
+    pg.wait_for_timeout(900)
+    assert len(req("GET", f"/api/roteiros/{slug}/jogos/{jid_pal}")["attrs"]["palavras"]) == 4
+    print("[ok] in-game: tirar palavra ali mesmo")
+
+    # o editor continua aberto depois de salvar (o redesenho nao pode fecha-lo)
+    assert pg.locator(".nova").count() == 1, "o editor fechou sozinho ao salvar"
+    print("[ok] in-game: o editor segue aberto entre um cadastro e outro")
+
+    # adivinha rank: acrescentar posicao abaixo do gabarito
+    pg.locator("#gChips .chip").first.click()
+    pg.wait_for_timeout(600)
+    pg.click("button:has-text('Editar aqui')")
+    pg.wait_for_selector(".aNome")
+    pg.fill(".aPos", "7")
+    pg.fill(".aNome", "Joao Felix")
+    pg.fill(".aExtra", "126 mi")
+    pg.click(".aAdd")
+    pg.wait_for_timeout(900)
+    assert pg.locator(".linha").count() == 7
+    assert pg.locator(".linha.fechada").count() == 5      # entrou fechada
+    jid_rank = disco["jogos"][0]["id"]
+    lst = req("GET", f"/api/roteiros/{slug}/jogos/{jid_rank}")["attrs"]["lista"]
+    assert lst[-1]["nome"] == "Joao Felix" and lst[-1]["extra"] == "126 mi"
+    print("[ok] in-game: posicao acrescentada abaixo do gabarito, entra fechada")
+
+    # impostor no quadro: subir imagem ali mesmo
+    pg.locator("#gChips .chip").nth(2).click()
+    pg.wait_for_timeout(600)
+    pg.click("button:has-text('Editar aqui')")
+    pg.wait_for_selector(".galeria")
+    pg.set_input_files(".arq", [
+        {"name": "noite estrelada.png", "mimeType": "image/png",
+         "buffer": png((40, 40, 120))},
+    ])
+    pg.wait_for_timeout(1200)
+    jid_q = disco["jogos"][2]["id"]
+    assert len(req("GET", f"/api/roteiros/{slug}/jogos/{jid_q}")["attrs"]["quadros"]) == 3
+    assert pg.locator(".galeria .thumb").count() == 3
+    assert pg.locator(".galeria .thumb.quebrado").count() == 0
+    foto("08_ingame_editor.png")
+    print("[ok] in-game: quadro subido ali mesmo, miniatura carrega")
+
     # F5 mantem o placar
     pg.reload()
     pg.wait_for_selector("#jogo:not(.hidden)", timeout=8000)
@@ -259,7 +318,8 @@ with sync_playwright() as pw:
     pg.locator("#gChips .chip").first.click()
     pg.wait_for_timeout(700)
     assert pg.locator(".linha.aberta").count() == 0
-    assert pg.locator(".linha.fechada").count() == 6
+    # 7 e nao 6: o editor inline acrescentou o Joao Felix la em cima
+    assert pg.locator(".linha.fechada").count() == 7
     foto("05_ingame_reiniciado.png")
     print("[ok] Reiniciar: vidas cheias e gabarito todo fechado de novo")
 
