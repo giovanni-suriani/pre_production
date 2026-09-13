@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>video_script — In-game</title>
+<link rel="stylesheet" href="/shared/shell.css">
+<link rel="stylesheet" href="/static/vs.css">
+</head>
+<body class="page">
+
+<main>
+  <div>
+    <h1>In-game</h1>
+    <p class="sub">A mesa jogando. Cada clique grava em disco na hora: um F5 no
+      meio da gravação não custa o placar.</p>
+  </div>
+
+  <!-- sem roteiro na URL não há o que jogar -->
+  <section class="card hidden" id="semRoteiro">
+    <header><h2>Nenhum roteiro escolhido</h2></header>
+    <p class="note">Abra um roteiro e clique em <b>Jogar roteiro</b> — é de lá
+      que vêm os jogadores e os jogos.</p>
+    <div class="list" id="rLista"></div>
+  </section>
+
+  <section class="card hidden" id="jogo">
+    <header>
+      <h2 id="gNome">—</h2>
+      <p class="sub" id="gSub"></p>
+    </header>
+
+    <div class="mesa" id="gMesa"></div>
+
+    <div class="field">
+      <span class="lbl">Jogos do roteiro</span>
+      <div class="chips" id="gChips"></div>
+    </div>
+
+    <div id="gItem" class="pilha"></div>
+
+    <div class="row end">
+      <a class="btn" id="gVoltar" href="/roteiro">← roteiro</a>
+      <button class="btn danger" id="gReiniciar">Reiniciar partida</button>
+    </div>
+  </section>
+</main>
+
+<script src="/static/vs.js"></script>
+<script src="/static/in_game.js"></script>
+</body>
+</html>

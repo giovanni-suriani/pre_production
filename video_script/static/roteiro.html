@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>video_script — Roteiro</title>
+<link rel="stylesheet" href="/shared/shell.css">
+<link rel="stylesheet" href="/static/vs.css">
+</head>
+<body class="page">
+
+<main>
+  <div>
+    <h1>Roteiro</h1>
+    <p class="sub">O episódio inteiro: quem joga, com quantas vidas, e quais
+      jogos vão acontecer — nesta ordem. Clicar num jogo abre ele para editar.</p>
+  </div>
+
+  <div class="cols">
+    <div class="pilha">
+      <section class="card">
+        <header><h2>Novo roteiro</h2></header>
+        <div class="field">
+          <span class="lbl">Nome</span>
+          <input id="nName" type="text" placeholder="ex.: Ep 04 — rank e impostor">
+        </div>
+        <div class="row end"><button class="btn primary" id="nCriar">Criar</button></div>
+      </section>
+
+      <section class="card">
+        <header>
+          <h2>Roteiros</h2>
+          <p class="sub" id="cont"></p>
+        </header>
+        <div class="list" id="lista"></div>
+        <p class="note hidden" id="vazio">Nenhum roteiro ainda.</p>
+      </section>
+    </div>
+
+    <div class="pilha hidden" id="det">
+      <!-- --------------------------------------------------------- cabeçalho -->
+      <section class="card">
+        <header>
+          <h2 id="dNome">—</h2>
+          <p class="sub" id="dResumo"></p>
+        </header>
+        <div class="field">
+          <span class="lbl">Nome do roteiro</span>
+          <input id="dNomeIn" type="text">
+        </div>
+        <div class="field">
+          <span class="lbl">Notas gerais do episódio</span>
+          <textarea id="dNotas" rows="2" placeholder="abertura, deixa do patrocínio, o que não pode faltar..."></textarea>
+        </div>
+      </section>
+
+      <!-- ----------------------------------------------------- participantes -->
+      <section class="card">
+        <header>
+          <h2>Quem joga</h2>
+          <p class="sub" id="dPartSub"></p>
+        </header>
+        <div class="list" id="dParts"></div>
+        <p class="note hidden" id="dPartVazio">Ninguém na mesa ainda — sem isso
+          não dá para jogar o roteiro.</p>
+        <div class="row">
+          <button class="btn small" id="dAddPart">+ participante</button>
+          <span class="spacer"></span>
+          <span class="note">as vidas valem para o episódio todo; trocar aqui no
+            meio da partida não zera o placar</span>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------------ jogos -->
+      <section class="card">
+        <header>
+          <h2>Jogos do roteiro</h2>
+          <p class="sub" id="dJogosSub"></p>
+        </header>
+        <div class="list" id="dJogos"></div>
+        <p class="note hidden" id="dJogosVazio">Nenhum jogo ainda. Escolha um
+          tipo abaixo.</p>
+        <div class="field">
+          <span class="lbl">Adicionar jogo</span>
+          <div class="chips" id="dTipos"></div>
+        </div>
+      </section>
+
+      <div class="row end">
+        <button class="btn danger" id="dApagar">Apagar roteiro</button>
+        <button class="btn primary" id="dSalvar">Salvar</button>
+        <button class="btn" id="dJogar">Jogar roteiro →</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="/static/vs.js"></script>
+<script src="/static/roteiro.js"></script>
+</body>
+</html>

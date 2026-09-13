@@ -33,7 +33,16 @@ editor_proxy\SpeakerSwitch.py            a cópia ATIVA (a de scriptsPrimarios e
 docs\arquitetura-giautosubs.md           o desenho do fluxo GiAutoSubs em duas fases
 tests\                                    testes que dirigem o app de verdade
 projects\<proj>\cortes\<corte>\           os dados (manifesto, não banco)
+video_script\                             OUTRO serviço (8741) → video_script\README.md
 ```
+
+`video_script\` não faz parte deste app: é um serviço separado, na porta 8741,
+para o episódio que **ainda vai ser gravado** — cadastrar os jogos (adivinha
+rank em lista, impostor no quadro, impostor na palavra), montar o roteiro e
+conduzir a mesa ao vivo (vidas, buscas por nome/rank, sorteio do impostor).
+Compartilha só o venv (`.venv`) e o `src\static\shell.css` (montado lá em
+`/shared`, sem cópia) — subir ou derrubar um não afeta o outro. Sobe com
+`video_script\run.bat`.
 
 ## Invariantes — quebrar qualquer uma produz erro silencioso
 

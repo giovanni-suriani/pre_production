@@ -1,0 +1,232 @@
+/* video_script — so o que o shell.css do pre_production nao tem.
+ *
+ * A base (cores, .card, .btn, .field, .nav, .toast) vem de /shared/shell.css.
+ *
+ * LEGIBILIDADE — a regra desta casa, na regua do turnsEditor:
+ *
+ *   1. Cada nivel de caixa SOBE de superficie, nunca repete a de baixo.
+ *      fundo(--void) < cartao(--slab) < caixa interna(--riser+) < destaque
+ *      (--lift). Aninhar --slab dentro de --slab, como estava antes, produz
+ *      dois retangulos sem borda visivel um do outro.
+ *   2. Dentro de uma caixa, o texto e --chalk (16:1) ou --ash (8.9:1).
+ *      --smoke (4.9:1) so em numero de apoio, nunca em conteudo. O turnsEditor
+ *      escreve a coluna de texto em --ash 13px — e essa a referencia.
+ *   3. Nada abaixo de 12.5px carrega informacao. Rotulo tambem nao encolhe:
+ *      esta tela e lida de longe, com a camera ligada.
+ */
+
+/* ------------------------------------------------------- base legivel */
+
+/* Os rotulos do shell sao 10.5px em caixa alta e --smoke. Funciona no editor
+   de turnos, onde sao 4; aqui sao dezenas, e viram um chiado cinza. */
+body.page .lbl {
+  font-size: 12.5px; letter-spacing: .04em;
+  color: var(--ash); text-transform: none;
+  font-family: var(--f-ui);
+}
+body.page .note { color: var(--ash); font-size: 12.5px; }
+body.page .sub { color: var(--ash); }
+body.page .card > header .sub { font-size: 12.5px; }
+
+body.page textarea {
+  background: var(--riser);
+  border: 1px solid var(--edge-2);
+  color: var(--chalk);
+  border-radius: var(--r-s);
+  padding: 9px 11px;
+  font-family: inherit; font-size: 13.5px;
+  width: 100%; resize: vertical; outline: none;
+  transition: border-color .12s;
+}
+body.page textarea:hover { border-color: #4a515d; }
+body.page textarea:focus-visible {
+  border-color: var(--chalk);
+  outline: 2px solid rgba(236, 238, 241, .35); outline-offset: 1px;
+}
+body.page input[type=text], body.page input[type=number], body.page select {
+  font-size: 13.5px;
+}
+
+body.page .cols { display: grid; grid-template-columns: 330px 1fr; gap: var(--gap); align-items: start; }
+body.page .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
+@media (max-width: 1150px) {
+  body.page .cols, body.page .cols2 { grid-template-columns: 1fr; }
+}
+
+body.page .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+body.page .row.end { justify-content: flex-end; }
+body.page .spacer { flex: 1; }
+body.page .pilha { display: grid; gap: var(--gap); }
+
+/* ----------------------------------------------------------- coracoes */
+
+/* A vida e um <button> e nao um <div>: quem apresenta as vezes joga com o
+   teclado (Tab + Espaco) porque o mouse esta fora de quadro. */
+body.page .vidas { display: flex; gap: 6px; align-items: center; }
+body.page .vida {
+  width: 45px; height: 45px; padding: 0;      /* 1.5x do tamanho antigo */
+  background: none; border: 0; cursor: pointer;
+  image-rendering: pixelated;                 /* os PNG sao pixel art */
+  background-size: contain; background-repeat: no-repeat;
+  background-position: center;
+  transition: transform .1s;
+}
+body.page .vida.mini { width: 26px; height: 26px; }
+body.page .vida:hover { transform: scale(1.14); }
+body.page .vida:active { transform: scale(.92); }
+body.page .vida.viva { background-image: url('/static/img/heart_full.png'); }
+body.page .vida.morta {
+  background-image: url('/static/img/heart_gray.png');
+  opacity: .45; filter: grayscale(1);
+}
+body.page .vida:focus-visible {
+  outline: 2px solid rgba(236, 238, 241, .6); outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* a mesa: um cartao por participante */
+body.page .mesa {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+}
+body.page .jogador {
+  background: var(--riser); border: 1px solid var(--edge-2);
+  border-radius: var(--r); padding: 14px 16px;
+  display: grid; gap: 10px;
+}
+body.page .jogador.fora { opacity: .5; }
+body.page .jogador.fora .nome { text-decoration: line-through; }
+body.page .jogador.impostor { border-color: var(--alert); background: var(--lift); }
+body.page .jogador .nome {
+  font-size: 17px; font-family: var(--f-display); color: var(--chalk);
+}
+
+/* --------------------------------------------------------- rank na tela */
+
+body.page .rank {
+  display: grid; gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  max-height: 56vh; overflow-y: auto; padding-right: 4px;
+}
+body.page .linha {
+  display: flex; gap: 9px; align-items: center;
+  background: var(--riser); border: 1px solid var(--edge-2);
+  border-radius: var(--r-s); padding: 9px 12px; font-size: 13.5px;
+}
+body.page .linha .pos {
+  font-family: var(--f-mono); color: var(--ash);
+  text-align: right; font-size: 12.5px; width: 30px; flex: 0 0 auto;
+}
+body.page .linha .nome {
+  flex: 1 1 auto; min-width: 0; color: var(--chalk);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Fechada mostra a posicao e um traco — nunca o nome. Esta tela fica atras da
+   camera, mas quem apresenta olha pra ela ao vivo: o gabarito nao pode
+   aparecer por acidente. */
+body.page .linha.fechada { background: var(--slab); }
+body.page .linha.fechada .nome { color: var(--smoke); letter-spacing: 3px; }
+body.page .linha.aberta { border-color: var(--check); background: var(--lift); }
+body.page .linha .extra {
+  color: var(--ash); font-size: 12.5px; font-family: var(--f-mono);
+}
+body.page .linha .quem { color: var(--check); font-size: 12px; }
+body.page .linha .x {
+  background: none; border: 0; color: var(--ash); cursor: pointer;
+  font-size: 15px; padding: 0 4px; line-height: 1;
+}
+body.page .linha .x:hover { color: var(--alert); }
+
+/* a caixa grande do que acabou de ser revelado/sorteado */
+body.page .holofote {
+  background: var(--lift); border: 1px solid var(--edge-2);
+  border-radius: var(--r); padding: 20px 22px; display: grid; gap: 6px;
+}
+body.page .holofote .grande {
+  font-family: var(--f-display); font-size: 32px; line-height: 1.1;
+  color: var(--chalk);
+}
+body.page .holofote .sub { color: var(--ash); font-size: 13px; }
+body.page .holofote.vazio { color: var(--ash); font-size: 13.5px; }
+body.page .holofote.erro { border-color: var(--alert); }
+body.page .holofote.erro .grande { color: var(--alert); }
+
+body.page .segredo {
+  font-family: var(--f-mono); font-size: 14px;
+  background: var(--riser); border: 1px dashed var(--edge-2);
+  border-radius: var(--r-s); padding: 13px 15px; color: var(--ash);
+  cursor: pointer; user-select: none;
+}
+body.page .segredo:hover { border-color: #4a515d; }
+body.page .segredo.aberto {
+  color: var(--chalk); border-style: solid; background: var(--lift);
+}
+
+body.page .cron {
+  font-family: var(--f-mono); font-size: 40px; letter-spacing: 1px;
+  color: var(--chalk); line-height: 1;
+}
+body.page .cron.acabou { color: var(--alert); }
+
+body.page .quadro {
+  max-width: 100%; max-height: 320px; border-radius: var(--r-s);
+  border: 1px solid var(--edge-2); background: var(--void);
+}
+
+/* ------------------------------------------------- os jogos do roteiro */
+
+body.page .jogo {
+  display: grid; grid-template-columns: 30px 1fr auto; gap: 12px;
+  align-items: start;
+  background: var(--riser); border: 1px solid var(--edge-2);
+  border-radius: var(--r); padding: 13px 15px;
+}
+body.page .jogo.pendente { border-color: var(--caution); }
+body.page .jogo .n {
+  font-family: var(--f-mono); color: var(--ash); font-size: 13px;
+  padding-top: 9px;
+}
+body.page .jogo .corpo { display: grid; gap: 8px; min-width: 0; }
+body.page .jogo .acoes { display: flex; gap: 5px; flex-direction: column; }
+
+/* o nome do jogo e um link: clicar abre a aba Jogos naquele jogo */
+body.page .abrir {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--lift); border: 1px solid var(--edge-2);
+  border-radius: var(--r-s); padding: 10px 13px;
+  color: var(--chalk); text-decoration: none; font-size: 15px;
+  font-family: var(--f-display);
+  transition: border-color .12s, background .12s;
+}
+body.page .abrir:hover { border-color: var(--chalk); }
+body.page .abrir .seta { margin-left: auto; color: var(--ash); font-size: 13px; }
+body.page .abrir .resumo {
+  font-family: var(--f-ui); font-size: 12.5px; color: var(--ash);
+}
+
+/* a mesa, na aba 2: uma linha por participante */
+body.page .part {
+  display: grid; grid-template-columns: 1fr 130px auto; gap: 10px;
+  align-items: center;
+  background: var(--riser); border: 1px solid var(--edge-2);
+  border-radius: var(--r-s); padding: 10px 12px;
+}
+@media (max-width: 700px) {
+  body.page .part { grid-template-columns: 1fr; }
+}
+
+body.page .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+body.page .chip {
+  background: var(--riser); border: 1px solid var(--edge-2);
+  border-radius: 999px; padding: 7px 15px; font-size: 13.5px;
+  color: var(--ash); cursor: pointer; font-family: inherit;
+}
+body.page .chip:hover { border-color: var(--chalk); color: var(--chalk); }
+body.page .chip.on {
+  background: var(--lift); border-color: var(--chalk); color: var(--chalk);
+}
+
+/* item de lista (roteiros): sobe de superficie como o resto */
+body.page .item { background: var(--riser); border-color: var(--edge-2); }
+body.page .item .t { font-size: 15px; }
+body.page .item .d { color: var(--ash); font-size: 12.5px; }

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>video_script — Jogos</title>
+<link rel="stylesheet" href="/shared/shell.css">
+<link rel="stylesheet" href="/static/vs.css">
+</head>
+<body class="page">
+
+<main>
+  <div>
+    <h1>Jogos</h1>
+    <p class="sub" id="topo">—</p>
+  </div>
+
+  <section class="card hidden" id="det">
+    <header>
+      <h2 id="dNome">—</h2>
+      <p class="sub" id="dTipo"></p>
+    </header>
+
+    <div class="field">
+      <span class="lbl">Nome do jogo</span>
+      <input id="dNomeIn" type="text">
+    </div>
+
+    <div id="dCampos" class="pilha"></div>
+
+    <!-- só no tipo rank_lista -->
+    <div class="hidden pilha" id="dRank">
+      <div class="field">
+        <span class="lbl">Importar o gabarito</span>
+        <div class="row">
+          <input type="file" id="dFile" accept=".txt,.csv,.md,text/plain" hidden>
+          <button class="btn" id="dPick">Escolher lista_do_rank.txt</button>
+          <span class="note" id="dRankN"></span>
+        </div>
+      </div>
+      <textarea id="dCola" rows="6" placeholder="ou cole a lista aqui — uma por linha:&#10;1. Nome — valor opcional&#10;2. Outro"></textarea>
+      <div class="row">
+        <button class="btn" id="dParse">Ler o texto colado</button>
+        <span class="spacer"></span>
+        <span class="note">aceita <code>1. Nome</code>, <code>1 - Nome</code> ou
+          só <code>Nome</code> (a posição vira a ordem das linhas)</span>
+      </div>
+      <div class="rank" id="dPrev"></div>
+    </div>
+
+    <div class="row end">
+      <a class="btn" id="dVoltar" href="/roteiro">← voltar ao roteiro</a>
+      <button class="btn primary" id="dSalvar">Salvar</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="semJogo">
+    <header><h2>Nenhum jogo escolhido</h2></header>
+    <p class="note">Esta aba edita <b>um</b> jogo de um roteiro. Abra um roteiro
+      e clique no jogo que você quer mexer.</p>
+    <div class="row end"><a class="btn primary" href="/roteiro">Ir para os roteiros</a></div>
+  </section>
+</main>
+
+<script src="/static/vs.js"></script>
+<script src="/static/jogo.js"></script>
+</body>
+</html>
