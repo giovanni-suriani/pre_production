@@ -1,0 +1,516 @@
+/* pre_production - casca comum das tres etapas.
+ *
+ * Mesma regra do turnsEditor, herdada de proposito: COR E' DADO, NUNCA
+ * DECORACAO. Todo o chrome e' acromatico; so carregam cor as coisas que
+ * significam algo - a identidade de cada participante e os avisos. Nao existe
+ * cor de "status ok": ausencia de aviso ja e' a boa noticia, e inventar um
+ * verde pra ela custaria uma cor que pertence a uma pessoa.
+ *
+ * ------------------------------------------------------------------------
+ * ESCOPO - a parte mais importante deste arquivo
+ * ------------------------------------------------------------------------
+ * Na etapa 3 este css carrega DEPOIS do style.css (a copia literal do
+ * turnsEditor). Qualquer seletor global daqui com o mesmo peso ganharia do
+ * de la em silencio - e foi o que aconteceu antes: um `.card { padding }`
+ * inocente aqui virava padding a mais no deck e gap a mais no ledger do
+ * editor, sem erro nenhum em lugar nenhum.
+ *
+ * Por isso:
+ *   - global, so o que as TRES rotas compartilham: os tokens (valores
+ *     identicos aos do style.css), a barra de etapas, e a linha a mais que
+ *     ela pede no grid do body;
+ *   - todo o resto vive sob `body.page`, que so as etapas 1 e 2 usam.
+ * O editor recebe daqui a barra e nada mais.
+ *
+ * Os tokens ficam repetidos porque o style.css nao pode ser tocado sem perder
+ * o "copia literal"; se mudar um valor la, mude aqui - mesma disciplina que
+ * timecode.py e app.js ja seguem.
+ */
+
+:root {
+  --void:   #121316;
+  --slab:   #1a1c20;
+  --riser:  #23262b;
+  --lift:   #2c3037;
+  --edge:   #2f333a;
+  --edge-2: #3c424c;
+
+  --chalk:  #eceef1;
+  --ash:    #aeb4c0;
+  --smoke:  #7e8695;
+
+  --playhead: #ff5d73;
+  --alert:    #ff7a6e;
+  --caution:  #f0b429;
+  --info:     #8fb8e0;
+  /* estado de escolha (checkbox marcada). Mesmo tom do primeiro participante
+     da paleta - so use onde nao houver identidade de pessoa por perto. */
+  --check:    #5b9cf8;
+
+  --r:   10px;
+  --r-s:  7px;
+  --gut: 26px;
+  --gap: 14px;
+
+  --f-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --f-ui:      "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --f-micro:   "Segoe UI Variable Small", "Segoe UI", system-ui, sans-serif;
+  --f-mono:    "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+}
+
+/* ============================================================== navegacao
+   Unico bloco global: e' a mesma barra nas tres rotas. */
+
+.nav {
+  display: flex; align-items: center; gap: 22px;
+  padding: 13px var(--gut);
+  border-bottom: 1px solid var(--edge);
+  background: var(--slab);
+}
+
+.nav .brand {
+  font-family: var(--f-display);
+  font-size: 15px; font-weight: 700; letter-spacing: -.015em;
+  color: var(--ash); white-space: nowrap;
+}
+.nav .brand span { color: var(--chalk); font-weight: 300; }
+
+/* As etapas sao numeradas porque a ordem E' o produto: nao da pra cortar um
+   trecho antes de ter o wav, nem corrigir turnos antes de diarizar. Etapa
+   ainda inalcancavel fica apagada em vez de sumir - some esconderia o
+   caminho. */
+.nav .steps { display: flex; align-items: center; gap: 4px; }
+
+.nav .step {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 13px 7px 9px;
+  border-radius: var(--r-s);
+  color: var(--ash); text-decoration: none;
+  font-size: 13px; white-space: nowrap;
+  border: 1px solid transparent;
+}
+.nav .step:hover { background: var(--riser); color: var(--chalk); }
+.nav .step .n {
+  display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--lift); color: var(--ash);
+  font-family: var(--f-mono); font-size: 11px;
+}
+.nav .step.on { background: var(--riser); border-color: var(--edge-2); color: var(--chalk); }
+.nav .step.on .n { background: var(--chalk); color: var(--void); }
+.nav .step.off { opacity: .38; pointer-events: none; }
+.nav .sep { color: var(--edge-2); }
+
+.nav .ctx {
+  margin-left: auto; display: flex; align-items: center; gap: 10px;
+  font-family: var(--f-mono); font-size: 12px; color: var(--smoke);
+}
+.nav .ctx b { color: var(--ash); font-weight: 400; }
+
+/* etapa 3: o body do editor ganha uma linha a mais no grid por causa da barra. */
+body.editor { grid-template-rows: auto auto minmax(0, 1fr); }
+
+/* O bloco que tomou o lugar do <select> de arquivos no cabecalho do editor:
+   que corte esta aberto, que arquivo, e o botao que abre o dialogo. O `.lbl`
+   do editor e' caixa alta - rotulo de campo; aqui ele carrega nome de projeto
+   e de corte, e caixa alta em nome proprio parece grito. */
+body.editor .openturns { gap: 6px; }
+body.editor .openturns .lbl {
+  text-transform: none; letter-spacing: 0; font-size: 11px;
+  font-family: inherit; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+body.editor .openturns .lbl b { color: var(--ash); font-weight: 600; }
+body.editor .openrow {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+}
+body.editor .openrow .fname {
+  font-family: var(--f-mono); font-size: 12.5px;
+  color: var(--ash); background: var(--riser);
+  border: 1px solid var(--edge-2); border-radius: var(--r-s);
+  padding: 5px 9px; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+body.editor .openrow .fmeta {
+  font-size: 11.5px; color: var(--smoke); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+body.editor .openrow .btn { margin-left: auto; flex: none; }
+
+/* ============================================================== paginas
+   Daqui pra baixo, tudo sob body.page - so as etapas 1 e 2. */
+
+html { height: 100%; }
+
+body.page {
+  margin: 0; height: 100%;
+  background: var(--void); color: var(--chalk);
+  font-family: var(--f-ui); font-size: 13.5px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  display: grid; grid-template-rows: auto minmax(0, 1fr);
+}
+body.page * { box-sizing: border-box; }
+
+body.page main {
+  overflow: auto;
+  padding: var(--gut);
+  display: grid; gap: var(--gap);
+  align-content: start;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1180px; width: 100%; margin: 0 auto;
+}
+
+body.page .hidden { display: none !important; }
+
+/* rotulo minusculo em caixa alta - Segoe UI Variable Small foi desenhado
+   pra esse tamanho, com contraste e espacamento proprios */
+body.page .lbl {
+  font-family: var(--f-micro);
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: .07em; text-transform: uppercase;
+  color: var(--smoke);
+}
+
+body.page h1 {
+  font-family: var(--f-display);
+  font-size: 22px; font-weight: 600; letter-spacing: -.02em;
+  margin: 0 0 2px;
+}
+body.page h2 {
+  font-family: var(--f-display);
+  font-size: 15px; font-weight: 600; margin: 0;
+}
+body.page .sub { color: var(--smoke); margin: 0; }
+body.page .mono { font-family: var(--f-mono); }
+body.page .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* Sem `min-height: 0` aqui, de proposito. O style.css tem essa linha no
+   `.card` porque la o cartao do ledger rola por dentro; aqui os cartoes sao
+   um empilhamento normal dentro de um `main` de altura definida - com o
+   minimo zerado, o grid ENCOLHE as linhas em vez de deixar o main rolar, e o
+   conteudo do cartao vaza por cima do cartao seguinte. */
+body.page .card {
+  background: var(--slab);
+  border: 1px solid var(--edge);
+  border-radius: var(--r);
+  padding: 18px 20px;
+  display: grid; gap: 14px;
+}
+body.page .card > header { display: flex; align-items: baseline; gap: 12px; }
+body.page .card > header .sub { margin-left: auto; font-size: 12px; }
+
+body.page .note {
+  color: var(--smoke); font-size: 12px; line-height: 1.6; margin: 0;
+}
+body.page .note b { color: var(--ash); }
+body.page code {
+  font-family: var(--f-mono); font-size: 11.5px;
+  background: var(--riser); color: var(--ash);
+  padding: 1.5px 6px; border-radius: 4px;
+}
+
+/* -------------------------------------------------------------- controles */
+
+body.page select,
+body.page input[type=text],
+body.page input[type=number],
+body.page input[type=search] {
+  background: var(--riser);
+  border: 1px solid var(--edge-2);
+  color: var(--chalk);
+  border-radius: var(--r-s);
+  padding: 8px 11px;
+  font-family: inherit; font-size: 13px;
+  outline: none;
+  transition: border-color .12s, background .12s;
+}
+body.page select:hover, body.page input:hover { border-color: #4a515d; }
+body.page select:focus-visible,
+body.page input:focus-visible,
+body.page button:focus-visible {
+  border-color: var(--chalk);
+  outline: 2px solid rgba(236, 238, 241, .35);
+  outline-offset: 1px;
+}
+body.page select { cursor: pointer; }
+body.page input:disabled, body.page select:disabled, body.page .btn:disabled {
+  opacity: .45; cursor: not-allowed;
+}
+
+body.page .btn {
+  background: var(--riser);
+  border: 1px solid var(--edge-2);
+  color: var(--chalk);
+  border-radius: var(--r-s);
+  padding: 8px 14px;
+  font-family: inherit; font-size: 13px;
+  cursor: pointer; white-space: nowrap;
+  text-decoration: none;            /* alguns botoes sao <a> de navegacao */
+  transition: background .12s, border-color .12s;
+}
+body.page .btn:hover:not(:disabled) { background: var(--lift); border-color: #4a515d; }
+body.page .btn:active:not(:disabled) { background: var(--riser); }
+
+/* primario acromatico: contraste puro, sem roubar cor de nenhum participante */
+body.page .btn.primary {
+  background: var(--chalk); border-color: var(--chalk); color: #16181c;
+  font-weight: 600;
+}
+body.page .btn.primary:hover:not(:disabled) { background: #fff; border-color: #fff; }
+
+body.page .btn.icon {
+  width: 34px; height: 34px; padding: 0;
+  display: grid; place-items: center; font-size: 14px;
+  color: var(--ash);
+}
+body.page .btn.icon:hover { color: var(--chalk); }
+body.page .btn.small { padding: 5px 10px; font-size: 12px; }
+body.page .btn.danger { color: var(--alert); }
+body.page .btn.danger:hover:not(:disabled) {
+  background: var(--lift);
+  border-color: color-mix(in srgb, var(--alert) 50%, transparent);
+}
+body.page .linkbtn {
+  background: none; border: 0; color: var(--info);
+  cursor: pointer; font: inherit; padding: 0; text-decoration: underline;
+}
+
+body.page .field { display: grid; gap: 6px; min-width: 0; }
+body.page .field input, body.page .field select { width: 100%; }
+body.page .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+body.page .row.end { justify-content: flex-end; }
+body.page .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+body.page .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+body.page .spacer { flex: 1; }
+
+body.page .chk { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; }
+
+/* Marca as tres acoes novas (transcricao inteira, sugestoes de corte, e o
+   reaproveitamento no corte novo) com --info - a MESMA cor ja usada em nota
+   informativa/link (.linkbtn) no resto do app, nao uma cor nova sem
+   significado. Continua a regra "cor e' dado": aqui o dado e' "isto e' uma
+   acao nova, ainda nao vista no resto da tela". */
+body.page .feature-hint.field {
+  border-left: 3px solid color-mix(in srgb, var(--info) 55%, transparent);
+  padding-left: 13px;
+}
+body.page .feature-hint.field > .lbl { color: var(--info); }
+body.page .feature-hint.chk > span { color: var(--info); }
+
+/* Caixa desenhada a mao em vez de `accent-color`: no escuro, a checkbox nativa
+   do Windows fica com fundo branco e some do resto da interface, e nao da pra
+   escolher o tamanho dela.
+   O azul aqui nao briga com a regra de "cor e' dado": marcado/desmarcado E' a
+   informacao. So nao pode aparecer ao lado de identidade de participante -
+   `--check` e' o mesmo tom do primeiro da paleta, e duas coisas azuis lado a
+   lado voltariam a dizer duas coisas de uma vez. Hoje so a lista de metodos
+   usa checkbox, e la nao ha nome de ninguem. */
+body.page .chk input[type=checkbox] {
+  appearance: none; -webkit-appearance: none;
+  width: 19px; height: 19px; margin: 0; flex: none;
+  border: 1.5px solid var(--edge-2);
+  border-radius: 5px;
+  background: var(--riser);
+  cursor: pointer;
+  display: grid; place-content: center;
+  transition: background .12s, border-color .12s;
+}
+body.page .chk input[type=checkbox]:hover:not(:disabled) { border-color: #5a6270; }
+body.page .chk input[type=checkbox]::before {
+  content: "";
+  width: 11px; height: 11px;
+  background: #16181c;
+  transform: scale(0);
+  transition: transform .1s ease-out;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+body.page .chk input[type=checkbox]:checked {
+  background: var(--check); border-color: var(--check);
+}
+body.page .chk input[type=checkbox]:checked::before { transform: scale(1); }
+body.page .chk input[type=checkbox]:disabled { opacity: .4; cursor: not-allowed; }
+body.page .chk input[type=checkbox]:focus-visible {
+  outline: 2px solid rgba(236, 238, 241, .35); outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ badges
+   Pilula de estado. O padrao e' acromatico; cor entra so quando ha AVISO -
+   e sempre tingida a partir do token, nunca de um hex chapado, pra que
+   mudar --caution mude a pilula junto. */
+
+body.page .badge {
+  font-family: var(--f-micro);
+  font-size: 11px; letter-spacing: .02em;
+  padding: 5px 11px; border-radius: 999px;
+  color: var(--ash);
+  background: var(--riser);
+  border: 1px solid var(--edge-2);
+  white-space: nowrap;
+}
+body.page .badge.ok { color: var(--chalk); }
+body.page .badge.warn {
+  color: var(--caution);
+  background: color-mix(in srgb, var(--caution) 12%, transparent);
+  border-color: color-mix(in srgb, var(--caution) 34%, transparent);
+}
+body.page .badge.err {
+  color: var(--alert);
+  background: color-mix(in srgb, var(--alert) 13%, transparent);
+  border-color: color-mix(in srgb, var(--alert) 40%, transparent);
+}
+
+/* bolinha de cor do participante - aqui cor E' identidade, nada mais */
+body.page .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+body.page .dot.hollow { background: none !important; border: 1.5px dashed var(--smoke); }
+
+/* --------------------------------------------------------------- listas */
+
+body.page .list { display: grid; gap: 10px; }
+
+body.page .item {
+  display: grid; gap: 4px;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  background: var(--riser);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-s);
+  padding: 13px 15px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+body.page .item:hover { border-color: var(--edge-2); background: var(--lift); }
+body.page .item.on { border-color: var(--chalk); }
+body.page .item .t { font-size: 14px; grid-column: 1; }
+body.page .item .d { color: var(--smoke); font-size: 12px; grid-column: 1; }
+/* `grid-column: 2` explicito: com so o `grid-row` definido, o item entra na
+   fase de colocacao "linha definida, coluna automatica" ANTES do titulo e da
+   descricao - e agarrava a coluna 1, jogando o nome pra direita. */
+body.page .item .side {
+  grid-column: 2; grid-row: 1;
+  display: flex; gap: 8px; align-items: center;
+}
+/* so centraliza nas duas linhas quando existe uma segunda linha; item sem
+   descricao nao deve abrir uma linha vazia so pro span */
+body.page .item .d ~ .side { grid-row: 1 / span 2; }
+
+/* ------------------------------------------------- seletor de trecho */
+
+body.page .picker { display: grid; gap: 10px; }
+body.page .picker canvas {
+  width: 100%; height: 132px; display: block;
+  background: var(--void);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-s);
+  cursor: crosshair;
+}
+body.page .picker .hint { color: var(--smoke); font-size: 12px; }
+body.page .picker .hint b { color: var(--ash); font-weight: 600; }
+body.page kbd {
+  font-family: var(--f-mono); font-size: 11px;
+  background: var(--riser); border: 1px solid var(--edge-2);
+  border-bottom-width: 2px; border-radius: 4px;
+  padding: 1px 5px; color: var(--ash);
+}
+
+/* relogio do playhead - mesmas medidas do turnsEditor (mono, 20px, o tempo
+   da midia menor logo abaixo), porque e' o mesmo dado nas duas telas */
+body.page .readout { display: flex; flex-direction: column; gap: 1px; min-width: 176px; }
+body.page .clock {
+  font-family: var(--f-mono); font-size: 20px;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+body.page .readout .under {
+  display: flex; gap: 9px;
+  font-family: var(--f-mono); font-size: 11px; color: var(--smoke);
+}
+body.page .rate {
+  font-family: var(--f-mono); font-size: 12px; color: var(--caution);
+}
+
+/* --------------------------------------------------- trabalho em curso */
+
+body.page .jobwrap {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(8, 9, 11, .7);
+  backdrop-filter: blur(4px);
+  display: grid; place-items: center;
+  padding: 30px;
+}
+body.page .jobbox {
+  width: min(860px, 92vw); max-height: 86vh;
+  background: var(--slab); border: 1px solid var(--edge-2);
+  border-radius: var(--r); padding: 22px 24px;
+  display: grid; gap: 14px; grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+}
+body.page .jobbox h2 { font-size: 17px; }
+body.page .jobbox .stepline { color: var(--ash); font-size: 13px; display: flex; gap: 10px; }
+body.page .jobbox .stepline .el { margin-left: auto; color: var(--smoke); font-family: var(--f-mono); }
+
+body.page .bar { height: 6px; border-radius: 3px; background: var(--riser); overflow: hidden; }
+body.page .bar > i { display: block; height: 100%; background: var(--chalk); width: 0; transition: width .25s; }
+/* sem total conhecido: faixa que anda, pra dizer "vivo" sem mentir "42%" */
+body.page .bar.indet > i {
+  width: 32%; background: linear-gradient(90deg, transparent, var(--ash), transparent);
+  animation: slide 1.5s linear infinite;
+}
+@keyframes slide { from { transform: translateX(-110%); } to { transform: translateX(320%); } }
+
+body.page .log {
+  overflow: auto; background: var(--void);
+  border: 1px solid var(--edge); border-radius: var(--r-s);
+  padding: 12px 14px; min-height: 180px;
+  font-family: var(--f-mono); font-size: 11.5px; line-height: 1.65;
+  color: var(--ash); white-space: pre-wrap; word-break: break-word;
+}
+body.page .log .err { color: var(--alert); }
+body.page .log .cmd { color: var(--smoke); }
+body.page .log .head, body.page .log .ok { color: var(--chalk); }
+
+/* ---------------------------------------------------------------- toast */
+
+body.page .toast {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+  background: var(--riser); border: 1px solid var(--edge-2);
+  border-left: 3px solid var(--ash);
+  padding: 13px 20px; border-radius: var(--r-s);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+  z-index: 60; font-size: 13px; max-width: 72vw;
+}
+body.page .toast.err { border-left-color: var(--alert); }
+body.page .toast.ok { border-left-color: var(--chalk); }
+
+/* ---------------------------------------------------------------- modal */
+
+body.page .modal {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(8, 9, 11, .7);
+  backdrop-filter: blur(4px);
+  display: grid; place-items: center; padding: 30px;
+}
+body.page .modal .box {
+  width: min(560px, 92vw); max-height: 88vh; overflow: auto;
+  background: var(--slab); border: 1px solid var(--edge-2);
+  border-radius: var(--r); padding: 22px 24px;
+  display: grid; gap: 14px;
+}
+body.page .modal .foot { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* --------------------------------------------------------------- tabela */
+
+body.page table.plain { width: 100%; border-collapse: collapse; font-size: 13px; }
+body.page table.plain th {
+  text-align: left; font-family: var(--f-micro); font-size: 10.5px;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--smoke);
+  font-weight: 600; padding: 0 10px 7px 0;
+}
+body.page table.plain td { padding: 7px 10px 7px 0; border-top: 1px solid var(--edge); }
+body.page table.plain tr:hover td { background: rgba(255, 255, 255, .015); }
+
+/* ------------------------------------------------------------ scrollbar */
+
+body.page ::-webkit-scrollbar { width: 12px; height: 12px; }
+body.page ::-webkit-scrollbar-track { background: transparent; }
+body.page ::-webkit-scrollbar-thumb {
+  background: #333941; border-radius: 7px;
+  border: 3px solid var(--slab); background-clip: padding-box;
+}

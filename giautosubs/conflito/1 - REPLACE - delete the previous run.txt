@@ -1,0 +1,2 @@
+Deletes the captions from the previous run and reuses their track.
+Only clips carrying the GiAutoSubsVersao stamp are touched - video, audio and other people's titles are left alone.

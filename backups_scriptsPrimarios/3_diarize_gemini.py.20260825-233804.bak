@@ -1,0 +1,127 @@
+"""
+Diarizacao via Gemini (alternativa ao pyannote/HuggingFace do 1_diarize.py).
+
+Instalacao:
+    pip install google-genai pydantic
+
+Requer GEMINI_API_KEY no ambiente (chave gratuita em https://aistudio.google.com/apikey).
+
+Uso:
+    python 3_diarize_gemini.py audio.wav --speakers 3 --out turnsGemini.json
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+
+from dotenv import load_dotenv
+from google import genai
+from google.genai import errors, types
+from pydantic import BaseModel
+
+# Le GEMINI_API_KEY e GEMINI_MODEL do .env nesta mesma pasta (nao sobrescreve
+# se ja estiverem setados no ambiente do sistema).
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")  # trocavel via .env, sem editar codigo
+
+# Organizacao: cada video tem sua propria pasta em resultados\<VIDEO_TITLE>\
+# com TODOS os arquivos gerados. Troque VIDEO_TITLE (ou use --title) quando
+# processar um episodio novo.
+_RESULTADOS_ROOT = r"D:\CanalYtbe\BatataQuente\scriptsPrimarios\resultados"
+VIDEO_TITLE = "EpisodioPiloto"
+
+
+class Turn(BaseModel):
+    speaker: str
+    start: float
+    end: float
+
+
+class TurnList(BaseModel):
+    turns: list[Turn]
+
+
+SYSTEM_PROMPT = """Voce ouve um audio com uma conversa entre multiplas pessoas e faz a \
+diarizacao: identifica QUEM fala QUANDO, sem transcrever o conteudo.
+
+Regras:
+- Rotule cada pessoa como SPEAKER_00, SPEAKER_01, SPEAKER_02 etc, na ordem em que \
+aparecem pela primeira vez.
+- Cada turno e um trecho continuo (em segundos, desde o inicio do audio) em que a \
+MESMA pessoa fala, do inicio ao fim daquele trecho.
+- Ignore trechos de silencio total ou ruido sem fala.
+- Nao junte duas pessoas diferentes no mesmo turno.
+- Cubra o audio inteiro, do segundo 0 ate o final."""
+
+
+def diarize(client, audio_path, num_speakers):
+    print(f"[i] enviando {audio_path} pro Gemini...")
+    uploaded = client.files.upload(file=audio_path)
+
+    user_message = (
+        f"Este audio tem aproximadamente {num_speakers} pessoas falando. "
+        "Faca a diarizacao completa do audio."
+    )
+
+    max_attempts = 4
+    response = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=[uploaded, user_message],
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    response_schema=TurnList,
+                    temperature=0.2,
+                ),
+            )
+            break
+        except errors.APIError as e:
+            if e.code in (401, 403):
+                sys.exit("Credenciais invalidas: defina GEMINI_API_KEY (https://aistudio.google.com/apikey).")
+            if e.code == 429:
+                sys.exit(f"Rate limit/cota atingida na API do Gemini: {e.message}")
+            if e.code == 503 and attempt < max_attempts:
+                wait = 2 ** attempt
+                print(f"[!] modelo sobrecarregado (503), tentando de novo em {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            sys.exit(f"Erro da API do Gemini ({e.code}): {e.message}")
+
+    return json.loads(response.text)["turns"]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("wav")
+    ap.add_argument("--speakers", type=int, default=3)
+    ap.add_argument("--title", default=VIDEO_TITLE, help="pasta de organizacao dos arquivos gerados (resultados\\<title>\\)")
+    ap.add_argument("--out", default=None, help="default: resultados\\<title>\\turnsGemini.json")
+    args = ap.parse_args()
+    video_dir = os.path.join(_RESULTADOS_ROOT, args.title)
+    os.makedirs(video_dir, exist_ok=True)
+    args.out = args.out or os.path.join(video_dir, "turnsGemini.json")
+
+    client = genai.Client()
+    turns = diarize(client, args.wav, args.speakers)
+    turns.sort(key=lambda t: t["start"])
+
+    labels = sorted({t["speaker"] for t in turns})
+    print(f"\n[i] {len(turns)} turnos detectados")
+    print(f"[i] speakers detectados: {labels}")
+    for lb in labels:
+        first = next(t for t in turns if t["speaker"] == lb)
+        print(f"   {lb}: {first['start']:.1f}s - {first['end']:.1f}s")
+
+    with open(args.out, "w", encoding="utf-8") as f:
+        json.dump(turns, f, indent=1)
+    print(f"\n[ok] salvo em {args.out}")
+
+
+if __name__ == "__main__":
+    main()

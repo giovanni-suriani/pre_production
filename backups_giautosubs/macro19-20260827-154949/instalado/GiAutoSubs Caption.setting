@@ -1,0 +1,3715 @@
+{
+	Tools = ordered() {
+		AutoSubs = MacroOperator {
+			CtrlWZoom = false,
+			ViewInfo = GroupInfo { Pos = { 249.287, 50.4162 } },
+			CustomData = {
+				IsEditing = false,
+				DelaySpline = "Follower1DelaybyCharacterPosition",
+				WordTiming = {
+					-- Written by Lua server. Each entry: { startIndex, endIndex, startFrame, endFrame }
+					-- Indices are 0-based character positions; frames are relative to the subtitle's own start (frame 0), not the timeline.
+					-- endFrame is unused but kept for structural symmetry with startFrame.
+					-- Example — "Subtitle Example Text":
+					{ ["startIndex"] = 0,  ["endIndex"] = 7,  ["startFrame"] = 0,  ["endFrame"] = 10 },
+					{ ["startIndex"] = 8,  ["endIndex"] = 15, ["startFrame"] = 10, ["endFrame"] = 20 },
+					{ ["startIndex"] = 16, ["endIndex"] = 20, ["startFrame"] = 20, ["endFrame"] = 30 },
+				},
+				InputKeys = {
+					"Font",
+					"Style",
+					"TextSize",
+					"TextPosition",
+					"FadeEnabled",
+					"PopInEnabled",
+					"SlideUpEnabled",
+					"AnimationLength",
+					"AnimationLevel",
+					"AnimationMode",
+					"FillEnabled",
+					"FillColorRed",
+					"FillColorGreen",
+					"FillColorBlue",
+					"OutlineEnabled",
+					"OutlineThickness",
+					"OutlineColorRed",
+					"OutlineColorGreen",
+					"OutlineColorBlue",
+					"ShadowEnabled",
+					"ShadowColorRed",
+					"ShadowColorGreen",
+					"ShadowColorBlue",
+					"WordFillEnabled",
+					"WordFillColorRed",
+					"WordFillColorGreen",
+					"WordFillColorBlue",
+					"BubbleEnabled",
+					"BubbleColorRed",
+					"BubbleColorGreen",
+					"BubbleColorBlue",
+					"BubbleOpacity",
+					"BubbleLevel",
+					"BubbleExtendHorizontal",
+					"BubbleExtendVertical",
+					"BubbleRound",
+					"BubblePopEnabled",
+					"BubblePopAmount",
+					"BubblePopFrames",
+					"TextBoxEnabled",
+					"TextBoxColorRed",
+					"TextBoxColorGreen",
+					"TextBoxColorBlue",
+					"TextBoxOpacity",
+					"TextBoxLevel",
+					"TextBoxExtendHorizontal",
+					"TextBoxExtendVertical",
+					"TextBoxRound",
+					"BoxShadowOnHighlight",
+					"BoxShadowOnNormal",
+					"BoxShadowColorRed",
+					"BoxShadowColorGreen",
+					"BoxShadowColorBlue",
+					"BoxShadowCenterX",
+					"BoxShadowCenterY",
+					"BoxShadowOpacity",
+					"BoxShadowSoftness",
+					"TextCase",
+				},
+				GetInputValues = [[
+					return function(tool)
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+						local keys = gi_chunk(nil, tool, "InputKeys") or {}
+						local settings = {}
+						for _, key in ipairs(keys) do
+							local v
+							pcall(function() v = tool:GetInput(key) end)
+							if v ~= nil then settings[key] = v end
+						end
+						return settings
+					end
+				]],
+				SetInputValues = [[
+					return function(comp, tool, settings, origem, spline)
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+
+						-- Escreve no tool E no macro.
+						--
+						-- Sao dois lugares com o mesmo valor: o UserControl do Text+ e o
+						-- `InstanceInput` do MacroOperator que aponta pra ele. O Inspector do clipe
+						-- edita o segundo, o script escrevia so' no primeiro - e quem le tinha que
+						-- adivinhar qual dos dois estava em dia. Escrever nos dois acaba com a
+						-- pergunta; a comparacao abaixo garante que isso nao custa escrita nenhuma
+						-- quando ja estao iguais.
+						local macro = gi_macro(comp, tool)
+						local alvos = { tool }
+						if macro and macro ~= tool then alvos[#alvos + 1] = macro end
+
+						-- Mesma economia das outras rotinas: reescrever um input com o valor que
+						-- ele ja tem custa o mesmo que mudar de verdade (invalida o cache e
+						-- re-renderiza). Ver MACRO.md, secao 6.
+						local escritos, iguais = 0, 0
+						for key, value in pairs(settings or {}) do
+							for _, alvo in ipairs(alvos) do
+								local atual
+								pcall(function() atual = alvo:GetInput(key) end)
+								local mesmo = (atual ~= nil) and (type(atual) == type(value))
+									and ((type(value) == "number" and math.abs(atual - value) < 1e-6)
+										or (type(value) ~= "number" and type(value) ~= "table"
+											and atual == value))
+								if mesmo then
+									iguais = iguais + 1
+								else
+									pcall(function() alvo:SetInput(key, value) end)
+									escritos = escritos + 1
+								end
+							end
+						end
+
+						local function chamar(nome, ...)
+							local f = gi_chunk(comp, tool, nome)
+							if not f then
+								diga("[GiAutoSubs] SetInputValues: " .. nome .. " not found on this "
+									.. "tool - that half of the style was NOT applied")
+								return
+							end
+							local ok, erro = pcall(loadstring(f)(), ...)
+							if not ok then
+								diga("[GiAutoSubs] SetInputValues: " .. nome .. " FAILED: "
+									.. tostring(erro))
+							end
+						end
+
+						-- Duas origens, so' duas: o BOTAO Apply Style e o script.
+						--
+						-- Aqui existiam duas tabelas (ANIMACAO, ESTILO_BASE) que roteavam cada
+						-- controle pra rotina que ele alcanca. Elas serviam ao Inspector reagindo
+						-- controle a controle - ~40 disparos por arrasto de slider, cada um pagando
+						-- so' o pedaco dele. Sem os callbacks isso deixou de existir: aplicar e' um
+						-- clique consciente, uma vez, e o barato e' fazer TUDO sem perguntar de onde
+						-- veio.
+						--
+						-- SetAnimations so' no botao: ele reescreve os keyframes de animacao do
+						-- AutoSubs, e rodar isso nas 128 legendas de uma rodada do script seria
+						-- estrear um comportamento novo no meio do caminho.
+						if origem == "button" then
+							chamar("SetAnimations", comp, tool)
+						end
+						-- UpdateAllStyleColors cuida dos elementos 1..3 e termina chamando o
+						-- ApplyGiStyle, dono dos 4..7.
+						chamar("UpdateAllStyleColors", comp, tool, origem or "script", spline)
+
+						diga(string.format("[GiAutoSubs] %s -> SetInputValues: %d written, "
+							.. "%d already ok (%d keys)", tostring(origem or "script"),
+							escritos, iguais, escritos + iguais))
+						return escritos
+					end
+				]],
+				ScaleWordTiming = [[
+					return function(comp, wordTiming, force)
+						if not wordTiming or #wordTiming == 0 then
+							return wordTiming
+						end
+
+						local compositionEndFrame = comp:GetAttrs("COMPN_RenderEnd") or 1000
+						local maxEndFrame = math.max(1, compositionEndFrame - 1)
+
+						local n = #wordTiming
+						local lastEndFrame = wordTiming[n].endFrame
+						if lastEndFrame <= maxEndFrame and not force then
+							return wordTiming
+						end
+
+						-- More words than available frames: merge trailing words into the last
+						-- keepable interval so every remaining marker/highlight is on a
+						-- distinct, in-range frame.
+						if n > maxEndFrame then
+							local keep = math.max(1, maxEndFrame)
+							wordTiming[keep].endIndex = wordTiming[n].endIndex
+							for i = n, keep + 1, -1 do
+								table.remove(wordTiming, i)
+							end
+							n = keep
+						end
+
+						-- Scale the remaining timing to fit the composition. Each word gets a
+						-- distinct, non-overlapping integer interval.
+						lastEndFrame = wordTiming[n].endFrame
+						local scale = math.min(maxEndFrame / lastEndFrame, 1)
+						local prevEnd = 0
+						for i, word in ipairs(wordTiming) do
+							local targetStart = math.floor(word.startFrame * scale)
+							local targetEnd = math.floor(word.endFrame * scale)
+							local startFrame = math.max(0, math.max(targetStart, prevEnd))
+							local endFrame = math.max(startFrame + 1, targetEnd)
+
+							if endFrame > maxEndFrame then
+								endFrame = maxEndFrame
+								if startFrame >= endFrame then
+									startFrame = math.max(0, endFrame - 1)
+								end
+							end
+
+							word.startFrame = startFrame
+							word.endFrame = endFrame
+							prevEnd = endFrame
+						end
+
+						-- Tighten the sequence: each word must start after the previous one,
+						-- end before the composition end, and stay in a valid interval.
+						for i = 2, n do
+							if wordTiming[i].startFrame <= wordTiming[i - 1].startFrame then
+								wordTiming[i].startFrame = wordTiming[i - 1].startFrame + 1
+							end
+							wordTiming[i].endFrame = math.max(wordTiming[i].endFrame, wordTiming[i].startFrame + 1)
+							if wordTiming[i].endFrame > maxEndFrame then
+								wordTiming[i].endFrame = maxEndFrame
+								if wordTiming[i].startFrame >= wordTiming[i].endFrame then
+									wordTiming[i].startFrame = math.max(0, wordTiming[i].endFrame - 1)
+								end
+							end
+							if wordTiming[i].endFrame < wordTiming[i - 1].endFrame then
+								wordTiming[i].endFrame = wordTiming[i - 1].endFrame
+							end
+						end
+
+						wordTiming[n].endFrame = maxEndFrame
+
+						return wordTiming
+					end
+				]],
+				ComputeRevealFrames = [[
+					return function(comp, tool, wordTiming)
+						if not wordTiming or #wordTiming == 0 then
+							return wordTiming
+						end
+
+						local fps = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or 30
+						local animationLength = tool:GetInput("AnimationLength") or 0
+						local animationMode = tool:GetInput("AnimationMode") or 2
+						local leadInFrames = animationMode == 1 and 0 or math.floor(animationLength * fps * 0.5 + 0.5)
+
+						local prevReveal = -1
+						for _, word in ipairs(wordTiming) do
+							local target = math.max(0, (word.startFrame or 0) - leadInFrames)
+							word.revealFrame = math.max(target, prevReveal + 1)
+							prevReveal = word.revealFrame
+						end
+
+						return wordTiming
+					end
+				]],
+				Animations = {
+					-- Fade: Connect Opacity to stretcher with smooth ease-in/out
+					ApplyFade = [[
+						return function(ctx)
+							ctx.follower.Opacity1 = ctx.animStretcher.Result
+							ctx.follower.Opacity2 = ctx.animStretcher.Result
+							ctx.follower.Opacity3 = ctx.animStretcher.Result
+							ctx.follower.Opacity4 = ctx.animStretcher.Result
+
+							local keyframes
+							if ctx.mode == 0 then
+								-- In only
+								keyframes = {
+									[0] = { 0 },
+									[ctx.animInEnd] = { 1, LH = { -ctx.animInEnd, 0 } },
+									[100] = { 1 },
+								}
+							elseif ctx.mode == 1 then
+								-- Out only
+								keyframes = {
+									[0] = { 1 },
+									[ctx.animOutStart] = { 1 },
+									[100] = { 0 },
+								}
+							else
+								-- Both (default)
+								keyframes = {
+									[0] = { 0 },
+									[ctx.animInEnd] = { 1, LH = { -ctx.animInEnd, 0 } },
+									[ctx.animOutStart] = { 1 },
+									[100] = { 0 },
+								}
+							end
+
+							ctx.animSpline:SetKeyFrames(keyframes, true)
+							print("Applied Fade animation (mode: " .. ctx.mode .. ")")
+						end
+					]],
+					ResetFade = [[
+						return function(ctx)
+							ctx.follower.Opacity1 = nil
+							ctx.follower.Opacity2 = nil
+							ctx.follower.Opacity3 = nil
+							ctx.follower.Opacity4 = nil
+							ctx.follower:SetInput("Opacity1", 1)
+							ctx.follower:SetInput("Opacity2", 1)
+							ctx.follower:SetInput("Opacity3", 1)
+							ctx.follower:SetInput("Opacity4", 1)
+						end
+					]],
+					-- PopIn: Add KeyStretcher modifiers to WordSizeX/Y with smooth ease-in
+					ApplyPopIn = [[
+						return function(ctx)
+							local sizeKeyframes
+							if ctx.mode == 0 then
+								-- In only
+								sizeKeyframes = {
+									[0] = { 0.8 },
+									[ctx.animInEnd] = { 1, LH = { -ctx.animInEnd, 0 } },
+									[100] = { 1 },
+								}
+							elseif ctx.mode == 1 then
+								-- Out only
+								sizeKeyframes = {
+									[0] = { 1 },
+									[ctx.animOutStart] = { 1 },
+									[100] = { 0.8 },
+								}
+							else
+								-- Both (default)
+								sizeKeyframes = {
+									[0] = { 0.8 },
+									[ctx.animInEnd] = { 1, LH = { -ctx.animInEnd, 0 } },
+									[ctx.animOutStart] = { 1 },
+									[100] = { 0 },
+								}
+							end
+							local function applyStretchedKeyframes(propName)
+								ctx.follower:AddModifier(propName, "KeyStretcherMod")
+								local stretcher = ctx.follower[propName]:GetConnectedOutput():GetTool()
+								if stretcher then
+									stretcher:AddModifier("Keyframes", "BezierSpline")
+									local spline = stretcher.Keyframes:GetConnectedOutput():GetTool()
+									if spline then
+										spline:SetKeyFrames(sizeKeyframes, true)
+									end
+									stretcher:SetInput("StretchStart", ctx.animInEnd)
+									stretcher:SetInput("StretchEnd", ctx.animOutStart)
+								end
+							end
+							local propX = ctx.level == 0 and "Line" or "Word"
+							print(propX)
+							applyStretchedKeyframes(propX .. "SizeX")
+							applyStretchedKeyframes(propX .. "SizeY")
+							print("Applied PopIn animation (mode: " .. ctx.mode .. ")")
+						end
+					]],
+					ResetPopIn = [[
+						return function(ctx)
+							ctx.follower.LineSizeX = nil
+							ctx.follower.LineSizeY = nil
+							ctx.follower.WordSizeX = nil
+							ctx.follower.WordSizeY = nil
+							ctx.follower:SetInput("LineSizeX", 1)
+							ctx.follower:SetInput("LineSizeY", 1)
+							ctx.follower:SetInput("WordSizeX", 1)
+							ctx.follower:SetInput("WordSizeY", 1)
+						end
+					]],
+					-- SlideUp: Add XYPath + KeyStretcher to Offset Y with smooth ease-in
+					ApplySlideUp = [[
+						return function(ctx)
+							local yKeyframes
+							if ctx.mode == 0 then
+								-- In only
+								yKeyframes = {
+									[0] = { -0.1 },
+									[ctx.animInEnd] = { 0, LH = { -ctx.animInEnd, 0 } },
+									[100] = { 0 },
+								}
+							elseif ctx.mode == 1 then
+								-- Out only
+								yKeyframes = {
+									[0] = { 0 },
+									[ctx.animOutStart] = { 0 },
+									[100] = { -0.1 },
+								}
+							else
+								-- Both (default)
+								yKeyframes = {
+									[0] = { -0.1 },
+									[ctx.animInEnd] = { 0, LH = { -ctx.animInEnd, 0 } },
+									[ctx.animOutStart] = { 0 },
+									[100] = { -0.1 },
+								}
+							end
+							for i = 1, 3 do
+								local offsetProp = "Offset" .. i
+								ctx.follower:AddModifier(offsetProp, "XYPath")
+								local xyPath = ctx.follower[offsetProp]:GetConnectedOutput():GetTool()
+								if xyPath then
+									xyPath:AddModifier("Y", "KeyStretcherMod")
+									local yStretcher = xyPath.Y:GetConnectedOutput():GetTool()
+									if yStretcher then
+										yStretcher:AddModifier("Keyframes", "BezierSpline")
+										local ySpline = yStretcher.Keyframes:GetConnectedOutput():GetTool()
+										if ySpline then
+											ySpline:SetKeyFrames(yKeyframes, true)
+										end
+										yStretcher:SetInput("StretchStart", ctx.animInEnd)
+										yStretcher:SetInput("StretchEnd", ctx.animOutStart)
+									end
+								end
+							end
+							print("Applied SlideUp animation (mode: " .. ctx.mode .. ")")
+						end
+					]],
+					ResetSlideUp = [[
+						return function(ctx)
+							for i = 1, 3 do
+								local offsetProp = "Offset" .. i
+								local offsetInput = ctx.follower[offsetProp]
+								if offsetInput then
+									local output = offsetInput:GetConnectedOutput()
+									if output then
+										local xyPath = output:GetTool()
+										if xyPath and xyPath.Name:match("XYPath") then
+											ctx.follower[offsetProp] = nil
+										end
+									end
+								end
+							end
+						end
+					]],
+				},
+				-- Ordered list of animation descriptors. To add a new animation:
+				--   1. Add ApplyX and ResetX strings to the Animations table above.
+				--   2. Add a descriptor entry here with controlKey, usesFade, applyKey, resetKey.
+				--   3. Add a new UserControl toggle and add to Inputs section below.
+				AnimationRegistry = [[
+					return {
+						{ controlKey = "PopInEnabled",   usesFade = true,  applyKey = "ApplyPopIn",   resetKey = "ResetPopIn" },
+						{ controlKey = "SlideUpEnabled", usesFade = true,  applyKey = "ApplySlideUp", resetKey = "ResetSlideUp" },
+					}
+				]],
+				SetAnimations = [[
+					return function(comp, tool)
+						local anims = tool:GetData("Animations")
+						local registry = loadstring(tool:GetData("AnimationRegistry"))()
+						local animationLength = tool:GetInput("AnimationLength")
+						local animationMode = tool:GetInput("AnimationMode") or 2
+
+						local follower = comp:FindTool("Follower1")
+						local animStretcher = comp:FindTool("AnimationKeyframeStretcher")
+						local orderStretcher = comp:FindTool("OrderKeyframeStretcher")
+						local animSpline = animStretcher.Keyframes:GetConnectedOutput():GetTool()
+						local orderSpline = orderStretcher.Keyframes:GetConnectedOutput():GetTool()
+
+						local fps = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or 30
+						local function round(x) return math.floor(x + 0.5) end
+						local frames = round(animationLength * fps)
+						local ctx = {
+							follower      = follower,
+							animStretcher = animStretcher,
+							animSpline    = animSpline,
+							animInEnd     = frames,
+							animOutStart  = 100 - frames,
+							mode          = animationMode,
+							level         = tool:GetInput("AnimationLevel"),
+						}
+
+						-- Reset all registered animations
+						for _, anim in ipairs(registry) do
+							loadstring(anims[anim.resetKey])()(ctx)
+						end
+
+						-- Determine enabled animations and whether fade is needed
+						local enabled = {}
+						local needsFade = (tool:GetInput("FadeEnabled") == 1)
+						for _, anim in ipairs(registry) do
+							if tool:GetInput(anim.controlKey) == 1 then
+								table.insert(enabled, anim)
+								if anim.usesFade then needsFade = true end
+							end
+						end
+
+						-- Apply fade once as the shared base layer, or set flat opacity
+						if needsFade then
+							loadstring(anims.ApplyFade)()(ctx)
+						else
+							follower.Opacity1 = animStretcher.Result
+							follower.Opacity2 = animStretcher.Result
+							follower.Opacity3 = animStretcher.Result
+							follower.Opacity4 = animStretcher.Result
+							animSpline:SetKeyFrames({
+								[0] = { 1, Flags = { StepIn = true } },
+								[100] = { 1, Flags = { StepIn = true } },
+							}, true)
+						end
+
+						-- Apply each enabled animation
+						for _, anim in ipairs(enabled) do
+							loadstring(anims[anim.applyKey])()(ctx)
+						end
+
+						-- Set stretcher time ranges
+						animStretcher:SetInput("StretchStart", ctx.animInEnd)
+						animStretcher:SetInput("StretchEnd", ctx.animOutStart)
+
+						-- Configure order spline for out animation (animate entire line out, not word by word)
+						orderSpline:SetKeyFrames({
+							[ctx.animOutStart-1] = { 6, Flags = { StepIn = true } }, -- "Manual Curve"
+							[ctx.animOutStart] = { 0, Flags = { StepIn = true } },   -- "Automatic" (everything animates together)
+						}, true)
+						orderSpline:SetInput("StretchEnd", ctx.animOutStart)
+					end
+				]],
+				ApplyAnimationLevel = [[
+					return function(comp, tool)
+						local function utf8len(s)
+							local _, count = s:gsub("[^\128-\191]", "")
+							return count
+						end
+
+						-- Get current spline settings to be modified
+						local spline = comp:FindTool(tool:GetData("DelaySpline"))
+						local settings = spline:SaveSettings()
+
+						if tool:GetInput("AnimationLevel") == 1 then
+							-- Restore word timing keyframes
+							local wordTiming = tool:GetData("WordTiming")
+							local keyframes = loadstring(tool:GetData("ConvertToDelayKeyframes"))()(comp, tool, wordTiming)
+
+							settings.Tools[spline.Name].KeyFrames = keyframes
+							spline:LoadSettings(settings)
+						else
+							-- Remove word timing keyframes
+							-- TODO: Investigate if easier to set Order type to Automatic
+							local text = tool:GetInput("Text")
+							if text and utf8len(text) > 0 then
+								settings.Tools[spline.Name].KeyFrames = {
+									[utf8len(text)] = { 0, Flags = { StepIn = true } },
+								}
+								spline:LoadSettings(settings)
+							end
+						end
+
+						-- Scale type must be changed to line or word (if being utilised)
+						if tool:GetInput("PopInEnabled") == 1 then
+							loadstring(tool:GetData("SetAnimations"))()(comp, tool)
+						end
+					end
+				]],
+				ConvertToDelayKeyframes = [[
+					return function(comp, tool, wordTiming)
+						local keyframes = {}
+						for _, word in ipairs(wordTiming) do
+							local revealFrame = word.revealFrame or word.startFrame
+							keyframes[word.startIndex] = { math.max(0, revealFrame), Flags = { StepIn = true } }
+						end
+						return keyframes
+					end
+				]],
+				ApplyWordTiming = [[
+					return function(comp, tool, wordTiming)
+						-- Desarmado: escrevia keyframes no spline de delay a partir do
+						-- WordTiming de exemplo do macro (tres palavras ficticias).
+					end
+				]],
+				UpdateTextContent = [[
+					return function(comp, tool, text)
+						-- Desarmado no GiAutoSubs. O original recalculava o tempo de cada
+						-- palavra a partir do TEXTO (chutando ~15 caracteres por segundo) e
+						-- ainda chamava ApplyWordTiming -> UpdateHighlight. Aqui o tempo por
+						-- palavra vem do Whisper, medido; estimar por cima disso so podia
+						-- piorar. Era tambem a origem do `[string "..."]:55: attempt to
+						-- index a nil value` que aparecia a cada execucao.
+					end
+				]],
+				ShowWordMarkers = [[
+					return function(comp, tool)
+						local getTimelineItem = loadstring(tool:GetData("GetTimelineItem"))()
+						local item = getTimelineItem(comp)
+						if not item then return end
+
+						local wordTiming = tool:GetData("WordTiming")
+						if not wordTiming or #wordTiming == 0 then
+							print("[AutoSubs] No word timing data found. Please transcribe or add text first.")
+							return
+						end
+
+						-- Normalize timing to the composition end so every marker is visible and
+						-- editable without multiple words collapsing onto the same frame.
+						wordTiming = loadstring(tool:GetData("ScaleWordTiming"))()(comp, wordTiming)
+						-- Compute reveal frames (spoken start minus animation lead-in) so markers
+						-- align with when the word actually becomes visible.
+						wordTiming = loadstring(tool:GetData("ComputeRevealFrames"))()(comp, tool, wordTiming)
+						tool:SetData("WordTiming", wordTiming)
+
+						-- Clear existing markers
+						while item:DeleteMarkerByCustomData("AutoSubs") do end
+
+						print("[AutoSubs] Generating markers for " .. #wordTiming .. " words.")
+
+						local offset = comp:GetAttrs("COMPN_RenderStart")
+						for i, word in ipairs(wordTiming) do
+							if word.revealFrame then
+								-- Store the spoken end frame in the marker note so marker edits can
+								-- preserve the original word interval across round-trips.
+								item:AddMarker(word.revealFrame + offset, "Blue", "Word " .. i, tostring(word.endFrame), 1, "AutoSubs")
+							end
+						end
+					end
+				]],
+				ApplyWordMarkers = [[
+					return function(comp, tool)
+						-- Get timeline item that contains this composition
+						local getTimelineItem = loadstring(tool:GetData("GetTimelineItem"))()
+						local item = getTimelineItem(comp)
+						if not item then return end
+
+						-- Get follower delay spline
+						local spline = comp:FindTool(tool:GetData("DelaySpline"))
+
+						-- Get comp offset
+						local offset = comp:GetAttrs("COMPN_RenderStart")
+						local compositionEndFrame = comp:GetAttrs("COMPN_RenderEnd") or 1000
+						local maxFrame = math.max(1, compositionEndFrame - 1)
+
+						-- Animation lead-in: the follower spline must start changing before the
+						-- spoken word starts, so the word is fully visible by the time it is spoken.
+						local fps = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or 30
+						local animationLength = tool:GetInput("AnimationLength") or 0
+						local animationMode = tool:GetInput("AnimationMode") or 2
+						local leadInFrames = animationMode == 1 and 0 or math.floor(animationLength * fps * 0.5 + 0.5)
+
+						-- Collect marker positions from timeline; preserve the spoken end frame stored in the note.
+						local markers = item:GetMarkers()
+						local markerFrames = {}
+						for frame, markerInfo in pairs(markers) do
+							if markerInfo["customData"] == "AutoSubs" then
+								table.insert(markerFrames, {
+									frame = math.min(frame - offset, maxFrame),
+									storedEnd = tonumber(markerInfo["note"]) or nil,
+								})
+							end
+						end
+
+						-- Sort markers by frame number
+						table.sort(markerFrames, function(a, b) return a.frame < b.frame end)
+
+						-- Split text into words
+						local text = tool:GetInput("Text")
+						local words = {}
+						for word in text:gmatch("%S+") do
+							table.insert(words, word)
+						end
+						
+						-- UTF-8 aware character count
+						local function utf8len(s)
+							local _, count = s:gsub("[^\128-\191]", "")
+							return count
+						end
+
+						-- Build intermediate word timing format
+						local wordTiming = {}
+						local count = math.min(#markerFrames, #words)
+						local charIndex = 0
+						
+						for i = 1, count do
+							local wordText = words[i]
+							if i > 1 then
+								wordText = " " .. wordText
+							end
+
+							local length = utf8len(wordText)
+							-- Markers denote when the word becomes visible; store the spoken start
+							-- time as the marker plus the animation lead-in. The note carries the
+							-- original spoken end frame so unchanged markers round-trip without
+							-- rewriting word intervals.
+							local marker = markerFrames[i]
+							local startFrame = math.min(marker.frame + leadInFrames, maxFrame)
+							local endFrame
+						
+							if marker.storedEnd then
+								endFrame = marker.storedEnd
+							elseif i < count then
+								endFrame = markerFrames[i + 1].frame + leadInFrames
+							else
+								endFrame = maxFrame
+							end
+						
+							table.insert(wordTiming, {
+								["startIndex"] = charIndex,
+								["endIndex"] = charIndex + length - 1,
+								["startFrame"] = startFrame,
+								["endFrame"] = endFrame,
+							})
+
+							charIndex = charIndex + length
+						end
+						
+						-- Normalize the marker-derived timing so duplicate or out-of-range marker
+						-- positions don't collapse highlight states onto the same frame.
+						wordTiming = loadstring(tool:GetData("ScaleWordTiming"))()(comp, wordTiming, true)
+
+						-- Apply word timing (update spline, store data, refresh highlight)
+						loadstring(tool:GetData("ApplyWordTiming"))()(comp, tool, wordTiming)
+
+						-- Clean up markers
+						while item:DeleteMarkerByCustomData("AutoSubs") do end
+					end
+				]],
+				GetTimelineItem = [[
+					return function(comp)
+						-- Final attempt at getting Resolve object for Free version users
+						local resolve = _G.resolve 
+							or (fusion and fusion.GetResolve and fusion:GetResolve()) 
+							or (app and app.GetResolve and app:GetResolve()) 
+							or (bmd and bmd.scriptapp and bmd.scriptapp("Resolve"))
+							or (comp:GetApp() and comp:GetApp():GetResolve())
+
+						-- Strict check: must be a valid object (userdata or table)
+						if type(resolve) ~= "userdata" and type(resolve) ~= "table" then
+							print("[CHECK-123] This feature (Markers) requires DaVinci Resolve Studio or enabled Scripting API.")
+							return nil
+						end
+
+						local projectManager = resolve:GetProjectManager()
+						local currentProject = projectManager:GetCurrentProject()
+						local timeline = currentProject:GetCurrentTimeline()
+
+						local function itemContainsComp(timelineItem, targetComp)
+							if timelineItem:GetFusionCompCount() == 0 then
+								return false
+							end
+					
+							return timelineItem:GetFusionCompByIndex(1) == targetComp
+						end
+						
+						-- Search from top track down (subtitles usually on top track - faster)
+						local videoTrackCount = timeline:GetTrackCount("video")
+						for trackIndex = videoTrackCount, 1, -1 do
+							local itemsOnTrack = timeline:GetItemListInTrack("video", trackIndex)
+							
+							for _, timelineItem in ipairs(itemsOnTrack or {}) do
+								if itemContainsComp(timelineItem, comp) then
+									return timelineItem
+								end
+							end
+						end
+						
+						return nil
+					end
+				]],
+				ApplyHighlight = [[
+					return function(comp, tool)
+						-- Desarmado: sobrescrevia os keyframes por palavra que o
+						-- GiAutoSubs.lua escreve, repintava Red2/Green2/Blue2 com as cores
+						-- do AutoSubs e forcava Enabled4 = 0 quando o estilo de destaque
+						-- nao era "Bubble" - matando a bolha.
+					end
+				]],
+				RemoveHighlight = [[
+					return function(comp, tool)
+						-- Desarmado: limpava o spline e desligava o elemento 4.
+					end
+				]],
+				ToggleHighlight = [[
+					return function(comp, tool)
+						-- Desarmado junto com ApplyHighlight/RemoveHighlight.
+					end
+				]],
+				UpdateHighlight = [[
+					return function(comp, tool)
+						-- Desarmado. E' o ponto por onde ApplyHighlight era chamado de
+						-- quatro lugares diferentes (UpdateStyleColor, ApplyWordTiming,
+						-- SetInputValues e o botao do Inspector).
+					end
+				]],
+				UpdateStyleColor = [[
+					return function(comp, tool, type)
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+						-- O original terminava chamando UpdateHighlight, que repintava tudo de
+						-- novo a partir de outros controles. Um clique em "Update Fill Color"
+						-- mexia no outline. Aqui cada botao mexe no que diz que mexe.
+						local f = gi_chunk(comp, tool, "UpdateAllStyleColors")
+						if f then loadstring(f)()(comp, tool, type or "script") end
+					end
+				]],
+				UpdateAllStyleColors = [[
+					return function(comp, tool, origem, spline)
+						local template, follower = comp:FindTool("Template"), comp:FindTool("Follower1")
+						origem = origem or "script"
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+
+						-- Le na ordem macro -> tool -> Text+. O macro primeiro porque e' onde o
+						-- Inspector do clipe grava (ver `gi_macro`); os outros dois porque nem todo
+						-- controle esta exposto la.
+						local macro = gi_macro(comp, tool)
+						local function ctl(nome)
+							local v
+							for _, alvo in ipairs({ macro, tool, template }) do
+								if alvo then
+									pcall(function() v = alvo:GetInput(nome) end)
+									if v ~= nil then return v end
+								end
+							end
+							return nil
+						end
+
+						-- Mesma economia do ApplyGiStyle: nao reescrever o que ja esta certo.
+						local escritos, iguais = 0, 0
+						local function pin(chave, valor)
+							if valor == nil then return end
+							for _, alvo in ipairs({ template, follower }) do
+								if alvo then
+									local atual
+									pcall(function() atual = alvo:GetInput(chave) end)
+									local mesmo = (atual ~= nil) and (type(atual) == type(valor))
+										and ((type(valor) == "number" and math.abs(atual - valor) < 1e-6)
+											or (type(valor) ~= "number" and type(valor) ~= "table"
+												and atual == valor))
+									if mesmo then
+										iguais = iguais + 1
+									else
+										pcall(function() alvo:SetInput(chave, valor) end)
+										escritos = escritos + 1
+									end
+								end
+							end
+						end
+
+						for _, par in ipairs({ { "Fill", "1" }, { "Outline", "2" }, { "Shadow", "3" } }) do
+							local tipo, id = par[1], par[2]
+							pin("Enabled" .. id, ctl(tipo .. "Enabled"))
+							pin("Red" .. id, ctl(tipo .. "ColorRed"))
+							pin("Green" .. id, ctl(tipo .. "ColorGreen"))
+							pin("Blue" .. id, ctl(tipo .. "ColorBlue"))
+							if tipo == "Outline" then
+								pin("Thickness" .. id, ctl("OutlineThickness"))
+							end
+						end
+
+						diga(string.format("[GiAutoSubs] fill/outline/shadow -> UpdateAllStyleColors: "
+							.. "%d written, %d already ok", escritos, iguais))
+
+						-- bolha, caixa e as sombras das duas moram no ApplyGiStyle. `origem` vem de
+						-- quem chamou (o nome do controle mexido, ou "script"): e' ela que decide se
+						-- o spline precisa ser refeito. Chegando "script", refaz por seguranca -
+						-- dali nao da' pra saber QUAL controle disparou, e fill/outline/shadow podem
+						-- ser camadas animadas.
+						local f = gi_chunk(comp, tool, "ApplyGiStyle")
+						if f then
+							loadstring(f)()(comp, tool, origem, spline)
+						else
+							diga("[GiAutoSubs] UpdateAllStyleColors: ApplyGiStyle not found - "
+								.. "bubble and boxes were not applied")
+						end
+					end
+				]],
+				ApplyGiStyle = [[
+					return function(comp, tool, origem, spline)
+						local template = comp:FindTool("Template") or tool
+						if not template then return end
+						origem = origem or "script"
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+
+						-- macro primeiro: e' onde o Inspector do clipe grava (ver `gi_macro`).
+						local macro = gi_macro(comp, tool)
+						local function ctl(nome, padrao)
+							local v
+							for _, alvo in ipairs({ macro, tool, template }) do
+								if alvo then
+									pcall(function() v = alvo:GetInput(nome) end)
+									if v ~= nil then return v end
+								end
+							end
+							return padrao
+						end
+
+						local escritos, iguais = 0, 0
+
+						-- Escreve nos DOIS tools.
+						--
+						-- O Follower1 gera o StyledText que o Text+ consome, e os inputs de
+						-- elemento que ele tem sobrescrevem os do Text+. Escrever so no Template
+						-- era o motivo de mexer na cor da bolha no Inspector nao mudar nada na
+						-- tela. E' a mesma razao de o UpdateStyleColor do AutoSubs fazer
+						-- `template:SetInput(...)` seguido de `follower:SetInput(...)`.
+						--
+						-- `Opacity` dos elementos 1..4 fica FORA do Follower: la elas estao
+						-- conectadas ao AnimationKeyframeStretcher, e trocar a conexao por um
+						-- numero mata o fade sem dar erro. Da' 5 em diante nao ha conexao.
+						local follower = comp:FindTool("Follower1")
+
+						-- Reescrever um input com o valor que ele JA tem custa o mesmo que mudar
+						-- de verdade: o Fusion invalida o cache e re-renderiza. Um arrastar de
+						-- slider dispara este callback a cada valor intermediario, e em cada
+						-- disparo UM input mudou - os outros ~80 eram reafirmacao. Comparar antes
+						-- e' o que tira o grosso da espera.
+						local function igual(atual, valor)
+							if type(atual) ~= type(valor) then return false end
+							if type(valor) == "number" then return math.abs(atual - valor) < 1e-6 end
+							if type(valor) == "table" then return false end   -- Offset e afins
+							return atual == valor
+						end
+
+						local function um(alvo, chave, valor)
+							if not alvo then return end
+							local atual
+							pcall(function() atual = alvo:GetInput(chave) end)
+							if atual ~= nil and igual(atual, valor) then
+								iguais = iguais + 1
+								return
+							end
+							pcall(function() alvo:SetInput(chave, valor) end)
+							escritos = escritos + 1
+						end
+
+						-- A opacidade dos elementos 1..4 chega no Follower1 CONECTADA ao
+						-- `AnimationKeyframeStretcher` - e' assim que o fade do AutoSubs e' feito. E
+						-- o Follower vence o Text+. Era exatamente por isso que `BubbleOpacity` nao
+						-- mudava nada na tela: o valor era escrito no Text+ e ignorado.
+						--
+						-- Para a bolha valer, a conexao tem que sair. O jeito de fazer isso e' o
+						-- mesmo do `RemoveFade` do AutoSubs: `follower.Opacity4 = nil` e so' entao
+						-- `SetInput`. Escrever sem desconectar e' aceito e ignorado.
+						--
+						-- So' a bolha. Nos elementos 1..3 essa conexao E' o fade do texto, e trocar
+						-- por um numero mataria o fade sem dizer nada.
+						local stretcher = comp:FindTool("AnimationKeyframeStretcher")
+						local chave_bolha = "Opacity" .. 4
+						local function opacidade_da_bolha(valor)
+							if not follower then return end
+							if valor >= 1 then
+								-- 1 = "sem opacidade propria": devolve a bolha pro fade, se ele
+								-- estiver la. Sem isto, mexer no slider e voltar pra 1 deixaria a
+								-- bolha fora do fade pra sempre.
+								if stretcher then
+									pcall(function() follower[chave_bolha] = stretcher.Result end)
+									return
+								end
+							end
+							pcall(function() follower[chave_bolha] = nil end)
+							um(follower, chave_bolha, valor)
+						end
+
+						local function pin(n, chave, valor)
+							if valor == nil then return end
+							um(template, chave .. n, valor)
+							if not follower then return end
+							if chave == "Opacity" and n <= 4 then
+								if n == 4 then opacidade_da_bolha(valor) end
+								return
+							end
+							um(follower, chave .. n, valor)
+						end
+
+						-- 2 = "Border Fill" (0 Text Fill, 1 Text Outline, 2 Border Fill,
+						-- 3 Border Outline). Lido do dump dentro do Resolve: o elemento 1
+						-- ("White Solid Fill") da' 0 e o 2 ("Red Outline") da' 1. O elemento 4
+						-- nasce em 3, que e' so o CONTORNO do retangulo - nao serve pra bolha.
+						local BORDA = 2
+
+						local function caixa(n, prefixo, ligada)
+							pin(n, "Enabled", ligada and 1 or 0)
+							if not ligada then return end
+							-- ElementShape ANTES da geometria: Level/Extend/Round so existem pra
+							-- forma de borda. Na ordem trocada o Text+ aceita e descarta.
+							pin(n, "ElementShape", BORDA)
+							pin(n, "Red", ctl(prefixo .. "ColorRed", 0))
+							pin(n, "Green", ctl(prefixo .. "ColorGreen", 0))
+							pin(n, "Blue", ctl(prefixo .. "ColorBlue", 0))
+							pin(n, "Opacity", ctl(prefixo .. "Opacity", 1))
+							pin(n, "Level", ctl(prefixo .. "Level", 2))
+							-- Com o "pop" ligado, quem manda nos dois Extend da BOLHA e' um spline
+							-- de keyframes (o `GiRebuildHighlight` monta), e escrever um numero num
+							-- input conectado e' aceito e ignorado - ou pior, derruba a conexao.
+							if not (n == 4 and ctl("BubblePopEnabled", 0) == 1) then
+								pin(n, "ExtendHorizontal", ctl(prefixo .. "ExtendHorizontal", 0))
+								pin(n, "ExtendVertical", ctl(prefixo .. "ExtendVertical", 0))
+							end
+							pin(n, "Round", ctl(prefixo .. "Round", 0.2))
+						end
+
+						-- A sombra copia a GEOMETRIA da caixa e muda so cor, opacidade, borrao e
+						-- deslocamento. Sombra de tamanho diferente entrega que sao dois
+						-- elementos empilhados em vez de uma caixa com sombra.
+						local function sombra(n, prefixo, ligada)
+							pin(n, "Enabled", ligada and 1 or 0)
+							if not ligada then return end
+							pin(n, "ElementShape", BORDA)
+							pin(n, "Red", ctl("BoxShadowColorRed", 0))
+							pin(n, "Green", ctl("BoxShadowColorGreen", 0))
+							pin(n, "Blue", ctl("BoxShadowColorBlue", 0))
+							pin(n, "Opacity", ctl("BoxShadowOpacity", 0.55))
+							pin(n, "Softness", ctl("BoxShadowSoftness", 2))
+							pin(n, "Level", ctl(prefixo .. "Level", 2))
+							pin(n, "ExtendHorizontal", ctl(prefixo .. "ExtendHorizontal", 0))
+							pin(n, "ExtendVertical", ctl(prefixo .. "ExtendVertical", 0))
+							pin(n, "Round", ctl(prefixo .. "Round", 0.2))
+							-- Offset, nao Position: Position e' coordenada ABSOLUTA e joga o
+							-- elemento pro canto da tela.
+							pin(n, "Offset", { ctl("BoxShadowCenterX", 0.005),
+								ctl("BoxShadowCenterY", -0.007) })
+						end
+
+						-- Um Lock so' pra escrita: sem ele o Fusion re-avalia a arvore a cada
+						-- SetInput, e sao dezenas por disparo. O Unlock tem que acontecer mesmo se
+						-- algo levantar no meio, senao a composicao fica travada na cara do
+						-- usuario - dai o pcall em volta.
+						local travou = pcall(function() comp:Lock() end)
+						local ok, erro = pcall(function()
+							local bolha = ctl("BubbleEnabled", 0) == 1
+							caixa(4, "Bubble", bolha)
+							sombra(5, "Bubble", bolha and ctl("BoxShadowOnHighlight", 0) == 1)
+
+							local cx = ctl("TextBoxEnabled", 0) == 1
+							caixa(6, "TextBox", cx)
+							sombra(7, "TextBox", cx and ctl("BoxShadowOnNormal", 0) == 1)
+						end)
+						if travou then pcall(function() comp:Unlock() end) end
+						if not ok then
+							diga("[GiAutoSubs] " .. origem .. " -> ApplyGiStyle FAILED: " .. tostring(erro))
+							return
+						end
+
+						-- E por ultimo o spline. Num elemento ANIMADO a cor mora no array de
+						-- keyframe, que vence os inputs do Text+ e do Follower1 - entao mexer no
+						-- seletor de cor nao muda nada ate o array ser reconstruido. E' a mesma
+						-- razao de o UpdateStyleColor do AutoSubs terminar chamando UpdateHighlight.
+						--
+						-- Aqui existia uma tabela NO_SPLINE dizendo quais controles vivem dentro do
+						-- array de keyframe, pra pular a metade cara (N palavras x camadas x 4
+						-- codigos) quando o controle mexido nao chegava la. Ela pagava o Inspector
+						-- reagindo a cada valor intermediario de slider. Com a aplicacao vindo de um
+						-- clique, refazer sempre custa uma vez e nao ha o que adivinhar.
+						--
+						-- `spline` (o argumento) continua sendo a palavra final de quem chamou:
+						-- false quer dizer "nao refaca, eu vou reescrever o array em seguida" - e' o
+						-- GiAutoSubs.lua criando as legendas, onde refazer aqui seria trabalho
+						-- jogado fora 128 vezes.
+						local refazer = spline
+						if refazer == nil then refazer = true end
+						-- O pop roda SEMPRE, mesmo quando o spline e' pulado: ele e' geometria
+						-- animada, nao o array de estilo por caractere, e quem pula o array (o
+						-- script, que o escreve ele mesmo) quer o pop do mesmo jeito.
+						local estadoPop = "no GiBubblePop"
+						do
+							local f = gi_chunk(comp, tool, "GiBubblePop")
+							if f then estadoPop = loadstring(f)()(comp, tool) or "done" end
+						end
+
+						-- O texto: a caixa das letras, e a sincronia entre o campo `Text` que voce
+						-- edita e o tool que de fato desenha. Mexe no TEXTO, nao no estilo - mas
+						-- entra aqui pelo mesmo motivo do pop: e' o Apply Style que aplica tudo que
+						-- o Inspector pede, e um segundo botao seria um segundo lugar pra "nao
+						-- surtiu efeito".
+						local estadoCase = "no GiApplyText"
+						do
+							local f = gi_chunk(comp, tool, "GiApplyText")
+							if f then estadoCase = loadstring(f)()(comp, tool) or "done" end
+						end
+
+						local estadoSpline = "skipped (not in the spline)"
+						if refazer then
+							local f = gi_chunk(comp, tool, "GiRebuildHighlight")
+							if f then
+								estadoSpline = loadstring(f)()(comp, tool) or "rebuilt"
+							else
+								estadoSpline = "GiRebuildHighlight MISSING"
+							end
+						end
+
+						-- Uma linha por aplicacao, sempre: qual rotina rodou, quanto trabalho deu, e
+						-- se o spline foi refeito. Com um caminho so', estas linhas sao o log
+						-- inteiro - da' pra ler o bloco de um clique de ponta a ponta.
+						diga(string.format("[GiAutoSubs] %s -> ApplyGiStyle: %d written, %d already ok; "
+							.. "spline: %s; bubble pop: %s; text: %s",
+							origem, escritos, iguais, estadoSpline, estadoPop, estadoCase))
+					end
+				]],
+				GiRebuildHighlight = [[
+					return function(comp, tool)
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+						local template = comp:FindTool("Template") or tool
+						local follower = comp:FindTool("Follower1")
+						if not template or not follower then return "no Follower1" end
+
+						-- Devolve SEMPRE uma string: quem chama imprime isso no log. Sair calado
+						-- aqui era indistinguivel de ter funcionado.
+						local tempos = template:GetData("GiWordTiming")
+						local camadas = template:GetData("GiCamadas")
+						if not tempos or not camadas then return "no GiWordTiming/GiCamadas" end
+						if #tempos == 0 then return "empty GiWordTiming" end
+						-- `camadas` vazio nao aborta aqui: o `WordFill` mais abaixo pode criar a
+						-- dele, e e' o unico destaque que um estilo sem camada nenhuma teria.
+
+						-- macro primeiro: e' onde o Inspector do clipe grava (ver `gi_macro`).
+						local macro = gi_macro(comp, tool)
+						local function ctl(nome, padrao)
+							local v
+							for _, alvo in ipairs({ macro, tool, template }) do
+								if alvo then
+									pcall(function() v = alvo:GetInput(nome) end)
+									if v ~= nil then return v end
+								end
+							end
+							return padrao
+						end
+
+						-- A cor da palavra FALADA (o fill do elemento 1).
+						--
+						-- O elemento 1 fica fora do `CONTROLE_DA_CAMADA` de proposito: a cor BASE
+						-- dele e' a do falante, escrita clipe a clipe, e um seletor unico apagaria
+						-- isso em todas as legendas. Aqui ele entra so' pela cor ATIVA - o `WordFill`
+						-- pinta a palavra que esta sendo dita, e a cor de cada pessoa continua
+						-- valendo em todas as outras.
+						local palavra_colorida = ctl("WordFillEnabled", 0) == 1
+
+						-- A cor sai do Inspector quando a camada diz de qual controle ela vem
+						-- (a bolha vem de Bubble*, a sombra dela de BoxShadow*). Sem isso o
+						-- seletor de cor de um elemento animado seria enfeite.
+						local function cor_de(c, qual)
+							local base = c[qual]
+							local de = c.controle
+							if qual == "cor_ativa" and c.elemento == 1 and palavra_colorida then
+								de = "WordFill"
+							end
+							if de then
+								return {
+									ctl(de .. "ColorRed", base and base[1] or 0),
+									ctl(de .. "ColorGreen", base and base[2] or 0),
+									ctl(de .. "ColorBlue", base and base[3] or 0),
+								}
+							end
+							return base
+						end
+
+						-- O estilo pode nao ter camada de fill nenhuma (e' o caso do `capcut_bolha`,
+						-- onde o destaque e' so' a bolha). Sem uma camada, o controle nao teria onde
+						-- agir - entao ela nasce aqui, com a cor BASE lida do proprio Text+: e' la
+						-- que a cor do falante deste clipe ja esta.
+						if palavra_colorida then
+							local tem = false
+							for _, c in ipairs(camadas) do
+								if c.elemento == 1 then tem = true end
+							end
+							if not tem then
+								local function base(nome, padrao)
+									local v
+									pcall(function() v = template:GetInput(nome) end)
+									if v == nil then return padrao end
+									return v
+								end
+								camadas[#camadas + 1] = {
+									elemento = 1, on_base = 1, on_ativo = 1,
+									cor_base = { base("Red1", 1), base("Green1", 1), base("Blue1", 1) },
+								}
+							end
+						end
+
+						if #camadas == 0 then return "no highlight layers (nothing animates)" end
+
+						-- O checkbox que LIGA cada camada animada, por elemento.
+						--
+						-- Sem isto o `Enabled` de uma camada animada vinha so' do `on_base`/
+						-- `on_ativo` gravados no clipe quando ele nasceu, e o array vence o input:
+						-- desmarcar "Bubble > Enabled" no Inspector escrevia `Enabled4 = 0` no Text+
+						-- e no Follower1, e o keyframe da palavra falada devolvia 1 logo em seguida.
+						-- O sintoma era o checkbox da bolha nao fazer nada.
+						--
+						-- A sombra depende da caixa que ela acompanha: sombra de bolha desligada nao
+						-- e' sombra de coisa nenhuma.
+						local LIGA = {
+							[4] = { "BubbleEnabled" },
+							[5] = { "BubbleEnabled", "BoxShadowOnHighlight" },
+							[6] = { "TextBoxEnabled" },
+							[7] = { "TextBoxEnabled", "BoxShadowOnNormal" },
+						}
+						-- Resolvido UMA vez por camada, nao por palavra: o laco abaixo e' N x N x
+						-- camadas, e uma leitura de input ali dentro se multiplica por tudo isso.
+						local permitida, cores = {}, {}
+						for idx, c in ipairs(camadas) do
+							permitida[idx] = true
+							for _, nome in ipairs(LIGA[c.elemento] or {}) do
+								if ctl(nome, 1) ~= 1 then permitida[idx] = false end
+							end
+							cores[idx] = { base = cor_de(c, "cor_base"), ativa = cor_de(c, "cor_ativa") }
+						end
+
+						local keyframes, k = {}, 0
+						for i = 1, #tempos do
+							local array = {}
+							for j = 1, #tempos do
+								local palavra = tempos[j]
+								local ativa = (j == i)
+								for idx, c in ipairs(camadas) do
+									local ligado = permitida[idx]
+										and ((ativa and c.on_ativo or c.on_base) == 1)
+									local cor = ativa and cores[idx].ativa or cores[idx].base
+									-- `Index` do array e' o elemento em base ZERO
+									local elem = c.elemento - 1
+									local vals = {
+										[2000] = ligado and 1 or 0,
+										[2401] = cor and cor[1] or 0,
+										[2402] = cor and cor[2] or 0,
+										[2403] = cor and cor[3] or 0,
+									}
+									for codigo, valor in pairs(vals) do
+										table.insert(array, {
+											codigo, palavra.startIndex, palavra.endIndex,
+											Value = valor, __flags = 256, Index = elem,
+										})
+									end
+								end
+							end
+							keyframes[tempos[i].startFrame] = {
+								k,
+								Value = {
+									__ctor = "StyledText",
+									Array = array,
+									Flags = { StepIn = true, LockedY = true, __flags = 256 },
+								},
+							}
+							k = k + 1
+						end
+
+						local ok = pcall(function()
+							local cls = follower.Text:GetConnectedOutput():GetTool()
+							local spline = cls.CharacterLevelStyling:GetConnectedOutput():GetTool()
+							spline:SetKeyFrames(keyframes, true)
+						end)
+						if not ok then return "could not reach the spline" end
+						return string.format("rebuilt %d keyframes (%d words x %d layers)",
+							k, #tempos, #camadas)
+					end
+				]],
+				GiBubblePop = [[
+					return function(comp, tool)
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+						local template = comp:FindTool("Template") or tool
+						if not template then return "no Template" end
+
+						-- macro primeiro: e' onde o Inspector do clipe grava (ver `gi_macro`).
+						local macro = gi_macro(comp, tool)
+						local function ctl(nome, padrao)
+							local v
+							for _, alvo in ipairs({ macro, tool, template }) do
+								if alvo then
+									pcall(function() v = alvo:GetInput(nome) end)
+									if v ~= nil then return v end
+								end
+							end
+							return padrao
+						end
+
+						local eixos = { ExtendHorizontal4 = "BubbleExtendHorizontal",
+							ExtendVertical4 = "BubbleExtendVertical" }
+
+						local tempos = template:GetData("GiWordTiming")
+						local ligado = ctl("BubblePopEnabled", 0) == 1
+							and ctl("BubbleEnabled", 0) == 1
+							and tempos ~= nil and #tempos > 0
+
+						if not ligado then
+							-- Devolve os dois inputs pro valor fixo. Sem isto, desmarcar o Pop
+							-- deixaria o spline mandando pra sempre - e os sliders de Extend
+							-- virariam enfeite, que e' o mesmo tipo de armadilha da opacidade.
+							for chave, controle in pairs(eixos) do
+								pcall(function() template[chave] = nil end)
+								pcall(function() template:SetInput(chave, ctl(controle, 0)) end)
+							end
+							return "off"
+						end
+
+						local quanto = ctl("BubblePopAmount", 0.15)
+						local dura = math.max(1, math.floor(ctl("BubblePopFrames", 3)))
+
+						local feitos = 0
+						for chave, controle in pairs(eixos) do
+							local cheio = ctl(controle, 0)
+							local kf = {}
+							for i = 1, #tempos do
+								local inicio = tempos[i].startFrame
+								kf[inicio] = { cheio - quanto }
+								kf[inicio + dura] = { cheio }
+								-- SEGURA o tamanho ate a proxima palavra. Sem este keyframe a
+								-- interpolacao entre o fim do pop e a palavra seguinte vira uma
+								-- rampa longa: a bolha encolheria devagar durante a palavra
+								-- inteira, que nao e' pop nenhum.
+								local prox = tempos[i + 1] and tempos[i + 1].startFrame
+								if prox and prox - 1 > inicio + dura then
+									kf[prox - 1] = { cheio }
+								end
+							end
+							local ok = pcall(function()
+								-- AddModifier repetido empilha modificador em cima de modificador;
+								-- so' cria quando ainda nao ha um.
+								if not template[chave]:GetConnectedOutput() then
+									template:AddModifier(chave, "BezierSpline")
+								end
+								template[chave]:GetConnectedOutput():GetTool():SetKeyFrames(kf, true)
+							end)
+							if ok then feitos = feitos + 1 end
+						end
+
+						return string.format("%d/2 axes, -%.2f over %d frames on %d words",
+							feitos, quanto, dura, #tempos)
+					end
+				]],
+				GiApplyText = [[
+					return function(comp, tool)
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+						local template = comp:FindTool("Template") or tool
+						if not template then return "no Template" end
+
+						local macro = gi_macro(comp, tool)
+						local function ctl(nome, padrao)
+							local v
+							for _, alvo in ipairs({ macro, tool, template }) do
+								if alvo then
+									pcall(function() v = alvo:GetInput(nome) end)
+									if v ~= nil then return v end
+								end
+							end
+							return padrao
+						end
+
+						-- 0xC3 e' o primeiro byte de todo acentuado latino em UTF-8; o segundo diz
+						-- qual letra e' e se e' maiuscula (0x80..0x9E) ou minuscula (0xA0..0xBE).
+						-- 0x97 e 0xB7 sao 'x' e '/' de multiplicacao e divisao - nao sao letras.
+						local function maiuscula(s)
+							s = s:gsub("\195(.)", function(c)
+								local b = string.byte(c)
+								if b >= 160 and b <= 190 and b ~= 183 then
+									return "\195" .. string.char(b - 32)
+								end
+							end)
+							return (s:upper())
+						end
+
+						local function minuscula(s)
+							s = s:gsub("\195(.)", function(c)
+								local b = string.byte(c)
+								if b >= 128 and b <= 158 and b ~= 151 then
+									return "\195" .. string.char(b + 32)
+								end
+							end)
+							return (s:lower())
+						end
+
+						local function transformar(s, modo)
+							if modo == 1 then return minuscula(s) end
+							if modo == 2 then return maiuscula(s) end
+							return s
+						end
+
+						local modo = math.floor(ctl("TextCase", 0))
+						local atual
+						pcall(function() atual = template:GetInput("Text") end)
+						if type(atual) ~= "string" then return "no text" end
+
+						local original = template:GetData("GiTextOriginal")
+						local ultimo = template:GetData("GiTextCase") or 0
+						if type(original) ~= "string" or transformar(original, ultimo) ~= atual then
+							-- primeira vez, ou o texto foi editado a mao: o que esta na tela agora
+							-- passa a ser o original
+							original = atual
+							pcall(function() template:SetData("GiTextOriginal", original) end)
+						end
+
+						local novo = transformar(original, modo)
+						pcall(function() template:SetData("GiTextCase", modo) end)
+
+						-- Escreve o texto nos DOIS tools, comparando CADA UM com o que vai entrar.
+						--
+						-- Duas coisas moram aqui, e a segunda so' apareceu depois:
+						--
+						-- 1. O que o Text+ RENDERIZA nao e' o `Text` dele: o `StyledText` vem
+						--    conectado ao Follower1, que vem do CharacterLevelStyling1 - e o texto
+						--    de verdade e' o `Text` do CLS1.
+						--
+						-- 2. Editar o texto no Inspector escreve so' no Text+. Quem sincronizava os
+						--    dois no AutoSubs era o `UpdateTextContent`, uma das seis rotinas que
+						--    este macro DESARMA (ela vinha junto com a cadeia que repintava tudo).
+						--    Sem ela, digitar no campo Text nao mudava a legenda - e o Apply Style
+						--    tambem nao, porque a versao anterior desta rotina comparava com o Text+
+						--    e concluia "ja esta certo" enquanto o CLS1 seguia com o texto velho.
+						--
+						-- Comparar por alvo e' o que fecha os dois casos de uma vez.
+						local escritos = 0
+						local cls = comp:FindTool("CharacterLevelStyling1")
+						for _, alvo in ipairs({ template, cls }) do
+							if alvo then
+								local tem
+								pcall(function() tem = alvo:GetInput("Text") end)
+								if tem ~= novo then
+									local ok = pcall(function() alvo:SetInput("Text", novo) end)
+									if ok then escritos = escritos + 1 end
+								end
+							end
+						end
+
+						local nome = ({ [0] = "as typed", [1] = "lowercase", [2] = "UPPERCASE" })[modo]
+							or "as typed"
+
+						-- Editar o texto a mao MUDA o numero de caracteres, e o destaque por palavra
+						-- endereca o texto por indice de caractere (`GiWordTiming`). Realinhar
+						-- palavra a palavra so' o script sabe fazer - o que da' pra fazer aqui e'
+						-- dizer, em vez de deixar o destaque errar em silencio.
+						local tempos = template:GetData("GiWordTiming")
+						local ultimoIndice = 0
+						for _, t in ipairs(tempos or {}) do
+							if (t.endIndex or 0) > ultimoIndice then ultimoIndice = t.endIndex end
+						end
+						local _, letras = novo:gsub("[^\128-\191]", "")
+						if ultimoIndice > 0 and letras < ultimoIndice + 1 then
+							diga(string.format("[GiAutoSubs] WARNING: the text is now %d characters "
+								.. "but the per-word highlight was built for %d - run the script "
+								.. "again to realign it", letras, ultimoIndice + 1))
+						end
+
+						if escritos == 0 then return nome .. " (already in sync)" end
+						return string.format("%s (%d tools)", nome, escritos)
+					end
+				]],
+			},
+			Tools = ordered() {
+				Template = TextPlus {
+					CtrlWZoom = false,
+					CtrlWShown = true,
+					Inputs = {
+						SlideUpEnabled = Input { Value = 0, },
+						PopInEnabled = Input { Value = 0, },
+						FadeEnabled = Input { Value = 0, },
+						AnimationLevel = Input { Value = 0, },
+						Enabled5 = Input { Value = 0, },
+						Opacity4 = Input { Value = 1, },
+						Blue4 = Input { Value = 0, },
+						Green4 = Input { Value = 0, },
+						Red4 = Input { Value = 0, },
+						ElementShape4 = Input { Value = 2, },
+						Enabled4 = Input { Value = 1, },
+						Enabled7 = Input { Value = 0, },
+						Enabled6 = Input { Value = 0, },
+						Blue1 = Input { Value = 1, },
+						Green1 = Input { Value = 1, },
+						Red1 = Input { Value = 1, },
+						Enabled1 = Input { Value = 1, },
+						Size = Input { Value = 0.09, },
+						GlobalOut = Input { Value = 149, },
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						SelectElement = Input { Value = 1, },
+						Select = Input { Value = 1, },
+						Name2 = Input { Value = "Outline", },
+						Enabled2 = Input { Value = 1, },
+						Enabled3 = Input { Value = 0, },
+						StyledText = Input {
+							SourceOp = "Follower1",
+							Source = "StyledText",
+						},
+						Font = Input { Value = "Open Sans", },
+						Style = Input { Value = "Bold", },
+						VerticalJustificationNew = Input { Value = 3, },
+						HorizontalJustificationNew = Input { Value = 3, },
+						Text = Input { Value = "Subtitle Example Text", },
+						Center = Input { Value = { 0.5, 0.22 }, },
+						Thickness2 = Input { Value = 0.15, },
+						Red2 = Input { Value = 0, },
+						Green2 = Input { Value = 0, },
+						Blue2 = Input { Value = 0, },
+						Softness2 = Input { Value = 1, },
+						Opacity3 = Input { Value = 0.4925926029682, },
+						Softness3 = Input { Value = 1, },
+						Level4 = Input { Value = 2, },
+						ExtendHorizontal4 = Input { Value = -0.047, },
+						ExtendVertical4 = Input { Value = 0.1, },
+						Round4 = Input { Value = 0.126, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 0, 8.75758 } },
+					UserControls = ordered() {
+						-- UserControls defines the actual custom controls on the Template tool.
+						-- These are the source definitions: labels, defaults, callbacks, ranges, etc.
+						SubtitleLabel = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 6,
+							INP_SplineType = "Default",
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							INP_Passive = true,
+							LINKS_Name = "Text",
+						},
+						Text = {
+							TEC_ReadOnly = false,
+							INPID_InputControl = "TextEditControl",
+							TEC_Lines = 5,
+							LINKID_DataType = "Text",
+							TEC_Wrap = false,
+							INP_External = false,
+							IC_NoLabel = true,
+							INP_Passive = true,
+							IC_Visible = true,
+						},
+						AnimationLabel = {
+							LINKS_Name = "Animation",
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 6,
+							INP_SplineType = "Default",
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_Passive = true,
+							INPID_InputControl = "LabelControl",
+						},
+						AnimationLevel = {
+							LINKS_Name = "Animation Level",
+							INP_MaxAllowed = 1,
+							INP_Integer = true,
+							INPID_InputControl = "ComboControl",
+							INP_SplineType = "Default",
+							INP_MaxScale = 1,
+							INP_Default = 0,
+							LINKID_DataType = "Number",
+							INP_MinScale = 0,
+							INP_External = false,
+							INP_Passive = true,
+							INP_MinAllowed = 0,
+							{ CCS_AddString = "Segment Level" },
+							{ CCS_AddString = "Word by Word" },
+						},
+						ModifyWordTiming = {
+							LINKS_Name = "Adjust Word Timing",
+							LINKID_DataType = "Number",
+							IC_NoLabel = false,
+							INPID_InputControl = "ButtonControl",
+							IC_Visible = true,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+								local isEditing = tool:GetData("IsEditing") == true
+								if isEditing then
+									-- Apply changes and exit editing mode
+									tool.ModifyWordTiming:SetAttrs({INPS_Name = "Adjust Word Timing"})
+									tool:SetData("IsEditing", false)
+									loadstring(tool:GetData("ApplyWordMarkers"))()(comp, tool)
+								else
+									-- Enter editing mode and show markers
+									tool.ModifyWordTiming:SetAttrs({INPS_Name = "Timeline Markers Added - Adjust & Click to Save"})
+									tool:SetData("IsEditing", true)
+									loadstring(tool:GetData("ShowWordMarkers"))()(comp, tool)
+								end
+							]],
+						},
+						FadeEnabled = {
+							LINKS_Name = "Fade",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_Passive = true,
+							INP_External = false,
+							CBC_TriState = false,
+						},
+						PopInEnabled = {
+							LINKS_Name = "Pop In",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_Passive = true,
+							INP_External = false,
+							CBC_TriState = false,
+						},
+						SlideUpEnabled = {
+							LINKS_Name = "Slide Up",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_Passive = true,
+							INP_External = false,
+							CBC_TriState = false,
+						},
+						AnimationMode = {
+							LINKS_Name = "Animation Mode",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ComboControl",
+							INP_Integer = true,
+							INP_Default = 2,
+							INP_Passive = true,
+							INP_External = false,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 2,
+							{ CCS_AddString = "In" },
+							{ CCS_AddString = "Out" },
+							{ CCS_AddString = "Both" },
+						},
+						AnimationLength = {
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INPID_InputControl = "SliderControl",
+							IC_Steps = 0,
+							INP_MaxScale = 1,
+							INP_Passive = true,
+							INP_External = false,
+							INP_Default = 0.2,
+							INP_MinScale = 0,
+							INP_MinAllowed = 0,
+							LINKID_DataType = "Number",
+							ICD_Center = 0.5,
+							LINKS_Name = "Duration (seconds)"
+						},
+						UpdateAnimationButton = {
+							LINKS_Name = "Update Animation",
+							LINKID_DataType = "Number",
+							IC_NoLabel = false,
+							INPID_InputControl = "ButtonControl",
+							IC_Visible = true,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+								loadstring(tool:GetData("SetAnimations"))()(comp, tool)
+							]],
+						},
+						HighlightLabel = {
+							LINKS_Name = "Highlighter",
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 9,
+							INP_SplineType = "Default",
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_Passive = true,
+							INPID_InputControl = "LabelControl",
+						},
+						HighlightEnabled = {
+							LINKS_Name = "Highlight Spoken Word",
+							INP_MaxAllowed = 1,
+							INP_Integer = false,
+							INPID_InputControl = "CheckboxControl",
+							CBC_TriState = false,
+							INP_SplineType = "Default",
+							INP_MaxScale = 1,
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_MinScale = 0,
+							INP_External = false,
+							INP_Passive = false,
+							INP_MinAllowed = 0,
+						},
+						UpdateHighlight = {
+							LINKS_Name = "Update Highlight Color",
+							LINKID_DataType = "Number",
+							IC_NoLabel = false,
+							INPID_InputControl = "ButtonControl",
+							IC_Visible = true,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+								loadstring(tool:GetData("UpdateHighlight"))()(comp, tool)
+							]],
+						},
+						HighlightStyle = {
+							LINKS_Name = "Style",
+							INP_Integer = true,
+							INPID_InputControl = "ComboControl",
+							INP_SplineType = "Default",
+							INP_MaxScale = 1,
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_MinScale = 0,
+							INP_External = false,
+							INP_Passive = true,
+							INP_MinAllowed = 0,
+							{ CCS_AddString = "Fill" },
+							{ CCS_AddString = "Outline" },
+							{ CCS_AddString = "Shadow / Glow" },
+							{ CCS_AddString = "Bubble" },
+						},
+						HighlightExtendHorizontal = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0,
+							INP_Integer = false,
+							INP_MinScale = -0.5,
+							INP_MaxScale = 2,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_SplineType = "Default",
+							INP_External = false,
+							INP_Passive = true,
+							LINKS_Name = "Extend Horizontal",
+						},
+						HighlightExtendVertical = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0,
+							INP_Integer = false,
+							INP_MinScale = -0.5,
+							INP_MaxScale = 2,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_SplineType = "Default",
+							INP_External = false,
+							INP_Passive = true,
+							LINKS_Name = "Extend Vertical",
+						},
+						HighlightRound = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.2,
+							INP_Integer = false,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_SplineType = "Default",
+							INP_External = false,
+							INP_Passive = true,
+							LINKS_Name = "Round",
+						},
+						HighlightColorRed = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							CLRC_ShowWheel = true,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 1.0,
+							IC_ControlID = 0,
+							IC_ControlGroup = 23,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						HighlightColorGreen = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 0,
+							IC_ControlID = 1,
+							IC_ControlGroup = 23,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						HighlightColorBlue = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 0,
+							IC_ControlID = 2,
+							IC_ControlGroup = 23,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						FillLabel = {
+							LINKS_Name = "Fill",
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 4,
+							INP_SplineType = "Default",
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_Passive = true,
+							INPID_InputControl = "LabelControl",
+						},
+						FillEnabled = {
+							LINKS_Name = "Enabled",
+							INP_MaxAllowed = 1,
+							INP_Integer = false,
+							INPID_InputControl = "CheckboxControl",
+							CBC_TriState = false,
+							INP_SplineType = "Default",
+							INP_MaxScale = 1,
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_MinScale = 0,
+							INP_External = false,
+							INP_Passive = false,
+							INP_MinAllowed = 0,
+						},
+						UpdateFillColor = {
+							LINKS_Name = "Update Fill Color",
+							LINKID_DataType = "Number",
+							IC_NoLabel = false,
+							INPID_InputControl = "ButtonControl",
+							IC_Visible = true,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+								loadstring(tool:GetData("UpdateStyleColor"))()(comp, tool, "Fill")
+							]],
+						},
+						FillColorRed = {
+							LINKS_Name = "Fill Color",
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							CLRC_ShowWheel = true,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 1,
+							IC_ControlID = 0,
+							IC_ControlGroup = 21,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						FillColorGreen = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 1,
+							IC_ControlID = 1,
+							IC_ControlGroup = 21,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						FillColorBlue = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 1,
+							IC_ControlID = 2,
+							IC_ControlGroup = 21,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						OutlineLabel = {
+							LINKS_Name = "Outline",
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 5,
+							INP_SplineType = "Default",
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_Passive = true,
+							INPID_InputControl = "LabelControl",
+						},
+						OutlineEnabled = {
+							LINKS_Name = "Enabled",
+							INP_MaxAllowed = 1,
+							INP_Integer = false,
+							INPID_InputControl = "CheckboxControl",
+							CBC_TriState = false,
+							INP_SplineType = "Default",
+							INP_MaxScale = 1,
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_MinScale = 0,
+							INP_External = false,
+							INP_Passive = false,
+							INP_MinAllowed = 0,
+						},
+						UpdateOutlineColor = {
+							LINKS_Name = "Update Outline Color",
+							LINKID_DataType = "Number",
+							IC_NoLabel = false,
+							INPID_InputControl = "ButtonControl",
+							IC_Visible = true,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+								loadstring(tool:GetData("UpdateStyleColor"))()(comp, tool, "Outline")
+							]],
+						},
+						OutlineThickness = {
+							INP_MaxAllowed = 1,
+							INP_Integer = false,
+							INPID_InputControl = "SliderControl",
+							IC_Steps = 0,
+							INP_MaxScale = 0.2,
+							INP_Passive = true,
+							INP_External = false,
+							INP_Default = 0.15,
+							INP_MinScale = 0,
+							INP_MinAllowed = 0,
+							LINKID_DataType = "Number",
+							LINKS_Name = "Thickness"
+						},
+						OutlineColorRed = {
+							LINKS_Name = "Outline Color",
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							CLRC_ShowWheel = true,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 0,
+							IC_ControlID = 0,
+							IC_ControlGroup = 20,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						OutlineColorGreen = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 0,
+							IC_ControlID = 1,
+							IC_ControlGroup = 20,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						OutlineColorBlue = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 0,
+							IC_ControlID = 2,
+							IC_ControlGroup = 20,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						ShadowLabel = {
+							LINKS_Name = "Shadow / Glow",
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 4,
+							INP_SplineType = "Default",
+							INP_Default = 1,
+							LINKID_DataType = "Number",
+							INP_Passive = true,
+							INPID_InputControl = "LabelControl",
+						},
+						ShadowEnabled = {
+							LINKS_Name = "Enabled",
+							INP_MaxAllowed = 1,
+							INP_Integer = false,
+							INPID_InputControl = "CheckboxControl",
+							CBC_TriState = false,
+							INP_SplineType = "Default",
+							INP_MaxScale = 1,
+							INP_Default = 0,
+							LINKID_DataType = "Number",
+							INP_MinScale = 0,
+							INP_External = false,
+							INP_Passive = false,
+							INP_MinAllowed = 0,
+						},
+						UpdateShadowColor = {
+							LINKS_Name = "Update Shadow Color",
+							LINKID_DataType = "Number",
+							IC_NoLabel = false,
+							INPID_InputControl = "ButtonControl",
+							IC_Visible = true,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+								loadstring(tool:GetData("UpdateStyleColor"))()(comp, tool, "Shadow")
+							]],
+						},
+						ShadowColorRed = {
+							LINKS_Name = "Shadow Color",
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							CLRC_ShowWheel = true,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 0,
+							IC_ControlID = 0,
+							IC_ControlGroup = 22,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						ShadowColorGreen = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 0,
+							IC_ControlID = 1,
+							IC_ControlGroup = 22,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						ShadowColorBlue = {
+							INP_Integer = false,
+							CLRC_NoSliders = false,
+							INPID_InputControl = "ColorControl",
+							LINKID_DataType = "Number",
+							INP_Default = 0,
+							IC_ControlID = 2,
+							IC_ControlGroup = 22,
+							ICS_ControlPage = "Controls",
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						GiAutoSubsVersao = {
+							LINKS_Name = "GiAutoSubs (macro version)",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 19,
+							INP_Integer = true,
+							INP_MinScale = 0,
+							INP_MaxScale = 9999,
+							INP_External = false,
+							INP_Passive = true,
+							IC_Visible = false,
+						},
+						WordFillLabel = {
+							LINKS_Name = "Spoken Word",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 4,
+							INP_Default = 1,
+							INP_Integer = false,
+							INP_Passive = true,
+						},
+						WordFillEnabled = {
+							LINKS_Name = "Enabled",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 1,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						WordFillColorRed = {
+							LINKS_Name = "Word Color",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 1,
+							CLRC_ShowWheel = true,
+							IC_ControlID = 0,
+							IC_ControlGroup = 27,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						WordFillColorGreen = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0.9137254902,
+							IC_ControlID = 1,
+							IC_ControlGroup = 27,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						WordFillColorBlue = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							IC_ControlID = 2,
+							IC_ControlGroup = 27,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubbleLabel = {
+							LINKS_Name = "Bubble",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 12,
+							INP_Default = 1,
+							INP_Integer = false,
+							INP_Passive = true,
+						},
+						BubbleEnabled = {
+							LINKS_Name = "Enabled",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 1,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubbleColorRed = {
+							LINKS_Name = "Bubble Color",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							CLRC_ShowWheel = true,
+							IC_ControlID = 0,
+							IC_ControlGroup = 24,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubbleColorGreen = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							IC_ControlID = 1,
+							IC_ControlGroup = 24,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubbleColorBlue = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							IC_ControlID = 2,
+							IC_ControlGroup = 24,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubbleOpacity = {
+							LINKS_Name = "Opacity",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 1,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubbleLevel = {
+							LINKS_Name = "Level",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ComboControl",
+							INP_Integer = true,
+							INP_Default = 2,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 3,
+							INP_External = false,
+							INP_Passive = false,
+							{ CCS_AddString = "Text+ default" },
+							{ CCS_AddString = "Character" },
+							{ CCS_AddString = "Word" },
+							{ CCS_AddString = "Line" },
+						},
+						BubbleExtendHorizontal = {
+							LINKS_Name = "Extend Horizontal",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = -0.047,
+							INP_MinScale = -0.5,
+							INP_MaxScale = 2,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubbleExtendVertical = {
+							LINKS_Name = "Extend Vertical",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.1,
+							INP_MinScale = -0.5,
+							INP_MaxScale = 2,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubbleRound = {
+							LINKS_Name = "Round",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.126,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubblePopEnabled = {
+							LINKS_Name = "Pop",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 1,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubblePopAmount = {
+							LINKS_Name = "Pop Amount",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.15,
+							INP_MinScale = 0,
+							INP_MaxScale = 0.5,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BubblePopFrames = {
+							LINKS_Name = "Pop Frames",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 3,
+							INP_MinScale = 1,
+							INP_MaxScale = 15,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						TextBoxLabel = {
+							LINKS_Name = "Text Box",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 9,
+							INP_Default = 1,
+							INP_Integer = false,
+							INP_Passive = true,
+						},
+						TextBoxEnabled = {
+							LINKS_Name = "Enabled",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						TextBoxColorRed = {
+							LINKS_Name = "Text Box Color",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							CLRC_ShowWheel = true,
+							IC_ControlID = 0,
+							IC_ControlGroup = 25,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						TextBoxColorGreen = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							IC_ControlID = 1,
+							IC_ControlGroup = 25,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						TextBoxColorBlue = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							IC_ControlID = 2,
+							IC_ControlGroup = 25,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						TextBoxOpacity = {
+							LINKS_Name = "Opacity",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.45,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						TextBoxLevel = {
+							LINKS_Name = "Level",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ComboControl",
+							INP_Integer = true,
+							INP_Default = 3,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 3,
+							INP_External = false,
+							INP_Passive = false,
+							{ CCS_AddString = "Text+ default" },
+							{ CCS_AddString = "Character" },
+							{ CCS_AddString = "Word" },
+							{ CCS_AddString = "Line" },
+						},
+						TextBoxExtendHorizontal = {
+							LINKS_Name = "Extend Horizontal",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.2,
+							INP_MinScale = -0.5,
+							INP_MaxScale = 2,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						TextBoxExtendVertical = {
+							LINKS_Name = "Extend Vertical",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.12,
+							INP_MinScale = -0.5,
+							INP_MaxScale = 2,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						TextBoxRound = {
+							LINKS_Name = "Round",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.25,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowLabel = {
+							LINKS_Name = "Box Shadow",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 9,
+							INP_Default = 1,
+							INP_Integer = false,
+							INP_Passive = true,
+						},
+						BoxShadowOnHighlight = {
+							LINKS_Name = "Shadow on Bubble",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowOnNormal = {
+							LINKS_Name = "Shadow on Text Box",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowColorRed = {
+							LINKS_Name = "Shadow Color",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							CLRC_ShowWheel = true,
+							IC_ControlID = 0,
+							IC_ControlGroup = 26,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowColorGreen = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							IC_ControlID = 1,
+							IC_ControlGroup = 26,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowColorBlue = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0,
+							IC_ControlID = 2,
+							IC_ControlGroup = 26,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowCenterX = {
+							LINKS_Name = "Offset X",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.005,
+							INP_MinScale = -0.05,
+							INP_MaxScale = 0.05,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowCenterY = {
+							LINKS_Name = "Offset Y",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = -0.007,
+							INP_MinScale = -0.05,
+							INP_MaxScale = 0.05,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowOpacity = {
+							LINKS_Name = "Opacity",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.55,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxShadowSoftness = {
+							LINKS_Name = "Softness",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 2,
+							INP_MinScale = 0,
+							INP_MaxScale = 10,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						ConfigLabel = {
+							LINKS_Name = "Config",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 1,
+							INP_Default = 1,
+							INP_Integer = false,
+							INP_Passive = true,
+						},
+						DisplayConfig = {
+							LINKS_Name = "Display Config",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ButtonControl",
+							IC_NoLabel = false,
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+								local function gi_dono(comp, tool, nome)
+									local v
+									pcall(function() v = tool and tool:GetData(nome) end)
+									if v ~= nil then return tool end
+									local c = comp
+									if c == nil and tool then pcall(function() c = tool.Comp end) end
+									local tools
+									pcall(function() tools = c:GetToolList(false) end)
+									for _, t in pairs(tools or {}) do
+										pcall(function() v = t:GetData(nome) end)
+										if v ~= nil then return t end
+									end
+									return nil
+								end
+
+								local macro = gi_dono(comp, tool, "InputKeys")
+								local template = comp:FindTool("Template") or tool
+
+								local linhas = {}
+								local function diz(s)
+									linhas[#linhas + 1] = s
+									print(s)
+								end
+
+								diz("[GiAutoSubs] ===== config of this caption =====")
+
+								local versao = "?"
+								pcall(function() versao = tostring(template:GetInput("GiAutoSubsVersao")) end)
+								diz("[GiAutoSubs] macro version in this clip: " .. versao)
+
+								local original
+								pcall(function() original = template:GetData("GiTextOriginal") end)
+								diz("[GiAutoSubs] text as typed: " .. tostring(original or "(not stored yet)"))
+
+								-- Le do MESMO jeito que o script: `GetInputValues` percorre o `InputKeys`.
+								local chaves, valores = {}, {}
+								do
+									local f = macro and macro:GetData("GetInputValues")
+									if f then
+										local ok, r = pcall(function() return loadstring(f)()(macro) end)
+										if ok then valores = r or {} end
+									end
+									local ik = macro and macro:GetData("InputKeys") or {}
+									for _, k in ipairs(ik) do chaves[#chaves + 1] = k end
+								end
+
+								if #chaves == 0 then
+									diz("[GiAutoSubs] could not read InputKeys from the macro - this clip "
+										.. "carries an old copy (see the version above)")
+								else
+									table.sort(chaves)
+									for _, k in ipairs(chaves) do
+										local v = valores[k]
+										if v == nil then pcall(function() v = template:GetInput(k) end) end
+										if type(v) == "number" and v == math.floor(v) then
+											v = string.format("%d", v)
+										elseif type(v) == "number" then
+											v = string.format("%.4f", v)
+										elseif type(v) == "table" then
+											-- Position e Offset sao pares. `tostring` numa tabela imprime o
+											-- ENDERECO ("table: 0x01e4b..."), que nao serve pra nada de volta.
+											local partes = {}
+											for i = 1, 4 do
+												if v[i] == nil then break end
+												partes[#partes + 1] = string.format("%.4f", v[i])
+											end
+											v = "{ " .. table.concat(partes, ", ") .. " }"
+										end
+										diz(string.format("[GiAutoSubs]   %-26s %s", k, tostring(v)))
+									end
+									diz("[GiAutoSubs] ===== " .. #chaves .. " controls =====")
+								end
+
+								-- Tambem em arquivo: o Console do Resolve nao deixa copiar log longo - ele rola
+								-- pra fora antes de dar pra selecionar, e sao ~60 linhas.
+								pcall(function()
+									local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_giconfig.txt", "w")
+									if not fh then return end
+									fh:write(table.concat(linhas, "\n"), "\n")
+									fh:close()
+									print("[GiAutoSubs] saved to D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_giconfig.txt")
+								end)
+							]],
+						},
+						ApplyStyleLabel = {
+							LINKS_Name = "Actions",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 1,
+							INP_Default = 1,
+							INP_Integer = false,
+							INP_Passive = true,
+						},
+						ApplyStyle = {
+							LINKS_Name = "Apply Style",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ButtonControl",
+							IC_NoLabel = false,
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+								local function gi_chunk(comp, tool, nome)
+									local v
+									pcall(function() v = tool and tool:GetData(nome) end)
+									if v ~= nil then return v end
+									local c = comp
+									if c == nil and tool then pcall(function() c = tool.Comp end) end
+									local tools
+									pcall(function() tools = c:GetToolList(false) end)
+									for _, t in pairs(tools or {}) do
+										pcall(function() v = t:GetData(nome) end)
+										if v ~= nil then return v end
+									end
+									return nil
+								end
+
+								local quando = ""
+								pcall(function() quando = " " .. os.date("%H:%M:%S") end)
+								print("[GiAutoSubs] --- Apply Style" .. quando .. " ---")
+
+								local f = gi_chunk(comp, tool, "SetInputValues")
+								if f then
+									loadstring(f)()(comp, tool, nil, "button")
+								else
+									print("[GiAutoSubs] Apply Style: no tool in this comp owns SetInputValues - "
+										.. "the clip carries an old copy of the macro (see MACRO_VERSAO)")
+								end
+							]],
+						},
+						TextCase = {
+							LINKS_Name = "Case",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ComboControl",
+							INP_Integer = true,
+							INP_Default = 2,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 2,
+							INP_External = false,
+							INP_Passive = false,
+							{ CCS_AddString = "As typed" },
+							{ CCS_AddString = "lowercase" },
+							{ CCS_AddString = "UPPERCASE" },
+						},
+					}
+				},
+				Follower1 = StyledTextFollower {
+					Inputs = {
+						Enabled5 = Input { Value = 0, },
+						Blue4 = Input { Value = 0, },
+						Green4 = Input { Value = 0, },
+						Red4 = Input { Value = 0, },
+						Enabled4 = Input { Value = 1, },
+						Enabled7 = Input { Value = 0, },
+						Enabled6 = Input { Value = 0, },
+						Blue2 = Input { Value = 0, },
+						Blue1 = Input { Value = 1, },
+						Green1 = Input { Value = 1, },
+						Red1 = Input { Value = 1, },
+						Enabled1 = Input { Value = 1, },
+						Order = Input {
+							SourceOp = "OrderKeyframeStretcher",
+							Source = "Result",
+						},
+						DelayByCharacterPosition = Input {
+							SourceOp = "Follower1DelaybyCharacterPosition",
+							Source = "Value",
+						},
+						DelayType = Input { Value = 0, },
+						Delay = Input { Value = 0, },
+						Text = Input {
+							SourceOp = "CharacterLevelStyling1",
+							Source = "StyledText",
+						},
+						TransformRotation = Input { Value = 1, },
+						SelectElement = Input { Value = 2, },
+						Enabled2 = Input { Value = 1, },
+						Enabled3 = Input { Value = 0, },
+						Opacity1 = Input {
+							SourceOp = "AnimationKeyframeStretcher",
+							Source = "Result",
+						},
+						Softness1 = Input { Value = 1, },
+						Opacity2 = Input {
+							SourceOp = "AnimationKeyframeStretcher",
+							Source = "Result",
+						},
+						Thickness2 = Input { Value = 0.15, },
+						Red2 = Input { Value = 0, },
+						Green2 = Input { Value = 0, },
+						Softness2 = Input { Value = 1, },
+						Opacity3 = Input {
+							SourceOp = "AnimationKeyframeStretcher",
+							Source = "Result",
+						},
+						Softness3 = Input { Value = 1, },
+						Opacity4 = Input {
+							SourceOp = "AnimationKeyframeStretcher",
+							Source = "Result",
+						},
+						Softness4 = Input { Value = 1, },
+						Softness5 = Input { Value = 1, },
+						Softness6 = Input { Value = 1, },
+						Softness7 = Input { Value = 1, },
+						Softness8 = Input { Value = 1, }
+					},
+				},
+				AnimationKeyframeStretcher = KeyStretcherMod {
+					CtrlWZoom = false,
+					Inputs = {
+						Keyframes = Input {
+							SourceOp = "KeyframeStretcher1Keyframes",
+							Source = "Value",
+						},
+						SourceEnd = Input { Value = 100, },
+						StretchStart = Input { Value = 15, },
+						StretchEnd = Input { Value = 85, }
+					},
+				},
+				OrderKeyframeStretcher = KeyStretcherMod {
+					Inputs = {
+						Keyframes = Input {
+							SourceOp = "KeyframeStretcher2Keyframes",
+							Source = "Value",
+						},
+						SourceEnd = Input { Value = 100, },
+						StretchEnd = Input { Value = 85, }
+					},
+				},
+				KeyframeStretcher1Keyframes = BezierSpline {
+					SplineColor = { Red = 193, Green = 106, Blue = 231 },
+					NameSet = true,
+					KeyFrames = {
+						[0] = { 1, Flags = { StepIn = true } },
+						[100] = { 1, Flags = { StepIn = true } }
+					},
+				},
+				KeyframeStretcher2Keyframes = BezierSpline {
+					SplineColor = { Red = 193, Green = 106, Blue = 231 },
+					NameSet = true,
+					KeyFrames = {
+						[84] = { 6, Flags = { StepIn = true } },
+						[85] = { 0, Flags = { StepIn = true } },
+					}
+				},
+				CharacterLevelStyling1 = StyledTextCLS {
+					CtrlWZoom = false,
+					Inputs = {
+						TransformRotation = Input { Value = 1, },
+						SelectElement = Input { Value = 1, },
+						Softness = Input { Value = 1, },
+						Text = Input { Value = "Subtitle Example Text", },
+						CharacterLevelStyling = Input {
+							SourceOp = "CharacterLevelStyling1RightclickHeretoAnimateCharacterLevelStyling",
+							Source = "Value",
+						}
+					},
+				},
+				CharacterLevelStyling1RightclickHeretoAnimateCharacterLevelStyling = BezierSpline {
+					SplineColor = { Red = 240, Green = 105, Blue = 156 },
+					CtrlWZoom = false,
+					KeyFrames = {
+						[0] = { 0, Flags = { StepIn = true, LockedY = true }, Value = StyledText { Array = { }, Value = "" } }
+					},
+				}
+			},
+			UserControls = ordered() {
+			    Icon = { INP_Integer = false, INPID_InputControl = "LabelControl", IC_ControlPage = -1, LBLC_MultiLine = true, INP_External = false, LINKID_DataType = "Number", IC_NoReset = true, INP_Passive = true, IC_NoLabel = true, LINKS_Name = "<center><img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAWMAAAAjCAYAAABB7Ws5AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAA2QSURBVHgB7V1NjBTHFX41O4v5MXitGBTJyG4Qlh0jxYNQYt/olcKZ5cAhyWEHJVaSQ8KiKImUHHZGOURCiXb2FMuytbMHcsGW2UOUX2kb3yJZYqIIB8lI2yQgJQF7F4zACbNTqdf1qru6p7pnprfBC12fKGq6fl/VbH396tXrHgALCwsLCwsLCwsLCwsLCwuLTQEGFnDg2zdcER1jPTbFGXfSyuFkcYgmjZuLdRiwztj4WPPyG0/7YGFhYTEESk3GzszqRPV2d1bMwowpnxH7xkk3umLqf/GP84istQKtbrfa9NtPr4GFhYVFBkpLxgER3+kuC/asmfJZQLBcxJJpeZimlaGCioiRinn/lHa669VJS8gWFhZZqEBJEWjEBiJGKlVEjOC8B5KKxf89TmwsYx6EnsyL6cQx/bhWrYq+LCwsLDJQSs34pe+uOt373ZX+HKkJc0W4ABqvRmmvvrgFdm6vwJ8v/pfyWBgJezFp0SymRYvkyStv7fbAwsLCwoAqlBDr99djmmp4MJck4gA9GYmkXdsZfP/Yk1A/uiNIun5zHb555hO4/vE6tcJIQ2ahiUMRsrieEpEHFhYWFgaU0kzBGY+ZJ7j2f6QRoymiRzEXJLwDls/sDokY8ewzY+CJtL1fqER1CMktRwUqx8DCYhNAKAYTIjhgsalQTptxn61YHrsF9t9AMeYhGX/1xXFBuHvgB8d2Cs3YPF3PCjLmfB1C1ws68Au047CH8v7x48IvevGL9uZEWIZNABrfBDw6uCjCipDZBYtNg9Ie4CkwYkse+rDxMHzt0FY4+5NnAg04GzwicOiF9QMzRZo3cg4QAeEieg8KBhIbtg8FgbQvlHdVXKJ9foVknyuIuPCG6sLnBDGGOs0ZfsE4vlUcqwgLm0HrFDLMkHy1jGKP0g3ksUcpbcYKUhumC/U0h9JshVb8s68/1VfnL5c/Cwj2tZe2hWmRnZlrT4VIP7i+g7ycIAJT/tCBJibaLtJdzoWCQLKi9uWAtJNfoKxpkGNwRTgEjyBobAsi4BkAzn9bhKuUfUSEOgZRriG+nyZ8flA3KxPhTmK6kK8DFpsGpSbj6CmNyF1NEfGrwjyxV9OIb9/twfx7H0P7D7fgzOt7ADQy1s0crDKmNY3tsf6HQfJhimIfJMnVRWjBQwaREYa1jJsByuqI0BRlGlpdlBdNCzU80BR556FY2RyMRbv+EGWHGYcJuHvA8c2L0EjWpa0/7lwa4vMtkd8quP8N1UUMOT/OsGWLkqvsKLeZQpkVuH4dfOgr+qcP7sDC7z4RZuR16FN10Rc5sBmDRuhaW8U4EE5TfJxi44EgkgGXaAyTT9ttJazKQywk6tXIRqvMDqtkdjhl6Mal2NMTaYGeFqGZaHuZ+nTALPOg/FMJc0iquYDGnxzHAh/CtIBzBfIm2BZjmTERjkjzIPqOZpMmmZT+l8nu3KBx1rXyKs0dVnb6PtXfi5o7ruUb55NL09LsCHPJqa1a3jm1iFBazTjSVkPbRHAlD/F60E/IeL0eaLrmPHowJDBNqLRiWJj+qF0RPNxaimsPJHHWCthqYn0kx1mQWveilq76x4Xdhvi2HEkGbwgtJA8hh8nsgFtlT08gsvKgICB5iKghAmrZf6VklLcOco4OKdLk0n66TOPAMfsg57WvbAoUwWWaH3CMoq19BlnVPCI8iJtvLkL2vOBcz1AZ1f8Rkn1KtD2p/S00qXwN4maUVNDfGM6Nk5BN9eFSH36iqqqHfZ+mtFMw/JxaEEpJxjG/4p5m6wXd9msg3D4fZD2b8phGwrodemNQJopFLXYpfUNkTAu4Q6Tm62YFBC1S3Gr7IiQXIx4StUU8zaWNVNUN0kBqhnh9fpTt7ohAgjqUuCk1lFwgbzKntbKI43RTCGQVZZEskECmICLLGEjDdQFfBDXEWJJlaB4bdDmp9a/kbZEMaUDZm4bvB69xjGga2Ud9N6g/JOPFRF9pWACDaYn6wL7nqMxkop6pDt6gUZ4pkrsBFgNRTj9jkI9nyJdKKBJVOZqGnKiFaTu3oX/xeDxHP8Dr6ynSvzcAtUg9ilELXIPsxVsUcDEhETVTSGgmKQst/ial4yJeoe3szAPYujZTdgdKrjof7L2BRIgk42WUcSgeqGWmwKU22iZyRLMHSHnTsJQkSaqHaR7IQ10XcoB2DC7InVfD0EeL+nANfayZ6kCkvWd5c1hoKLHNmMU+B++g0N470ceeIuno4Z3w21+8AK+9vKMvU7PIgVmzzgdaKA7IxegH0spt35IIE/zB+4q+QrFRA0/IUtPSGyA9Jk6C1OQdiIh5ForDeRggF0RE2qZ4mWyaLpXFHYE3QOPd6FZb2fgXM8pk5Z0fop4L+eBSvASj95H2d6HSnwKLoVBaMuaxd09wPYPiOJke/couePOHDuzdvaWvLenJljj8Y+qNb9D3GqERoTTOdiJdXU/BQ8CQtumJRB3UmlATRJsybqGRmH2Q2/I6FIABBKryHCrrgdzKY1wHScrDHjYpMn4e8mEiIVNWHyb4Q+RtVLZh+s/bh8UAlJKMw6fiNCKOFGEevqVNx67t6Q9+ROZmrlVjmkfFhuBSfIxIIwgQHSZN89EeohilLEIdfjkZZYbSfpCYQRIy4kiyjzwYINcryfZJC0aTBJIyej2gNlgX4WJWW6RpeyDd8lLLZUCZN5yMMlnfjTNEXl4TytoI/eftw2IASmwzZqmGXDaqHsujdxsDSyjbLPxvZHD5ciEH5GJxDQHTcQHpdrlBGtyoNjzloTCVIqNDsvjKFkruUcspJhQln6Ol3TKk6UhLR9TBLJc+Lx1KqyVME3iwiPWRlLH8DGRDbdUzn1TE743cvla0G6XaWbgZVbPeXzI9RD0P8qGTaMeEIxvsw2IAymszjrmfRe5tHHiqRnv77jrMv/Mv+OMHt/ry6NhPknxfR7k1ZLU48PR/XzKA5s+q1fFBEt6UwY8Ur7MWtWNIa1N7sya/VJDEhLFu78RBuyl9mWynyh7aZ0vm0o/ZgXScStFU5yA6MFvT0kw3iaE0c9LsPZBza3ysm9pWZN3U+m5DNI81Q71ZyB6na7K1UxreKP0Ur4mBOyHN3dAlzwlTH/WMPiwKQGn9jHnsAY/oAC6izjiBfnj1HnznVytw7cb/4JffiyudaBtmrAJKpw615LAdNrJuTAu9DhkLgPxZfZCLaIJstGvicxMkIeDWG4nuAsgte9BeSpcetYMuSagNd0hz9LX2VshlDPNxEpTmnjyFbwH5+hJRqoOhI1THB+1ACvsR5TrU/wpIol5LlHdS5F7MkAvrNbWy+NkVYYHmRZWf0eQeBLwBLlCdKfL5vqqNz1V9EXmrMeL3cprqXtTkReg+wXVIH2eDyH5Jq4fXOFeTifIeyO9gTpF/iteDApqPlqk8juNCog/f0IdFgSjxQx8sRrrhTyqlKLF/F2R8/WY3qNd659/wpee2wcvOVlj4/Sp8+A98yXwlbDl62TxLPFIyEpRZwBtQDhep0lxaslvWIt9ZlY4Br+epvWVDO7gYF6hf5W97Xmuvo7WngG32+aUS8eDCxXS1mFV5bPc0638Q4DiVn4ZIQ8Y+J+naAQPQJYzGGpC/LpcILb0funkdp/Z0DbBDMvkwANTecTqA1PvUx7eY4r7WppvnXKKeR+OcgnS0QX4fcxA3k2Ddk0nZqa8axOezkdY43XTVdzatyaLG1GQPzlfcAvIaMx9xHPjWDR7+tJL62SR8nJmevsPP+Gsev/np3rDOu++vwo/e+CdERFuBXTuq8Ok9tBOPictqkKY05NjnoDyDj97a/dDnm+d4x8CA9lBjnxilzVFlyCuzZq4Y+G6EPOMY1C97AO9x0B7qmNRs8kPV3QhGmUuLYlDSJ/DEouE9R7fmys9M5YPxPoXkGlgdpFni07uUxnRfjMgoEbYdvEpzY0/K5UXR2gwtzJEW56gy5JV5lHp5xlFEv0X0X6TsGX34YPFQUcoDPKH/LklPNLLwBqxJRCzIlRvJGK/FdOFb2QKNFz9XQmJW5gnppcHIRMHCc0LG7esKLSws0lFOP2PG5eFRyJSKfNWPicr3Fv/4zf/ANWEnfvf92/DzszcEB0vTAxNmiYCUQZkiNFJm6ieYIGwPw9j4/SZYWFhYpKCUNmPEC6/fbEGvd4qHjy4LW3GvB/KVmr0w7cmtIMwRXc0UEWnQkoSTREwacmCaUGYPmP/o7T0zYGExIkw2Y4vHE6X1M95arTZ55FoEoMwLdPgGRKZ3PgN5OAeSfBmr9BFxaLbQiDgibejc3zneAAuLfGiD9LSwZq7HHKXUjLn8OST23DeuTjyxbdss5z35/gf0pAD1i9DaO41DnzcW15CVVqw+Q2QrJsxv3XKv+bdfP78KFhYWFhkorZmCwBqNBjt79aTDYRxJuSa03i9HD4IQIetOwiyh/WratDRBi1No1luqcL50+e0veqJcDhdjCwuLsqHUZCyIODTTXLp0iZ07d44dPHiwIj5jEnMch3W7XXbt2jUQn7nv+5jGq9VqQLBXrlzhhw8f5vv37++Jepza5JyrB0ksEVtYWFgMhCBNhkF8rJw4cWIMA0jfa3x7/BZBsPi+zC0HDhx4QsRP0PW4IOAguK5bxTpE6hWMtTYtLCwshsb/Aap7Tgd+tNxYAAAAAElFTkSuQmCC > ", },
+				Text = ControlPage {
+					CT_Visible = true,
+					CTID_DIB_ID = 'Icons.Tools.Tabs.Text'
+				},
+				Style = ControlPage {
+					CT_Visible = false,
+				},
+				Controls = ControlPage {
+					CT_Visible = false,
+				},
+				Settings = ControlPage {
+					CT_Visible = false,
+				},
+			},
+			Inputs = ordered() {
+				-- Inputs publishes controls to the Macro inspector.
+				-- InstanceInput creates a visible inspector entry that points back to a
+				-- UserControls entry on the Template via SourceOp/Source.
+				-- In most cases the instance name matches the source control name 1:1.
+				TextLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "SubtitleLabel",
+					Page = "Text",
+				},
+				Text = InstanceInput {
+					SourceOp = "Template",
+					Source = "Text",
+					Page = "Text",
+				},
+				Font = InstanceInput {
+					SourceOp = "Template",
+					Source = "Font",
+					ControlGroup = 4,
+					Page = "Text",
+				},
+				Style = InstanceInput {
+					SourceOp = "Template",
+					Source = "Style",
+					ControlGroup = 4,
+					Page = "Text",
+				},
+				TextCase = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextCase",
+					Name = "Case",
+					Page = "Text",
+				},
+				TextSize = InstanceInput {
+					SourceOp = "Template",
+					Source = "Size",
+					Default = 0.08,
+					Page = "Text",
+				},
+				TextPosition = InstanceInput {
+					SourceOp = "Template",
+					Source = "Center",
+					Name = "Center",
+					Page = "Text",
+				},
+				ApplyStyleLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "ApplyStyleLabel",
+					Page = "Text",
+				},
+				ApplyStyle = InstanceInput {
+					SourceOp = "Template",
+					Source = "ApplyStyle",
+					Page = "Text",
+				},
+				AnimationLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "AnimationLabel",
+					Page = "Text",
+				},
+				AnimationLevel = InstanceInput {
+					SourceOp = "Template",
+					Source = "AnimationLevel",
+					Page = "Text",
+					Default = 0,
+				},
+				AnimationMode = InstanceInput {
+					SourceOp = "Template",
+					Source = "AnimationMode",
+					Page = "Text",
+					Default = 2,
+				},
+				FadeEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "FadeEnabled",
+					Page = "Text",
+					Default = 0,
+				},
+				PopInEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "PopInEnabled",
+					Page = "Text",
+					Default = 0,
+				},
+				SlideUpEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "SlideUpEnabled",
+					Page = "Text",
+					Default = 0,
+				},
+				AnimationLength = InstanceInput {
+					SourceOp = "Template",
+					Source = "AnimationLength",
+					Page = "Text",
+				},
+
+
+
+
+
+
+
+
+
+
+				FillLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "FillLabel",
+					Page = "Text",
+				},
+				FillEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "FillEnabled",
+					Name = "Enabled",
+					Page = "Text",
+					Default = 1,
+				},
+				FillColorRed = InstanceInput {
+					SourceOp = "Template",
+					Source = "FillColorRed",
+					Name = "Fill Color",
+					ControlGroup = 121,
+					Page = "Text",
+					Default = 1,
+				},
+				FillColorGreen = InstanceInput {
+					SourceOp = "Template",
+					Source = "FillColorGreen",
+					ControlGroup = 121,
+					Page = "Text",
+					Default = 1,
+				},
+				FillColorBlue = InstanceInput {
+					SourceOp = "Template",
+					Source = "FillColorBlue",
+					ControlGroup = 121,
+					Page = "Text",
+					Default = 1,
+				},
+				OutlineLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "OutlineLabel",
+					Page = "Text",
+				},
+				OutlineEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "OutlineEnabled",
+					Name = "Enabled",
+					Page = "Text",
+					Default = 1,
+				},
+				OutlineThickness = InstanceInput {
+					SourceOp = "Template",
+					Source = "OutlineThickness",
+					Default = 0.15,
+					Page = "Text",
+				},
+				OutlineColorRed = InstanceInput {
+					SourceOp = "Template",
+					Source = "OutlineColorRed",
+					Name = "Outline Color",
+					ControlGroup = 120,
+					Page = "Text",
+					Default = 0,
+				},
+				OutlineColorGreen = InstanceInput {
+					SourceOp = "Template",
+					Source = "OutlineColorGreen",
+					ControlGroup = 120,
+					Page = "Text",
+					Default = 0,
+				},
+				OutlineColorBlue = InstanceInput {
+					SourceOp = "Template",
+					Source = "OutlineColorBlue",
+					ControlGroup = 120,
+					Page = "Text",
+					Default = 0,
+				},
+				ShadowLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "ShadowLabel",
+					Page = "Text",
+				},
+				ShadowEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "ShadowEnabled",
+					Name = "Enabled",
+					Page = "Text",
+					Default = 0,
+				},
+				ShadowColorRed = InstanceInput {
+					SourceOp = "Template",
+					Source = "ShadowColorRed",
+					Name = "Shadow Color",
+					ControlGroup = 122,
+					Page = "Text",
+					Default = 0,
+				},
+				ShadowColorGreen = InstanceInput {
+					SourceOp = "Template",
+					Source = "ShadowColorGreen",
+					ControlGroup = 122,
+					Page = "Text",
+					Default = 0,
+				},
+				ShadowColorBlue = InstanceInput {
+					SourceOp = "Template",
+					Source = "ShadowColorBlue",
+					ControlGroup = 122,
+					Page = "Text",
+					Default = 0,
+				},
+
+				-- Multiple InstanceInputs can point to the same source control.
+				-- Use distinct instance names only when exposing the same control in different
+				-- pages/groups/roles.
+				WordFillLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "WordFillLabel",
+					Page = "Text",
+				},
+				WordFillEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "WordFillEnabled",
+					Name = "Enabled",
+					Page = "Text",
+				},
+				WordFillColorRed = InstanceInput {
+					SourceOp = "Template",
+					Source = "WordFillColorRed",
+					Name = "Word Color",
+					ControlGroup = 127,
+					Page = "Text",
+				},
+				WordFillColorGreen = InstanceInput {
+					SourceOp = "Template",
+					Source = "WordFillColorGreen",
+					ControlGroup = 127,
+					Page = "Text",
+				},
+				WordFillColorBlue = InstanceInput {
+					SourceOp = "Template",
+					Source = "WordFillColorBlue",
+					ControlGroup = 127,
+					Page = "Text",
+				},
+				BubbleLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleLabel",
+					Page = "Text",
+				},
+				BubbleEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleEnabled",
+					Name = "Enabled",
+					Page = "Text",
+				},
+				BubbleColorRed = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleColorRed",
+					Name = "Bubble Color",
+					ControlGroup = 124,
+					Page = "Text",
+				},
+				BubbleColorGreen = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleColorGreen",
+					ControlGroup = 124,
+					Page = "Text",
+				},
+				BubbleColorBlue = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleColorBlue",
+					ControlGroup = 124,
+					Page = "Text",
+				},
+				BubbleOpacity = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleOpacity",
+					Page = "Text",
+				},
+				BubbleLevel = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleLevel",
+					Page = "Text",
+				},
+				BubbleExtendHorizontal = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleExtendHorizontal",
+					Page = "Text",
+				},
+				BubbleExtendVertical = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleExtendVertical",
+					Page = "Text",
+				},
+				BubbleRound = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubbleRound",
+					Page = "Text",
+				},
+				BubblePopEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubblePopEnabled",
+					Name = "Pop",
+					Page = "Text",
+				},
+				BubblePopAmount = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubblePopAmount",
+					Page = "Text",
+				},
+				BubblePopFrames = InstanceInput {
+					SourceOp = "Template",
+					Source = "BubblePopFrames",
+					Page = "Text",
+				},
+				TextBoxLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxLabel",
+					Page = "Text",
+				},
+				TextBoxEnabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxEnabled",
+					Name = "Enabled",
+					Page = "Text",
+				},
+				TextBoxColorRed = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxColorRed",
+					Name = "Text Box Color",
+					ControlGroup = 125,
+					Page = "Text",
+				},
+				TextBoxColorGreen = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxColorGreen",
+					ControlGroup = 125,
+					Page = "Text",
+				},
+				TextBoxColorBlue = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxColorBlue",
+					ControlGroup = 125,
+					Page = "Text",
+				},
+				TextBoxOpacity = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxOpacity",
+					Page = "Text",
+				},
+				TextBoxLevel = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxLevel",
+					Page = "Text",
+				},
+				TextBoxExtendHorizontal = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxExtendHorizontal",
+					Page = "Text",
+				},
+				TextBoxExtendVertical = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxExtendVertical",
+					Page = "Text",
+				},
+				TextBoxRound = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxRound",
+					Page = "Text",
+				},
+				BoxShadowLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowLabel",
+					Page = "Text",
+				},
+				BoxShadowOnHighlight = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowOnHighlight",
+					Page = "Text",
+				},
+				BoxShadowOnNormal = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowOnNormal",
+					Page = "Text",
+				},
+				BoxShadowColorRed = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowColorRed",
+					Name = "Shadow Color",
+					ControlGroup = 126,
+					Page = "Text",
+				},
+				BoxShadowColorGreen = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowColorGreen",
+					ControlGroup = 126,
+					Page = "Text",
+				},
+				BoxShadowColorBlue = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowColorBlue",
+					ControlGroup = 126,
+					Page = "Text",
+				},
+				BoxShadowCenterX = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowCenterX",
+					Page = "Text",
+				},
+				BoxShadowCenterY = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowCenterY",
+					Page = "Text",
+				},
+				BoxShadowOpacity = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowOpacity",
+					Page = "Text",
+				},
+				BoxShadowSoftness = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxShadowSoftness",
+					Page = "Text",
+				},
+				ConfigLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "ConfigLabel",
+					Page = "Text",
+				},
+				DisplayConfig = InstanceInput {
+					SourceOp = "Template",
+					Source = "DisplayConfig",
+					Page = "Text",
+				},
+			},
+			Outputs = {
+				MainOutput1 = InstanceOutput {
+					SourceOp = "Template",
+					Source = "Output",
+				},
+				Output1 = InstanceOutput {
+					SourceOp = "Follower1",
+					Source = "StyledText",
+				},
+				Output2 = InstanceOutput {
+					SourceOp = "KeyframeStretcher2",
+					Source = "Result",
+				},
+				Output3 = InstanceOutput {
+					SourceOp = "KeyframeStretcher2Keyframes",
+					Source = "Value",
+				},
+				Output4 = InstanceOutput {
+					SourceOp = "Follower1DelaybyCharacterPosition",
+					Source = "Value",
+				},
+				Output5 = InstanceOutput {
+					SourceOp = "KeyframeStretcher1Keyframes",
+					Source = "Value",
+				},
+			},
+		},
+		-- Needs to be placed outside of the AutoSubs tool list.
+		-- Otherwise the macro will break when Resolve is restarted (not sure why)
+		Follower1DelaybyCharacterPosition = BezierSpline {
+			SplineColor = { Red = 33, Green = 7, Blue = 252 },
+			KeyFrames = {
+				[0] = { 0, RH = { 2.66666666666667, 3.33333333333333 }, Flags = { StepIn = true } },
+				[8] = { 10, LH = { 5.33333333333333, 6.66666666666667 }, RH = { 10.6666666666667, 13.3333333333333 }, Flags = { StepIn = true } },
+				[16] = { 20, LH = { 13.3333333333333, 16.6666666666667 }, Flags = { StepIn = true } }
+			}
+		},
+	}
+}

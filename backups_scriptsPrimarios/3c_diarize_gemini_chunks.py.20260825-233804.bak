@@ -1,0 +1,338 @@
+"""
+PASSO 3c - Diarizacao via Gemini em PEDACOS pequenos (chunks), pra reduzir o
+risco de alucinacao de timestamp que vimos rodando o segmento inteiro de uma
+vez (3_diarize_gemini_video.py): confirmamos um bloco de 10 turnos duplicado
+literalmente, deslocado +380s, bem depois do fim real do video. Pedacos
+menores dao ao modelo um contexto bem mais curto e bem definido, reduzindo a
+chance de ele "continuar" gerando alem do conteudo real - e mesmo se
+acontecer de novo, o raio de dano fica limitado aquele pedaco (cada pedaco
+tem sua duracao real checada e turnos alem dela sao descartados na hora, nao
+so no final).
+
+Cada chamada ao Gemini nao tem memoria da anterior: SPEAKER_00 do pedaco 1
+NAO e necessariamente a mesma pessoa que SPEAKER_00 do pedaco 2. Reconciliamos
+automaticamente pela POSICAO na descricao visual (esquerda/centro/direita/
+fora de quadro) - funciona porque as pessoas nao trocam de lugar durante a
+gravacao. Saida final usa labels genericos (SPEAKER_LEFT/CENTER/RIGHT/OFFCAM)
+- de dar nome de verdade (Giovanni, Cupertino...) continua sendo trabalho do
+5_name_speakers.py, como no fluxo de pedaco unico.
+
+Instalacao: mesma do 3_diarize_gemini_video.py (google-genai, pydantic) + ffmpeg
+no PATH. Requer GEMINI_API_KEY no ambiente.
+
+Uso:
+    python 3c_diarize_gemini_chunks.py sourceMedia_ou_video_fonte.mkv \\
+        --start 2610 --end 4165.93 --chunk-seconds 180 --speakers 4 \\
+        --title EpisodioPiloto
+
+Video-fonte, recorte e upload de cada pedaco ficam em
+utilitarios\\<title>\\chunkNN.mp4 (arquivo de trabalho - pode apagar depois,
+nao e' usado pelo resto do pipeline).
+
+Turnos reconciliados (ja com "name" - nome real, nao label generico) sao
+salvos em resultados\\<title>\\turnsGemini_<versao-do-modelo>_Chunks.json
+(ex: turnsGemini_3.5_Chunks.json pro gemini-3.5-flash) - passe isso pro
+1_diarize_v3.py --from-json (com --wav/--duration e --range-start) pra
+limpar e gerar os planos finais, como sempre.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+
+from dotenv import load_dotenv
+from google import genai
+from google.genai import errors, types
+from pydantic import BaseModel
+
+# Le GEMINI_API_KEY e GEMINI_MODEL do .env nesta mesma pasta (nao sobrescreve
+# se ja estiverem setados no ambiente do sistema).
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")  # trocavel via .env, sem editar codigo
+# extrai "3.5" de "gemini-3.5-flash", "3.1" de "gemini-3.1-flash-lite" etc -
+# usado no nome do arquivo de saida default, pra distinguir runs de modelos
+# diferentes (turnsGemini_3.5_Chunks.json, turnsGemini_3.7_Chunks.json...)
+MODEL_VERSION = MODEL.replace("gemini-", "").split("-")[0]
+
+_RESULTADOS_ROOT = r"D:\CanalYtbe\BatataQuente\scriptsPrimarios\resultados"
+_UTILITARIOS_ROOT = r"D:\CanalYtbe\BatataQuente\scriptsPrimarios\utilitarios"
+VIDEO_TITLE = "EpisodioPiloto"
+
+# Posicao (fixa, pela cadeira de cada um) -> nome de verdade. Tem que bater
+# com NAME_TO_TRACK/OFF_CAMERA_NAMES do 2_SpeakerSwitch_v3.py - troque aqui se
+# alguem trocar de lugar ou for um episodio com pessoas diferentes. Faz a
+# saida final usar "name" (padrao do resto do diarize, ver 5_name_speakers.py)
+# em vez do label generico SPEAKER_LEFT/CENTER/RIGHT/OFFCAM.
+POSITION_TO_NAME = {
+    "SPEAKER_LEFT": "Giovanni",
+    "SPEAKER_CENTER": "Cupertino",
+    "SPEAKER_RIGHT": "Heitor",
+    "SPEAKER_OFFCAM": "no_name",
+}
+
+
+class Turn(BaseModel):
+    speaker: str
+    start: float
+    end: float
+
+
+class SpeakerDesc(BaseModel):
+    speaker: str
+    description: str
+
+
+class DiarizationResult(BaseModel):
+    speakers: list[SpeakerDesc]
+    turns: list[Turn]
+
+
+SYSTEM_PROMPT = """Voce assiste um TRECHO CURTO de video com uma conversa entre multiplas \
+pessoas em quadro (e possivelmente uma pessoa narrando fora de quadro) e faz a diarizacao: \
+identifica QUEM fala QUANDO, sem transcrever o conteudo.
+
+O audio e de um microfone unico captando a sala inteira - vozes vazam umas nas \
+outras. Por isso, USE PISTAS VISUAIS (boca mexendo, gesticulacao, quem esta em \
+quadro) junto com o audio pra decidir quem esta falando, especialmente quando o \
+audio sozinho for ambiguo (duas pessoas com timbre parecido, sobreposicao de fala).
+
+Regras:
+- Rotule cada pessoa como SPEAKER_00, SPEAKER_01, SPEAKER_02 etc, na ordem em que \
+aparecem pela primeira vez NESSE TRECHO (nao precisa bater com outros trechos).
+- Cada turno e um trecho continuo (em segundos, desde o inicio DESSE TRECHO, nao do \
+video original) em que a MESMA pessoa fala, do inicio ao fim daquele trecho.
+- Ignore trechos de silencio total ou ruido sem fala.
+- Nao junte duas pessoas diferentes no mesmo turno, mesmo que a voz seja parecida -
+use a imagem pra desempatar.
+- Cubra o trecho inteiro, do segundo 0 ate o final DESSE TRECHO - NAO invente turnos \
+depois do fim real do trecho enviado, mesmo que pareca que "falta" cobrir mais tempo.
+- Para CADA speaker label usado nos turnos, inclua uma descricao visual curta e \
+objetiva (posicao no quadro - esquerda/centro/direita, roupa, cabelo, ou "fora de \
+quadro, so audio" se for o caso) que ajude a identificar quem e quem depois."""
+
+
+def cut_chunk(source_video, start, dur, out_path):
+    cmd = [
+        "ffmpeg", "-y", "-ss", str(start), "-i", source_video, "-t", str(dur),
+        "-vf", "scale=640:-2", "-r", "5",
+        "-c:v", "libx264", "-crf", "28", "-preset", "veryfast",
+        "-c:a", "aac", "-b:a", "64k", out_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) == 0:
+        raise RuntimeError(f"ffmpeg falhou pro pedaco {out_path}: {result.stderr[-1000:]}")
+
+
+def diarize_chunk(client, video_path, num_speakers):
+    uploaded = client.files.upload(file=video_path)
+    while uploaded.state.name == "PROCESSING":
+        time.sleep(5)
+        uploaded = client.files.get(name=uploaded.name)
+    if uploaded.state.name == "FAILED":
+        raise RuntimeError(f"Gemini falhou ao processar o video: {uploaded.error}")
+
+    user_message = (
+        f"Este video tem aproximadamente {num_speakers} pessoas falando (uma "
+        "delas pode estar fora de quadro). Faca a diarizacao completa DESSE TRECHO, "
+        "usando pistas visuais pra desambiguar vozes parecidas."
+    )
+    max_attempts = 6
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=[uploaded, user_message],
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    response_schema=DiarizationResult,
+                    temperature=0.2,
+                ),
+            )
+            return json.loads(response.text)
+        except errors.APIError as e:
+            if e.code in (401, 403):
+                raise SystemExit("Credenciais invalidas: defina GEMINI_API_KEY.")
+            if e.code == 429:
+                violations = (e.details or {}).get("error", {}).get("details", [])
+                quota_id = ""
+                for v in violations:
+                    for viol in v.get("violations", []):
+                        quota_id = viol.get("quotaId", "")
+                if "PerDay" in quota_id:
+                    # cota diaria esgotada - nenhum retry dentro dessa execucao
+                    # vai resolver, so reseta amanha (ou habilitando billing)
+                    raise SystemExit(
+                        f"Cota DIARIA do Gemini esgotada ({quota_id}). Nao adianta re-tentar "
+                        "agora - so reseta amanha ou habilitando billing na conta.")
+                if attempt < max_attempts:
+                    wait = 20 * attempt
+                    print(f"    [!] rate limit (429, {quota_id or 'sem quotaId'}), "
+                          f"tentando de novo em {wait}s...", file=sys.stderr)
+                    time.sleep(wait)
+                    continue
+                raise RuntimeError("Rate limit atingido na API do Gemini (esgotou as tentativas).")
+            if e.code == 503 and attempt < max_attempts:
+                wait = 2 ** attempt
+                print(f"    [!] modelo sobrecarregado (503), tentando de novo em {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            raise RuntimeError(f"Erro da API do Gemini ({e.code}): {e.message}")
+
+
+def classify_position(description):
+    d = description.lower()
+    if "fora de quadro" in d or "fora da tela" in d or "so audio" in d or "só áudio" in d.replace("ó", "o"):
+        return "SPEAKER_OFFCAM"
+    if "esquerda" in d:
+        return "SPEAKER_LEFT"
+    if "direita" in d:
+        return "SPEAKER_RIGHT"
+    if "centro" in d:
+        return "SPEAKER_CENTER"
+    return None
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("video", help="video-fonte (ex: Raw_videos\\EpisodioPiloto.mkv)")
+    ap.add_argument("--start", type=float, required=True, help="segundos, inicio do trecho a diarizar")
+    ap.add_argument("--end", type=float, required=True, help="segundos, fim do trecho a diarizar")
+    ap.add_argument("--chunk-seconds", type=float, default=180.0)
+    ap.add_argument("--speakers", type=int, default=4)
+    ap.add_argument("--title", default=VIDEO_TITLE)
+    ap.add_argument("--out", default=None, help="default: resultados\\<title>\\turnsGemini_<versao-do-modelo>_Chunks.json")
+    ap.add_argument("--chunk-delay", type=float, default=15.0, help="segundos de pausa entre pedacos (evita rate limit)")
+    ap.add_argument("--force", action="store_true", help="ignora cache de pedacos ja processados e refaz tudo")
+    args = ap.parse_args()
+
+    video_dir = os.path.join(_RESULTADOS_ROOT, args.title)
+    util_dir = os.path.join(_UTILITARIOS_ROOT, args.title)
+    os.makedirs(video_dir, exist_ok=True)
+    os.makedirs(util_dir, exist_ok=True)
+    out_path = args.out or os.path.join(video_dir, f"turnsGemini_{MODEL_VERSION}_Chunks.json")
+
+    bounds = []
+    t = args.start
+    idx = 0
+    while t < args.end:
+        idx += 1
+        dur = min(args.chunk_seconds, args.end - t)
+        bounds.append((idx, t, dur))
+        t += dur
+    print(f"[i] {len(bounds)} pedacos de ate {args.chunk_seconds:.0f}s, "
+          f"cobrindo {args.start:.1f}s-{args.end:.1f}s")
+
+    client = genai.Client()
+    all_turns = []
+    all_speakers_by_chunk = []
+
+    for idx, chunk_start, chunk_dur in bounds:
+        chunk_end = chunk_start + chunk_dur
+        print(f"\n[i] pedaco {idx}/{len(bounds)}: {chunk_start:.1f}s-{chunk_end:.1f}s ({chunk_dur:.1f}s)")
+        mp4_path = os.path.join(util_dir, f"chunk{idx:02d}.mp4")
+        result_path = os.path.join(util_dir, f"chunk{idx:02d}_result.json")
+
+        if os.path.exists(result_path) and not args.force:
+            with open(result_path, encoding="utf-8") as f:
+                result = json.load(f)
+            print(f"    [i] resultado em cache ({result_path}), pulando Gemini (--force pra refazer)")
+        else:
+            try:
+                cut_chunk(args.video, chunk_start, chunk_dur, mp4_path)
+            except RuntimeError as e:
+                print(f"    [!] pulando pedaco {idx} (corte falhou): {e}")
+                continue
+
+            try:
+                result = diarize_chunk(client, mp4_path, args.speakers)
+            except (RuntimeError, SystemExit) as e:
+                print(f"    [!] pulando pedaco {idx} (Gemini falhou): {e}")
+                continue
+
+            with open(result_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=1, ensure_ascii=False)
+            if idx < len(bounds):
+                time.sleep(args.chunk_delay)
+
+        # reconcilia label local -> posicao global, pela descricao visual
+        pos_by_local = {}
+        for spk in result["speakers"]:
+            pos = classify_position(spk["description"])
+            if pos is None:
+                print(f"    [!] nao consegui classificar posicao de {spk['speaker']} "
+                      f"({spk['description']!r}) - turnos dele vao ficar sem label global, DESCARTADOS")
+                continue
+            if pos in pos_by_local.values():
+                print(f"    [!] duas pessoas classificadas como {pos} no pedaco {idx} - confira manualmente")
+            pos_by_local[spk["speaker"]] = pos
+        print(f"    [i] speakers: " + ", ".join(f"{k}->{v}" for k, v in pos_by_local.items()))
+
+        # turnos: reescala pra tempo absoluto (offset = chunk_start), remapeia
+        # label, e descarta/clipa qualquer coisa alem do fim REAL desse pedaco
+        # (protege contra alucinacao de cauda, igual ao fix do 1_diarize_v3.py)
+        kept, dropped = 0, 0
+        for turn in result["turns"]:
+            global_label = pos_by_local.get(turn["speaker"])
+            if global_label is None:
+                dropped += 1
+                continue
+            abs_start = turn["start"] + chunk_start
+            abs_end = turn["end"] + chunk_start
+            if abs_end <= abs_start:
+                # glitch confirmado na pratica: o Gemini as vezes pula pra um
+                # formato de tempo diferente no meio da resposta (ex: "start":
+                # 59, "end": 1.01 - parece min.seg em vez de segundos corridos),
+                # o que gera end < start apos somar o offset do chunk. Turno
+                # invertido descarta aqui - sem esse guard ele passava direto e
+                # corrompia o sweep-line do flatten_overlaps() no
+                # 1_diarize_v3.py (achatava o resto do chunk inteiro num so
+                # plano errado, ja visto na pratica: 481s virando 1 pessoa so).
+                print(f"    [!] turno com end<=start descartado (glitch de timestamp): "
+                      f"{turn['speaker']} start={turn['start']} end={turn['end']} "
+                      f"(abs {abs_start:.2f}-{abs_end:.2f})")
+                dropped += 1
+                continue
+            if abs_start >= chunk_end:
+                dropped += 1
+                continue
+            if abs_end > chunk_end:
+                abs_end = chunk_end
+            name = POSITION_TO_NAME.get(global_label)
+            if name is None:
+                print(f"    [!] {global_label} nao esta em POSITION_TO_NAME - turno descartado, "
+                      "confira/atualize esse dict")
+                dropped += 1
+                continue
+            all_turns.append({"name": name, "start": abs_start, "end": abs_end})
+            kept += 1
+        print(f"    [i] {kept} turnos mantidos, {dropped} descartados (sem label ou alem do pedaco)")
+        all_speakers_by_chunk.append({"chunk": idx, "speakers": result["speakers"]})
+
+    all_turns.sort(key=lambda t: t["start"])
+    print(f"\n[i] {len(all_turns)} turnos combinados de {len(bounds)} pedacos")
+    labels = sorted({t["name"] for t in all_turns})
+    print(f"[i] nomes globais: {labels}")
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(all_turns, f, indent=1)
+    print(f"[ok] salvo em {out_path}")
+
+    debug_path = out_path.rsplit(".", 1)[0] + "_chunks_speakers_debug.json"
+    with open(debug_path, "w", encoding="utf-8") as f:
+        json.dump(all_speakers_by_chunk, f, indent=1, ensure_ascii=False)
+    print(f"[ok] descricoes por pedaco (debug) salvas em {debug_path}")
+
+    shots_out = out_path.rsplit(".", 1)[0] + "_shots.json"
+    print("\nProximo passo: limpar e gerar planos, ex:")
+    print(f'  python 1_diarize_v3.py --from-json "{out_path}" --duration {args.end} '
+          f'--range-start {args.start} --fps 30 --out "{shots_out}" --no-samples')
+    print('  (1_diarize_v3.py detecta sozinho a chave "name" nesse json e mantem "name" na saida)')
+
+
+if __name__ == "__main__":
+    main()

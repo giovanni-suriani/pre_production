@@ -1,0 +1,345 @@
+{
+  "_leia": [
+    "Estilos do GiAutoSubs. Cada estilo vira inputs de um Text+ do Resolve.",
+    "Cores em #RRGGBB. Tamanhos e offsets sao fracao da tela (0..1), como o Fusion usa.",
+    "Mapa de elementos do Text+ (1 desenha na frente, 8 mais ao fundo):",
+    "  1 fill | 2 outline | 3 sombra do texto | 4 bolha do destaque | 5 sombra da bolha",
+    "  6 caixa do texto | 7 sombra dessa caixa | 8 terceira cor da caixa (base.camada3)",
+    "base.camada3: a TERCEIRA cor da caixa do texto. Uma caixa de 3 cores nao e' tres",
+    "  bordas concentricas (isso daria moldura nos quatro lados): e' a mesma caixa",
+    "  desenhada tres vezes, DESLOCADA. Entao o elemento 7 (a box_shadow) vira a",
+    "  segunda cor - basta dar a ela suavidade 0, opacidade 1 e um deslocamento - e o",
+    "  8 e' a terceira. Ver o estilo 'caixa_tres_cores'.",
+    "  camada3 nao tem geometria propria: nivel/extend/round sao COPIADOS da caixa.",
+    "  Se as tres divergirem nisso, o deslocamento vira contorno torto em vez de cor.",
+    "  Transparencia por 'alpha', nao 'opacidade': Opacity1..4 sao o fade do AutoSubs",
+    "  e os elementos 5..8 nao estao ligados nele.",
+    "'destaque' e' a palavra sendo falada agora; 'base' sao todas as outras.",
+    "fonte.caixa_das_letras: 'normal' | 'minusculas' | 'maiusculas' (aplicado pelo macro, reversivel).",
+    "caixa.nivel: o que a caixa envolve - 'texto' (a legenda inteira) | 'linha' | 'palavra' | 'caractere'.",
+    "  (a tabela estava com 'linha' e 'caractere' trocados ate' o macro 22; estilos antigos com",
+    "   'linha' desenhavam por LETRA. 'palavra' sempre esteve certo.)",
+    "destaque.fill: o 'Spoken Word' - a COR da letra na palavra falada (elemento 1).",
+    "  Vem DESLIGADO por padrao: e' a camada animada mais cara e a que menos se usa",
+    "  (quem destaca no capcut_bolha e no TikTokNovo e' a bolha). 'cor' fica guardada",
+    "  mesmo desligado, entao marcar 'Spoken Word > Enabled' no Inspector e clicar em",
+    "  Apply Style acende no amarelo certo, sem regerar nada. Ligado, o array de estilo",
+    "  por caractere DOBRA de tamanho - so' nas legendas em que voce ligar.",
+    "destaque.caixa.pop: a bolha entra menor e cresce, a cada palavra (o 'pop' do CapCut).",
+    "  quantidade esta na escala do extend_h/extend_v; frames e' a duracao da subida.",
+    "direcao {x,y}: para onde a sombra cai, em fracao da tela. y NEGATIVO desce",
+    "(o eixo do Fusion cresce pra cima). x positivo vai pra direita.",
+    "quebra.max_chars: caracteres por LINHA. 19 e' a largura de 'que ja amarrou uma.'",
+    "  (era 25, a largura de 'ELES SO SAO MEIO TIMIDOS.', ate' 01/09/2026.)",
+    "quebra.max_linhas: linhas por CAIXA DE TEXTO. Hoje 1 (era 2 ate' 01/09/2026):",
+    "  a legenda nunca quebra em duas linhas - o que nao couber vira legenda nova.",
+    "  Texto maior que isso nao estoura mais a largura: ele vira DUAS legendas,",
+    "  cortadas em fronteira de palavra, com o tempo por palavra repartido junto.",
+    "  Linha mais curta = mais legendas, e cada uma com MENOS palavras - o array de",
+    "  estilo por caractere cresce com o QUADRADO das palavras, entao encurtar a",
+    "  linha tambem alivia o playback. Estilo sem 'quebra' cai no padrao 19/2."
+  ],
+  "versao": 1,
+  "padrao": "capcut_bolha",
+  "estilos": {
+    "batata_shorts": {
+      "fonte": {
+        "familia": "Open Sans",
+        "estilo": "Bold",
+        "tamanho": 0.09
+      },
+      "posicao": {
+        "centro": [
+          0.5,
+          0.22
+        ]
+      },
+      "quebra": {
+        "max_chars": 19,
+        "max_linhas": 1
+      },
+      "base": {
+        "fill": {
+          "ativo": true,
+          "cor": "#FFFFFF"
+        },
+        "outline": {
+          "ativo": true,
+          "cor": "#000000",
+          "espessura": 0.15,
+          "suavidade": 1,
+          "direcao": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        },
+        "sombra": {
+          "ativo": true,
+          "cor": "#000000",
+          "opacidade": 0.6,
+          "suavidade": 1.5,
+          "direcao": {
+            "x": 0.004,
+            "y": -0.006
+          }
+        },
+        "caixa": {
+          "ativo": false,
+          "nivel": "linha",
+          "cor": "#000000",
+          "opacidade": 0.45,
+          "extend_h": 0.2,
+          "extend_v": 0.12,
+          "round": 0.25
+        },
+        "box_shadow": {
+          "ativo": false,
+          "cor": "#000000",
+          "opacidade": 0.5,
+          "suavidade": 2,
+          "direcao": {
+            "x": 0.005,
+            "y": -0.007
+          }
+        }
+      },
+      "destaque": {
+        "ativo": true,
+        "cor": "#FF4DA6",
+        "fill": {
+          "ativo": false,
+          "cor": "#FF4DA6"
+        },
+        "caixa": {
+          "ativo": false,
+          "nivel": "palavra",
+          "cor": "#FFD84D",
+          "opacidade": 1,
+          "extend_h": 0.15,
+          "extend_v": 0.1,
+          "round": 0.4
+        },
+        "box_shadow": {
+          "ativo": false,
+          "cor": "#000000",
+          "opacidade": 0.55,
+          "suavidade": 2,
+          "direcao": {
+            "x": 0.005,
+            "y": -0.007
+          }
+        }
+      }
+    },
+    "capcut_bolha": {
+      "_e": "A configuracao ajustada no Inspector em 27/08/2026 e devolvida pelo botao Display Config.",
+      "herda": "batata_shorts",
+      "fonte": {
+        "caixa_das_letras": "maiusculas"
+      },
+      "base": {
+        "sombra": {
+          "ativo": false
+        },
+        "caixa": {
+          "ativo": false
+        },
+        "box_shadow": {
+          "ativo": false
+        }
+      },
+      "destaque": {
+        "fill": {
+          "ativo": false,
+          "cor": "#FFE900"
+        },
+        "caixa": {
+          "ativo": true,
+          "nivel": "palavra",
+          "cor": "#000000",
+          "opacidade": 1,
+          "extend_h": -0.047,
+          "extend_v": 0.1,
+          "round": 0.126,
+          "pop": {
+            "ativo": true,
+            "quantidade": 0.15,
+            "frames": 3
+          }
+        },
+        "box_shadow": {
+          "ativo": false
+        }
+      }
+    },
+    "CortesDefault1": {
+      "_e": "Clone do capcut_bolha, para os cortes divergirem sem mexer no padrao.",
+      "herda": "capcut_bolha"
+    },
+    "caixa_tres_cores": {
+      "_e": "A mesma caixa desenhada tres vezes, deslocada: preta centrada (el 6), ciano pra cima-esquerda (el 7) e rosa pra baixo-direita (el 8). NAO sao bordas concentricas - por isso cada cor aparece de um lado so'.",
+      "herda": "batata_shorts",
+      "base": {
+        "caixa": {
+          "ativo": true,
+          "nivel": "linha",
+          "cor": "#000000",
+          "opacidade": 1,
+          "extend_h": 0.2,
+          "extend_v": 0.12,
+          "round": 0.2
+        },
+        "box_shadow": {
+          "_e": "Aqui ela NAO e' sombra: e' a segunda cor. Sem borrao (suavidade 0) e opaca, senao vira sombra de novo.",
+          "ativo": true,
+          "cor": "#00E5FF",
+          "opacidade": 1,
+          "suavidade": 0,
+          "direcao": {
+            "x": -0.006,
+            "y": 0.008
+          }
+        },
+        "camada3": {
+          "_e": "Lado OPOSTO ao da camada ciano: e' isso que faz uma cor sair em cima-esquerda e a outra embaixo-direita, em vez de as duas empilharem no mesmo canto. y NEGATIVO desce.",
+          "ativo": true,
+          "cor": "#FF4DA6",
+          "alpha": 1,
+          "direcao": {
+            "x": 0.006,
+            "y": -0.008
+          }
+        }
+      }
+    },
+    "caixa_atras_de_tudo": {
+      "herda": "batata_shorts",
+      "base": {
+        "caixa": {
+          "ativo": true
+        },
+        "box_shadow": {
+          "ativo": true
+        }
+      }
+    },
+    "TikTokNovo": {
+      "fonte": {
+        "familia": "Open Sans",
+        "estilo": "Bold",
+        "tamanho": 0.09,
+        "caixa_das_letras": "maiusculas"
+      },
+      "posicao": {
+        "centro": [
+          0.5,
+          0.22
+        ]
+      },
+      "quebra": {
+        "max_chars": 19,
+        "max_linhas": 1
+      },
+      "base": {
+        "fill": {
+          "ativo": true,
+          "cor": "#FFFFFF"
+        },
+        "outline": {
+          "ativo": true,
+          "cor": "#000000",
+          "espessura": 0.15,
+          "suavidade": 1.0,
+          "direcao": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        },
+        "sombra": {
+          "ativo": false,
+          "cor": "#000000",
+          "opacidade": 0.492592603,
+          "suavidade": 1.0,
+          "direcao": {
+            "x": 0.004,
+            "y": -0.006
+          }
+        },
+        "caixa": {
+          "ativo": true,
+          "nivel": "texto",
+          "cor": "#FFFFFF",
+          "opacidade": 1.0,
+          "extend_h": 0.2,
+          "extend_v": 0.12,
+          "round": 0.2
+        },
+        "box_shadow": {
+          "ativo": false,
+          "cor": "#000000",
+          "opacidade": 0.55,
+          "suavidade": 2.0,
+          "direcao": {
+            "x": 0.005,
+            "y": -0.007
+          }
+        }
+      },
+      "destaque": {
+        "ativo": true,
+        "cor": "#FFE900",
+        "fill": {
+          "ativo": false,
+          "cor": "#FFE900"
+        },
+        "caixa": {
+          "ativo": true,
+          "nivel": "palavra",
+          "cor": "#000000",
+          "opacidade": 1.0,
+          "extend_h": -0.1,
+          "extend_v": -0.1,
+          "round": 0.126,
+          "pop": {
+            "ativo": false,
+            "quantidade": 0.15,
+            "frames": 3
+          }
+        },
+        "box_shadow": {
+          "ativo": false,
+          "cor": "#000000",
+          "opacidade": 0.55,
+          "suavidade": 2.0,
+          "direcao": {
+            "x": 0.005,
+            "y": -0.007
+          }
+        }
+      },
+      "_e": "Exportado do Resolve pelo botao Generate Caption Style em 29/08/2026 17:26."
+    }
+  },
+  "falantes": {
+    "Cupertino": {
+      "track": 1
+    },
+    "Cuper": {
+      "track": 1
+    },
+    "Heitor": {
+      "track": 2
+    },
+    "Giovanni": {
+      "track": 3
+    }
+  },
+  "_falantes_ajuda": [
+    "track: numero da track de video; omita para todos na mesma.",
+    "COR POR FALANTE SAIU no macro 22. Ela pintava o elemento 1 clipe a clipe,",
+    "enquanto o controle 'Fill Color' do Inspector ficava parado no valor do",
+    "estilo - o que se via na tela nunca era o que o controle dizia, e mexer no",
+    "controle nao mudava um pixel (estilo por caractere vence os inputs). Hoje",
+    "quem manda no fill e' o Inspector. 'cor' e 'aplicar_em' aqui sao ignorados."
+  ]
+}

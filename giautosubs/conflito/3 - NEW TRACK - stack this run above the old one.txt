@@ -1,0 +1,2 @@
+Leaves the old captions alone and stacks this run on a track above.
+Both sets stay on the timeline: you edit the one below and see the one on top.

@@ -1,0 +1,8 @@
+Vazio de proposito.
+
+Escolher este arquivo na pergunta 2 ("qual configuracao de legenda") = NENHUMA
+configuracao por cima: vale inteiro o estilo assado no legendas.lua - hoje a
+caixa de tres cores.
+
+O GiAutoSubs.lua reconhece pelo NOME (qualquer arquivo comecando com "None"),
+entao nao adiante linhas `chave<TAB>valor` aqui: elas nao seriam lidas.

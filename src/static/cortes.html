@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pre_production — Cortes</title>
+<link rel="stylesheet" href="/static/shell.css">
+</head>
+<body class="page">
+
+<main>
+
+  <div>
+    <h1>Etapa 2 — Cortes</h1>
+    <p class="sub">Um corte é um trecho do episódio com nome próprio. Ele fatia
+      o wav, define qual track é de quem e roda a diarização.</p>
+  </div>
+
+  <!-- ------------------------------------------------------------ projeto -->
+  <section class="card">
+    <header>
+      <h2>Projeto</h2>
+      <p class="sub" id="pInfo"></p>
+    </header>
+    <div class="row">
+      <select id="projSelect" style="flex:1;min-width:260px"></select>
+      <a class="btn" href="/">← etapa 1</a>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- cortes -->
+  <section class="card" id="cutsCard">
+    <header>
+      <h2>Cortes deste projeto</h2>
+      <p class="sub"><button class="linkbtn" id="newCutBtn">+ novo corte</button></p>
+    </header>
+    <div class="list" id="cutList"></div>
+    <p class="note hidden" id="cutEmpty">Nenhum corte ainda.</p>
+  </section>
+
+  <!-- -------------------------------------------------------- novo corte -->
+  <section class="card hidden" id="newCut">
+    <header><h2>Novo corte</h2></header>
+
+    <div class="picker">
+      <canvas id="wave" height="132"></canvas>
+      <div class="row">
+        <button class="btn icon" id="pPlay" title="Tocar / pausar (Espaço)">▶</button>
+        <button class="btn" id="pPlaySel" title="Tocar só o trecho marcado (Enter)">Tocar trecho</button>
+
+        <div class="readout">
+          <div class="row" style="gap:9px">
+            <span id="pClock" class="clock">00:00.000</span>
+            <span id="pRate" class="rate hidden">1×</span>
+          </div>
+          <div class="under">
+            <span id="pClockFrame">frame 0</span>
+          </div>
+        </div>
+
+        <button class="btn small" id="pIn" title="Marcar início no playhead (I)">marcar início</button>
+        <button class="btn small" id="pOut" title="Marcar fim no playhead (O)">marcar fim</button>
+
+        <span class="spacer"></span>
+        <button class="btn small" id="pAll">tudo</button>
+        <button class="btn small" id="pZoomSel">zoom na seleção</button>
+      </div>
+
+      <div class="row">
+        <div class="field" style="width:170px">
+          <span class="lbl">início</span>
+          <input id="pStart" type="text" class="mono" placeholder="43:30">
+        </div>
+        <div class="field" style="width:170px">
+          <span class="lbl">fim</span>
+          <input id="pEnd" type="text" class="mono" placeholder="1:09:25.9">
+        </div>
+        <div class="field" style="width:150px">
+          <span class="lbl">duração</span>
+          <div class="num" id="pDur" style="padding-top:7px">—</div>
+        </div>
+        <div class="field" style="width:190px">
+          <span class="lbl">frame de origem</span>
+          <div class="num" id="pFrame" style="padding-top:7px">—</div>
+        </div>
+      </div>
+
+      <p class="hint">arraste na onda <b>move o playhead</b> · arraste a borda
+        <b>ajusta o trecho</b> · roda <b>zoom</b> · shift+roda <b>desloca</b><br>
+        <kbd>Espaço</kbd> tocar · <kbd>Enter</kbd> tocar o trecho ·
+        <kbd>I</kbd> <kbd>O</kbd> início/fim no playhead ·
+        <kbd>←</kbd><kbd>→</kbd> um frame (shift: um segundo) ·
+        <kbd>Home</kbd><kbd>End</kbd> ir ao início/fim do trecho ·
+        <kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> shuttle</p>
+    </div>
+
+    <p class="note" id="pOriginNote"></p>
+
+    <div class="grid2">
+      <div class="field">
+        <span class="lbl">Nome do corte</span>
+        <input id="cName" type="text" placeholder="corte_shorts1">
+      </div>
+      <div class="field">
+        <span class="lbl">Quantas vozes o diarizador deve procurar</span>
+        <input id="cSpeakers" type="number" min="1" max="12">
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">Qual track é de quem</span>
+      <div class="list" id="cTracks"></div>
+    </div>
+    <p class="note">Este mapa é o <code>NAME_TO_TRACK</code> do SpeakerSwitch.
+      <b>cut</b> não é pessoa: é a decisão manual de cortar para o enquadramento
+      alternativo, marcada à mão na etapa 3. Quem está fora de quadro fica
+      <b>sem track</b> de propósito — cai na V1.</p>
+
+    <label class="chk hidden feature-hint" id="cReuseRow" title="Recorta o
+      entire_transcribe.json do projeto (etapa 1) no início/fim deste corte,
+      em vez de rodar o Whisper de novo na etapa 2. Só aparece quando essa
+      transcrição já existe.">
+      <input type="checkbox" id="cReuseTranscript">
+      <span>Reaproveitar transcrição do episódio inteiro 🔥</span>
+    </label>
+
+    <div class="row end">
+      <button class="btn" id="cCancel">Cancelar</button>
+      <button class="btn primary" id="cCreate">Criar corte e fatiar o wav</button>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------- corte escolhido -->
+  <section class="card hidden" id="cutDetail">
+    <header>
+      <h2 id="dCut">—</h2>
+      <p class="sub" id="dRange"></p>
+    </header>
+
+    <div class="grid3" id="dFacts"></div>
+
+    <div class="field">
+      <span class="lbl">Qual track é de quem</span>
+      <div class="list" id="dTracks"></div>
+      <div class="row">
+        <button class="btn small" id="dSaveTracks">Salvar mapa de tracks</button>
+      </div>
+    </div>
+
+    <hr style="border:0;border-top:1px solid var(--edge);margin:2px 0">
+
+    <div class="field">
+      <span class="lbl">Método de diarização</span>
+      <div class="list" id="methodList"></div>
+    </div>
+    <div id="methodOpts" class="row"></div>
+    <div class="row">
+      <label class="chk" title="No fim da rodada, grava o .srt do corte sem
+        precisar abrir o modal. Os nomes só entram na frente da fala depois
+        que você disser quem é quem — SPEAKER_00 não vira legenda.">
+        <input type="checkbox" id="runSrt" checked>
+        <span>Gerar a legenda (.srt) junto</span>
+      </label>
+      <label class="chk" title="O mesmo texto no formato que o GiAutoSubs lê,
+        com o tempo por palavra preservado — é ele que acende a palavra falada.
+        Vira também a coluna “o que foi dito” do editor de turnos.">
+        <input type="checkbox" id="runGi" checked>
+        <span>Gerar a legenda do GiAutoSubs junto</span>
+      </label>
+      <label class="chk" title="Uma track de legenda por pessoa no GiAutoSubs
+        (a track dela no mapa de tracks deste corte). Já vem marcada quando o
+        projeto é de tela dividida.">
+        <input type="checkbox" id="runSplit">
+        <span>Tracks de legenda separadas</span>
+      </label>
+      <span class="spacer"></span>
+      <button class="btn primary" id="runBtn" disabled>Rodar</button>
+    </div>
+
+    <hr style="border:0;border-top:1px solid var(--edge);margin:2px 0">
+
+    <div class="field">
+      <span class="lbl">Resultados</span>
+      <table class="plain" id="filesTable">
+        <thead><tr>
+          <th>arquivo</th><th>turnos</th><th>trecho</th><th>rótulos</th>
+          <th>avisos</th><th></th>
+        </tr></thead>
+        <tbody id="filesBody"></tbody>
+      </table>
+      <p class="note hidden" id="filesEmpty">Nenhuma diarização ainda — escolha
+        um método acima e rode.</p>
+      <p class="note hidden" id="orphanWarn"></p>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="goEditor" disabled>Abrir no editor de turnos →</button>
+      <button class="btn" id="openOther" title="Abre qualquer turns*.json do disco no editor">Abrir outro arquivo…</button>
+      <button class="btn" id="srtBtn" title="Gera o .srt para importar no Resolve,
+        ou o json que o GiAutoSubs lê">Gerar legenda…</button>
+      <span class="spacer"></span>
+      <button class="btn danger" id="delCut">Mover corte para a lixeira</button>
+    </div>
+    <!-- Nao ha mais botao "Gravar speaker_switch.json": o SpeakerSwitch.py le o
+         corte.json direto. O arquivo-ponte era uma copia dos mesmos campos, e
+         so' existia enquanto alguem lembrasse de clicar aqui - esquecer nao
+         dava erro, fazia o script usar calado o mapa de outro episodio. -->
+    <p class="note" id="ssNote"></p>
+  </section>
+
+</main>
+
+<!-- quem é quem -->
+<div class="modal hidden" id="nameModal">
+  <div class="box">
+    <h2>Quem é quem</h2>
+    <p class="sub">O diarizador nomeia as vozes de <code>SPEAKER_00</code> em
+      diante. O SpeakerSwitch escolhe a track pelo <b>nome</b>, então esta
+      tradução é o que liga uma coisa à outra — feita de uma vez, no arquivo
+      inteiro.</p>
+    <div class="list" id="nameRows"></div>
+    <p class="note">Escreve por cima do arquivo, guardando um
+      <code>.bak</code> com data e hora antes.</p>
+    <div class="foot">
+      <button class="btn" id="nameCancel">Cancelar</button>
+      <button class="btn primary" id="nameApply">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- legenda -->
+<div class="modal hidden" id="srtModal">
+  <div class="box">
+    <h2>Gerar legenda</h2>
+    <p class="sub" id="srtSub">O <code>.srt</code> que o Resolve importa em
+      <b>Timeline → Import → Subtitle</b>.</p>
+
+    <label class="field">
+      <span class="lbl">Formato</span>
+      <select id="srtFormat">
+        <option value="srt">.srt — a legenda que o Resolve importa</option>
+        <option value="giautosubs">GiAutoSubs — json com tempo por palavra</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span class="lbl">Texto (a transcrição)</span>
+      <select id="srtText"></select>
+    </label>
+
+    <label class="field" id="srtSpeakersField">
+      <span class="lbl">Nomes na frente de cada fala (opcional)</span>
+      <select id="srtSpeakers"></select>
+    </label>
+
+    <label class="field" id="srtBaseField">
+      <span class="lbl">Base de tempo</span>
+      <select id="srtBase">
+        <option value="timeline">timeline do Resolve — começa no frame 0</option>
+        <option value="media">mídia — segundos absolutos do episódio</option>
+      </select>
+    </label>
+    <p class="note" id="srtNote"></p>
+
+    <label class="chk hidden" id="srtSplitField" title="Uma track de legenda
+      por pessoa no GiAutoSubs (a track dela no mapa de tracks deste corte).
+      Já vem marcada quando o projeto é de tela dividida.">
+      <input type="checkbox" id="srtSplit">
+      <span>Tracks de legenda separadas</span>
+    </label>
+
+    <label class="field">
+      <span class="lbl">Nome do arquivo</span>
+      <input id="srtName" type="text" class="mono" value="legendas.srt">
+    </label>
+
+    <div class="foot">
+      <button class="btn" id="srtCancel">Cancelar</button>
+      <button class="btn primary" id="srtGo">Gerar</button>
+    </div>
+  </div>
+</div>
+
+<audio id="preview" preload="none"></audio>
+
+<script src="/static/shell.js"></script>
+<script src="/static/cortes.js"></script>
+</body>
+</html>

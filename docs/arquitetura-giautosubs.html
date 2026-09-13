@@ -1,0 +1,246 @@
+<title>Arquitetura do GiAutoSubs</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap">
+<style>
+  :root {
+    --bg: #F5F7F9;
+    --surface: #FFFFFF;
+    --band-prep: #E8EDF1;
+    --band-apl: #E1EDF1;
+    --ink: #101820;
+    --ink-2: #33414E;
+    --muted: #5F6D7A;
+    --line: #DAE1E7;
+    --line-2: #B9C5CF;
+    --cyan: #00788F;
+    --red: #C62828;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0D1216;
+      --surface: #161D24;
+      --band-prep: #1A222A;
+      --band-apl: #15252B;
+      --ink: #E7ECF1;
+      --ink-2: #C2CCD5;
+      --muted: #94A2AF;
+      --line: #26303A;
+      --line-2: #3E4B57;
+      --cyan: #3FD8F0;
+      --red: #FF6B60;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0D1216;
+    --surface: #161D24;
+    --band-prep: #1A222A;
+    --band-apl: #15252B;
+    --ink: #E7ECF1;
+    --ink-2: #C2CCD5;
+    --muted: #94A2AF;
+    --line: #26303A;
+    --line-2: #3E4B57;
+    --cyan: #3FD8F0;
+    --red: #FF6B60;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 36px 20px 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 0;
+  }
+  .sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0;
+  }
+  .canvas {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 10px;
+    overflow-x: auto;
+  }
+  .canvas svg {
+    display: block;
+    min-width: 1060px;
+    max-width: 100%;
+    height: auto;
+    color: var(--ink-2);
+  }
+
+  .band-prep { fill: var(--band-prep); }
+  .band-apl { fill: var(--band-apl); }
+  .bx { fill: var(--surface); stroke: var(--line-2); stroke-width: 1; }
+  .bx-key { fill: var(--surface); stroke: var(--cyan); stroke-width: 1.7; }
+  .t { font-family: var(--mono); font-size: 11px; fill: var(--ink); }
+  .ts { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); }
+  .tb { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; fill: var(--muted); }
+  .ln { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+  .ln-key { stroke: var(--cyan); stroke-width: 1.8; fill: none; }
+  .ln-red { stroke: var(--red); stroke-width: 1.8; fill: none; }
+  .ts-red { font-family: var(--mono); font-size: 9.5px; fill: var(--red); }
+  .ln-d { stroke: var(--muted); stroke-width: 1.1; fill: none; stroke-dasharray: 4 3; }
+  .dv { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 4; }
+  .dot { fill: var(--red); stroke: var(--surface); stroke-width: 1.2; }
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Arquitetura do GiAutoSubs</h1>
+    <p class="sub">do arquivo plano da legenda até os clipes na timeline</p>
+  </div>
+
+  <div class="canvas">
+    <svg viewBox="0 0 1180 640" role="img"
+         aria-label="Fluxo em duas fases. Preparação: audio.wav passa pelo Whisper e vira o arquivo plano corte.giautosubs.json; diarização e turnsEditor viram turnsManual.json; você edita o estilos.json; o macro do AutoSubs passa pelo gerar_macro.py e vira o GiAutoSubs Caption.setting. Aplicação: as três entradas descem por um barramento até o giautosubs.py, que produz o legendas.lua; o legendas.lua e o Caption.setting chegam separados ao GiAutoSubs.lua dentro do Resolve, que produz todos os clipes na timeline.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <polygon points="0,1 9,5 0,9" fill="currentColor"></polygon>
+        </marker>
+        <marker id="arC" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <polygon points="0,1 9,5 0,9" fill="var(--cyan)"></polygon>
+        </marker>
+        <marker id="arR" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <polygon points="0,1 9,5 0,9" fill="var(--red)"></polygon>
+        </marker>
+        <marker id="arD" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <polygon points="0,1 9,5 0,9" fill="var(--muted)"></polygon>
+        </marker>
+      </defs>
+
+      <!-- ===================== PREPARAÇÃO ===================== -->
+      <rect class="band-prep" x="20" y="52" width="1140" height="280" rx="8"></rect>
+      <text class="tb" x="24" y="42">PREPARAÇÃO</text>
+      <text class="ts" x="140" y="42">monta as peças · muda raramente</text>
+
+      <!-- linha 1 -->
+      <rect class="bx" x="44" y="84" width="150" height="48" rx="5"></rect>
+      <text class="t" x="58" y="105">audio.wav</text>
+      <text class="ts" x="58" y="120">do corte</text>
+
+      <rect class="bx" x="234" y="84" width="150" height="48" rx="5"></rect>
+      <text class="t" x="248" y="105">Whisper</text>
+      <text class="ts" x="248" y="120">large-v3, --words</text>
+
+      <rect class="bx-key" x="440" y="84" width="280" height="48" rx="5"></rect>
+      <text class="t" x="454" y="105">&lt;corte&gt;.giautosubs.json</text>
+      <text class="ts" x="454" y="120">o arquivo plano: texto + tempo por palavra</text>
+
+      <line class="ln" x1="194" y1="108" x2="228" y2="108" marker-end="url(#ar)"></line>
+      <line class="ln" x1="384" y1="108" x2="434" y2="108" marker-end="url(#ar)"></line>
+
+      <!-- linha 2 -->
+      <rect class="bx" x="44" y="148" width="150" height="48" rx="5"></rect>
+      <text class="t" x="58" y="169">diarização</text>
+      <text class="ts" x="58" y="184">pyannote / Gemini</text>
+
+      <rect class="bx" x="234" y="148" width="150" height="48" rx="5"></rect>
+      <text class="t" x="248" y="177">turnsEditor</text>
+
+      <rect class="bx" x="440" y="148" width="280" height="48" rx="5"></rect>
+      <text class="t" x="454" y="169">turnsManual.json</text>
+      <text class="ts" x="454" y="184">quem fala → decide a track</text>
+
+      <line class="ln" x1="194" y1="172" x2="228" y2="172" marker-end="url(#ar)"></line>
+      <line class="ln" x1="384" y1="172" x2="434" y2="172" marker-end="url(#ar)"></line>
+
+      <!-- linha 3 -->
+      <rect class="bx" x="234" y="212" width="150" height="48" rx="5"></rect>
+      <text class="t" x="248" y="233">você edita</text>
+      <text class="ts" x="248" y="248">ou exporta do clipe</text>
+
+      <rect class="bx" x="440" y="212" width="280" height="48" rx="5"></rect>
+      <text class="t" x="454" y="233">estilos.json</text>
+      <text class="ts" x="454" y="248">os atributos de cada clipe</text>
+
+      <line class="ln" x1="384" y1="236" x2="434" y2="236" marker-end="url(#ar)"></line>
+
+      <!-- linha 4 -->
+      <rect class="bx" x="44" y="276" width="150" height="48" rx="5"></rect>
+      <text class="t" x="58" y="297">vendor/</text>
+      <text class="ts" x="58" y="312">autosubs-macro.setting</text>
+
+      <rect class="bx" x="234" y="276" width="150" height="48" rx="5"></rect>
+      <text class="t" x="248" y="305">gerar_macro.py</text>
+
+      <rect class="bx-key" x="440" y="276" width="280" height="48" rx="5"></rect>
+      <text class="t" x="454" y="297">GiAutoSubs Caption.setting</text>
+      <text class="ts" x="454" y="312">instalado em Templates/Edit/Titles</text>
+
+      <line class="ln" x1="194" y1="300" x2="228" y2="300" marker-end="url(#ar)"></line>
+      <text class="ts" x="198" y="294">patcheia</text>
+      <line class="ln" x1="384" y1="300" x2="434" y2="300" marker-end="url(#ar)"></line>
+
+      <!-- ===================== APLICAÇÃO ===================== -->
+      <rect class="band-apl" x="20" y="356" width="1140" height="240" rx="8"></rect>
+      <text class="tb" x="24" y="346">APLICAÇÃO</text>
+      <text class="ts" x="130" y="346">a cada corte</text>
+
+      <!-- barramento das tres entradas -> giautosubs.py -->
+      <path class="ln-red" d="M 440 108 L 418 108 L 418 431 L 466 431" marker-end="url(#arR)"></path>
+      <path class="ln-red" d="M 440 172 L 418 172"></path>
+      <path class="ln-red" d="M 440 236 L 418 236"></path>
+      <circle class="dot" cx="418" cy="108" r="4"></circle>
+      <circle class="dot" cx="418" cy="172" r="4"></circle>
+      <circle class="dot" cx="418" cy="236" r="4"></circle>
+      <text class="ts-red" x="412" y="400" text-anchor="end">as três entradas</text>
+
+      <rect class="bx" x="470" y="404" width="170" height="54" rx="5"></rect>
+      <text class="t" x="484" y="428">giautosubs.py</text>
+      <text class="ts" x="484" y="443">funde conteúdo + estilo</text>
+
+      <rect class="bx-key" x="690" y="404" width="170" height="54" rx="5"></rect>
+      <text class="t" x="704" y="428">legendas.lua</text>
+      <text class="ts" x="704" y="443">as legendas prontas</text>
+
+      <line class="ln" x1="640" y1="431" x2="684" y2="431" marker-end="url(#ar)"></line>
+
+      <!-- zona Resolve -->
+      <line class="dv" x1="890" y1="364" x2="890" y2="588"></line>
+      <text class="tb" x="1015" y="382" text-anchor="middle">DENTRO DO RESOLVE</text>
+
+      <rect class="bx" x="920" y="404" width="190" height="54" rx="5"></rect>
+      <text class="t" x="934" y="428">GiAutoSubs.lua</text>
+      <text class="ts" x="934" y="443">o script que o Resolve roda</text>
+
+      <line class="ln" x1="860" y1="431" x2="914" y2="431" marker-end="url(#ar)"></line>
+
+      <!-- o .setting vai DIRETO pro GiAutoSubs.lua -->
+      <path class="ln-key" d="M 720 300 L 1015 300 L 1015 398" marker-end="url(#arC)"></path>
+      <text class="ts" x="732" y="294">o molde, direto pro script</text>
+
+      <rect class="bx" x="920" y="496" width="190" height="54" rx="5"></rect>
+      <text class="t" x="934" y="520">todos os clipes</text>
+      <text class="ts" x="934" y="535">na timeline, um por legenda</text>
+
+      <line class="ln" x1="1015" y1="458" x2="1015" y2="490" marker-end="url(#ar)"></line>
+
+      <!-- volta -->
+      <path class="ln-d" d="M 920 523 L 400 523 L 400 236 L 434 236" marker-end="url(#arD)"></path>
+      <text class="ts" x="666" y="517" text-anchor="middle">Generate Caption Style · volta pra preparação</text>
+    </svg>
+  </div>
+</div>

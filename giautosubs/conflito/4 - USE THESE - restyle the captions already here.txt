@@ -1,0 +1,8 @@
+Creates nothing and deletes nothing. Restyles the captions that are already
+on the timeline, keeping their position, their trims, the text you corrected
+by hand and their per-word timing - so the bubble stays exactly as synced as
+it is now.
+
+Each caption is matched to the transcript BY START FRAME, not by order, so
+it survives a clip you moved and a caption count that no longer matches.
+Captions in the file with no clip here are listed at the end and left out.

@@ -1,0 +1,2 @@
+Deletes nothing. Captions that already start on a given frame are skipped.
+This is the mode for finishing an interrupted run.

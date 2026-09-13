@@ -1,0 +1,7 @@
+# So o servidor. torch/pyannote/faster-whisper/google-genai NAO entram aqui de
+# proposito: eles moram no Python do sistema, com versoes presas umas as outras
+# (ver CLAUDE.md), e sao chamados por subprocesso. Misturar aquele mundo neste
+# venv arrastaria a fragilidade dele pra dentro do app.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+numpy>=1.26

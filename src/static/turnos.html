@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pre_production — Turnos</title>
+<!-- style.css e' copia literal do turnsEditor; shell.css entra DEPOIS e so
+     acrescenta a barra de etapas (e a linha a mais no grid do body). -->
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/shell.css">
+</head>
+<body class="editor">
+
+<header class="head">
+  <div class="brand">turns<span>Editor</span></div>
+
+  <!-- Onde ficava o <select> de arquivos. Ele CONTINUA no DOM, escondido: o
+       app.js e' copia literal do turnsEditor, le e escreve `fileSelect.value`
+       e pendura o carregamento no `change` dele. A tela nova dispara esse
+       mesmo evento, entao o editor nao percebe que a origem mudou. -->
+  <div class="field grow openturns" id="turnsCtx"></div>
+  <label class="field grow hidden">
+    <span class="lbl">Arquivo de turnos</span>
+    <select id="fileSelect"></select>
+  </label>
+
+  <div class="grouped">
+    <span id="dirty" class="badge hidden">alterações não salvas</span>
+    <button id="undoBtn" class="btn icon" title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
+    <button id="redoBtn" class="btn icon" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer">↷</button>
+    <button id="saveBtn" class="btn primary" title="Salvar (Ctrl+S)">Salvar</button>
+    <button id="cfgBtn" class="btn icon" title="Ajustes" aria-label="Ajustes">⚙</button>
+    <button id="helpBtn" class="btn icon" title="Atalhos (?)" aria-label="Atalhos">?</button>
+  </div>
+</header>
+
+<main>
+
+<section class="card deck">
+  <div class="deckbar">
+    <button id="playBtn" class="btn play" title="Tocar / pausar (Espaço)" aria-label="Tocar">▶</button>
+    <button id="playTurnBtn" class="btn">Tocar turno</button>
+
+    <div class="readout">
+      <div class="clockline">
+        <span id="clock" class="clock">00:00.000</span>
+        <span id="rate" class="rate hidden">1×</span>
+      </div>
+      <div class="under">
+        <span id="clockTc" class="tc">00:00:00:00</span>
+        <span id="clockAbs" class="abs"></span>
+      </div>
+    </div>
+
+    <div class="seg" role="group" aria-label="Base de tempo">
+      <button id="baseRel" class="segbtn on">do zero</button>
+      <button id="baseAbs" class="segbtn">da mídia</button>
+    </div>
+
+    <div class="toggles">
+      <label class="chk"><input type="checkbox" id="snapChk" checked><span>encaixar no frame</span></label>
+      <label class="chk"><input type="checkbox" id="linkChk" checked><span>bordas coladas juntas</span></label>
+      <label class="chk"><input type="checkbox" id="followChk" checked><span>seguir playhead</span></label>
+    </div>
+
+    <div class="zoomctl">
+      <button id="zoomOut" class="btn icon" title="Menos zoom" aria-label="Menos zoom">−</button>
+      <button id="zoomIn" class="btn icon" title="Mais zoom" aria-label="Mais zoom">+</button>
+      <button id="zoomFit" class="btn">tudo</button>
+    </div>
+  </div>
+
+  <canvas id="wave"></canvas>
+
+  <p class="tip">
+    arraste <b>move o playhead</b> · arraste a borda de um bloco
+    <b>move o corte</b> · roda <b>zoom</b> · shift+roda <b>desloca</b> ·
+    duplo clique ou botão direito <b>troca o falante</b> ·
+    <kbd class="k">B</kbd> <b>divide</b>
+  </p>
+</section>
+
+<section class="card ledger">
+  <div class="ledgerbar">
+    <input id="search" type="search" placeholder="filtrar por nome ou fala…">
+    <div id="speakerFilter" class="chips"></div>
+    <div id="stats" class="stats"></div>
+  </div>
+
+  <div class="tablewrap">
+    <table id="turnsTable">
+      <thead>
+        <tr>
+          <th class="c-idx">#</th>
+          <th class="c-time" id="thStart">início</th>
+          <th class="c-time" id="thEnd">fim</th>
+          <th class="c-dur">duração</th>
+          <th class="c-frames" title="Quantos frames este turno vira no Resolve">frames</th>
+          <th class="c-name">falante</th>
+          <th class="c-text">o que foi dito</th>
+          <th class="c-act"></th>
+        </tr>
+      </thead>
+      <tbody id="turnsBody"></tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<div id="speakerMenu" class="menu hidden" role="menu" aria-label="Trocar falante"></div>
+
+<div id="toast" class="toast hidden" role="status"></div>
+
+<!-- ajustes -->
+<div id="cfgModal" class="modal hidden">
+  <div class="box">
+    <h2>Ajustes</h2>
+
+    <label class="field block">
+      <span class="lbl">Áudio</span>
+      <select id="audioSelect"></select>
+    </label>
+
+    <div class="pair">
+      <label class="field block">
+        <span class="lbl">Offset do áudio</span>
+        <input id="audioOffset" type="number" step="0.001">
+      </label>
+      <label class="field block">
+        <span class="lbl">Offset da transcrição</span>
+        <input id="transcriptOffset" type="number" step="0.001">
+      </label>
+    </div>
+    <p class="note">Segundos a somar no tempo do arquivo para chegar no tempo
+      dos turnos. Aqui os dois já vêm prontos do corte: o <code>audio.wav</code>
+      começa no zero, os turnos estão em tempo absoluto, e o offset é o início
+      do corte. A transcrição sai com offset <b>0</b> porque o app já a
+      converteu para a mesma base ao gravá-la.</p>
+
+    <div class="pair">
+      <label class="field block">
+        <span class="lbl">FPS do projeto</span>
+        <input id="fps" type="number" step="0.001">
+      </label>
+      <label class="field block">
+        <span class="lbl">Zero da linha do tempo</span>
+        <input id="zeroAt" type="text" placeholder="43:30.000">
+      </label>
+    </div>
+    <p class="note">O zero é onde a contagem “do zero” começa — normalmente o
+      primeiro turno, que é onde a timeline nova do Resolve começa também.
+      <button id="zeroReset" class="linkbtn">usar o primeiro turno</button></p>
+
+    <!-- preenchido pelo script de importação, logo abaixo -->
+    <div id="importSlot"></div>
+
+    <div class="foot">
+      <button id="cfgClose" class="btn primary">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- salvar -->
+<div id="saveModal" class="modal hidden">
+  <div class="box">
+    <h2>Salvar turnos</h2>
+
+    <label class="field block">
+      <span class="lbl">Nome do arquivo</span>
+      <input id="saveName" type="text">
+    </label>
+
+    <label class="field block">
+      <span class="lbl">Chave do rótulo no JSON</span>
+      <select id="saveLabelKey">
+        <option value="name">name</option>
+        <option value="speaker">speaker</option>
+      </select>
+    </label>
+
+    <label class="chk row"><input type="checkbox" id="saveSnap" checked>
+      <span>Encaixar todos os tempos no frame mais próximo</span></label>
+    <label class="chk row"><input type="checkbox" id="saveOverwrite">
+      <span>Sobrescrever se já existir — gera um <code>.bak</code> com data e hora</span></label>
+
+    <p class="note" id="saveHint"></p>
+
+    <div class="foot">
+      <button id="saveCancel" class="btn">Cancelar</button>
+      <button id="saveConfirm" class="btn primary">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- atalhos -->
+<div id="helpModal" class="modal hidden">
+  <div class="box">
+    <h2>Atalhos</h2>
+    <table class="keys">
+      <tr><td><kbd>Espaço</kbd></td><td>tocar / pausar (volta pra 1×)</td></tr>
+      <tr><td><kbd>L</kbd></td><td>acelerar — 1× 2× 3× 4×</td></tr>
+      <tr><td><kbd>J</kbd></td><td>desacelerar — 4× 3× 2× 1× ½× ¼×</td></tr>
+      <tr><td><kbd>K</kbd></td><td>parar e voltar pra 1×</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>tocar só o turno selecionado</td></tr>
+      <tr><td><kbd>↑</kbd><kbd>↓</kbd></td><td>turno anterior / próximo</td></tr>
+      <tr><td><kbd>B</kbd></td><td>dividir o turno no playhead (lâmina)</td></tr>
+      <tr><td><kbd>M</kbd></td><td>juntar com o turno seguinte</td></tr>
+      <tr><td><kbd>I</kbd></td><td>marcar início no playhead</td></tr>
+      <tr><td><kbd>O</kbd></td><td>marcar fim no playhead</td></tr>
+      <tr><td><kbd>Del</kbd></td><td>apagar o turno</td></tr>
+      <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>atribuir falante</td></tr>
+      <tr><td><kbd>Ctrl</kbd><kbd>Z</kbd></td><td>desfazer</td></tr>
+      <tr><td><kbd>Ctrl</kbd><kbd>⇧</kbd><kbd>Z</kbd></td><td>refazer</td></tr>
+      <tr><td><kbd>Ctrl</kbd><kbd>S</kbd></td><td>salvar</td></tr>
+    </table>
+    <p class="note">Os campos de tempo aceitam <code>43:30.500</code>,
+      <code>1:03:30.1</code> ou segundos crus (<code>2610</code>). Vírgula
+      também vale como decimal.</p>
+    <div class="foot">
+      <button id="helpClose" class="btn primary">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<audio id="audio" preload="none"></audio>
+
+<!-- A barra de etapas e' desenhada aqui, e nao pelo shell.js, de proposito: o
+     app.js (copia literal do turnsEditor) declara no escopo global nomes como
+     `api` e `toast`, e carregar o shell.js junto daria "identifier already
+     declared" - o editor inteiro pararia de carregar. Este trecho e' curto e
+     nao compartilha nome nenhum com ele. -->
+<script>
+(async function nav() {
+  const fmt = (s) => {
+    if (s === null || s === undefined) return '';
+    const m = Math.floor(s / 60), r = (s % 60).toFixed(0).padStart(2, '0');
+    return `${String(m).padStart(2, '0')}:${r}`;
+  };
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let st = null;
+  try { st = await (await fetch('/api/state')).json(); } catch (e) { /* offline */ }
+  const a = st && st.active;
+  const bar = document.createElement('nav');
+  bar.className = 'nav';
+  bar.innerHTML = `
+    <div class="brand">pre_<span>production</span></div>
+    <div class="steps">
+      <a class="step" href="/"><span class="n">1</span>Projeto</a>
+      <span class="sep">›</span>
+      <a class="step" href="/cortes${a ? `?projeto=${encodeURIComponent(a.project.slug)}` : ''}"
+        ><span class="n">2</span>Cortes</a>
+      <span class="sep">›</span>
+      <a class="step on" href="#"><span class="n">3</span>Turnos</a>
+    </div>
+    <div class="ctx">${a
+    ? `<b>${esc(a.project.name)}</b> · <b>${esc(a.cut.name)}</b>
+       <span>${fmt(a.cut.start)} → ${fmt(a.cut.end)} · frame ${a.cut.origin_frame}</span>`
+    : '<span style="color:var(--caution)">nenhum corte ativo — escolha um na etapa 2</span>'}</div>`;
+  document.body.prepend(bar);
+}());
+</script>
+<!-- Qual corte está aberto, qual arquivo de turnos, e o diálogo que troca de
+     arquivo. Substitui o <select> do cabeçalho: a lista era um dropdown de
+     nomes quase iguais (turnsPyannote_v3, turnsWhisper_medium, turnsManual…)
+     que não dizia de que corte eram nem o que tinha dentro. O diálogo abre
+     JÁ na pasta do corte, então os arquivos de casa continuam a um clique —
+     e os de fora, que o dropdown mostrava como caminho inteiro, deixam de
+     precisar de tratamento especial. Fora do app.js, como o resto. -->
+<script>
+(function turnsHeader() {
+  const slot = document.getElementById('turnsCtx');
+  const sel = document.getElementById('fileSelect');
+  if (!slot || !sel) return;
+
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmt = (s) => {
+    if (s === null || s === undefined) return '—';
+    const t = Math.max(0, Math.floor(s));
+    const h = Math.floor(t / 3600);
+    const mm = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
+    const ss = String(t % 60).padStart(2, '0');
+    return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  };
+  // um arquivo de fora do corte aparece como caminho inteiro; na tela cabe o
+  // nome, e o caminho vai pro title de quem quiser conferir a origem
+  const base = (n) => String(n).split(/[\\/]/).pop();
+  const foreign = (n) => /[\\/]/.test(String(n));
+  // de qual projeto/corte o arquivo de fora veio - antes so aparecia no title
+  // (hover), e "de fora do corte" sozinho nao diz de qual. Dois cortes com
+  // nome parecido (ex: "Mosquiteiro" e "corte_teste_mosquito") bastam pra
+  // trocar um pelo outro sem perceber.
+  const sourceOf = (n) => {
+    const parts = String(n).split(/[\\/]/);
+    const cutName = parts[parts.length - 2];
+    const pi = parts.lastIndexOf('projects');
+    return pi >= 0 && parts[pi + 1] ? `${parts[pi + 1]} › ${cutName}` : cutName;
+  };
+
+  let CTX = null, FILES = [], WANT = '', lastSeen = null;
+
+  async function pull() {
+    try {
+      const d = await (await fetch('/api/config')).json();
+      CTX = d.context || CTX;
+      FILES = d.turn_files || [];
+      WANT = (d.config && d.config.last_turns_file) || WANT;
+    } catch (e) { /* se /api/config cair, o próprio app.js já reclama */ }
+  }
+
+  function render(cur) {
+    const m = FILES.find((f) => f.name === cur);
+    slot.innerHTML = `
+      <span class="lbl">${CTX
+    ? `Corte · <b>${esc(CTX.project_name || CTX.project)}</b> ›
+       <b>${esc(CTX.cut)}</b> · ${fmt(CTX.start)} → ${fmt(CTX.end)} ·
+       frame ${esc(CTX.origin_frame)}`
+    : '<span style="color:var(--caution)">nenhum corte ativo</span>'}</span>
+      <div class="openrow">
+        <code class="fname" title="${esc(cur || '')}">${cur
+    ? esc(base(cur)) : '— nenhum arquivo aberto —'}</code>
+        <span class="fmeta">${m
+    ? `${m.count} turnos · ${fmt(m.span[0])}→${fmt(m.span[1])}
+       ${m.label_key ? `· rótulo <code>${esc(m.label_key)}</code>`
+    : '· <b>sem rótulo de falante</b>'}
+       ${foreign(cur) ? `· <b class="foreignsrc" style="color:var(--caution)">de fora — veio de ${esc(sourceOf(cur))}</b>` : ''}` : ''}</span>
+        <button id="openTurnsBtn" class="btn" type="button"
+          title="Abre o diálogo do Windows já na pasta deste corte. Serve
+tanto pra trocar entre os arquivos daqui quanto pra abrir um turns*.json de
+outra pasta — salvar continua caindo dentro do corte.">Abrir…</button>
+      </div>`;
+    document.getElementById('openTurnsBtn').onclick = openTurns;
+  }
+
+  function sync(force) {
+    const v = sel.value || '';
+    if (!force && v === lastSeen) return;
+    lastSeen = v;
+    // arquivo que o <select> ganhou por fora (o app.js aponta pro novo depois
+    // de salvar): busca os números dele antes de desenhar
+    if (v && !FILES.some((f) => f.name === v)) pull().then(() => render(v));
+    else render(v || WANT || '');
+  }
+
+  async function openTurns() {
+    if (!CTX) return;
+    const b = document.getElementById('openTurnsBtn');
+    const was = b.textContent;
+    b.disabled = true; b.textContent = 'aguardando o diálogo…';
+    try {
+      const r = await fetch(`/api/projects/${encodeURIComponent(CTX.project)}`
+        + `/cuts/${encodeURIComponent(CTX.cut)}/open-turns`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || r.statusText);
+      if (!d.file) return;                    // cancelou o diálogo
+      await pull();
+      // opção nova precisa existir antes do `value =`, senão ele não pega
+      if (![...sel.options].some((o) => o.value === d.file)) {
+        const o = document.createElement('option');
+        o.value = d.file; o.textContent = d.file;
+        sel.appendChild(o);
+      }
+      if (sel.value !== d.file) {
+        sel.value = d.file;
+        /* Quem carrega é o app.js: este `change` é o mesmo que o <select>
+           disparava. Inclusive o aviso de alterações não salvas — reimplementá-lo
+           aqui seria uma segunda chance de esquecer dele. */
+        sel.dispatchEvent(new Event('change'));
+      }
+      sync(true);
+    } catch (e) {
+      alert(`Não deu para abrir: ${e.message}`);
+    } finally { b.disabled = false; b.textContent = was; }
+  }
+
+  /* O app.js troca o arquivo por conta própria (no boot e depois de salvar) e
+     não avisa ninguém. Em vez de editar a cópia pra emitir um evento, esta
+     tela confere o valor de tempos em tempos — é uma leitura de string. */
+  setInterval(sync, 500);
+  pull().then(() => sync(true));
+}());
+</script>
+<!-- Clicar num turno leva ele pro TOPO da lista.
+     O app.js chama `select(uid, false)` no clique - o `false` desliga o scroll
+     de proposito, entao a linha clicada ficava onde estava e o que vinha
+     DEPOIS dela, que e' o que interessa quando se esta conferindo turno a
+     turno, ficava fora da tela. Aqui nao ha conflito a desfazer: e' scroll
+     onde nao havia nenhum.
+
+     Fica de fora quando o clique foi num controle (o <select> do falante, os
+     campos de tempo, os botoes da linha) - a mesma regra que o app.js ja usa
+     pra nao arrastar o playhead nesses casos. Rolar a lista com uma lista
+     nativa aberta a deixaria pendurada longe do campo que a abriu. -->
+<script>
+(function scrollTurnToTop() {
+  const body = document.getElementById('turnsBody');
+  const wrap = document.querySelector('.tablewrap');
+  const wave = document.getElementById('wave');
+  if (!body || !wrap) return;
+  const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function aoTopo(tr) {
+    if (!tr) return;
+    // o <thead> e' sticky (top:0): sem descontar a altura dele, a linha "no
+    // topo" para exatamente ATRAS do cabecalho
+    const head = wrap.querySelector('thead');
+    const hh = head ? head.getBoundingClientRect().height : 0;
+    const delta = tr.getBoundingClientRect().top
+      - wrap.getBoundingClientRect().top - hh;
+    if (Math.abs(delta) < 1) return;          // ja esta la
+    wrap.scrollTo({ top: wrap.scrollTop + delta,
+      behavior: suave ? 'smooth' : 'auto' });
+  }
+
+  // ---- clique na LISTA
+  body.addEventListener('click', (ev) => {
+    if (ev.target.closest('select, input, button')) return;
+    const tr = ev.target.closest('tr');
+    if (!tr) return;
+    // depois do que o app.js faz no mesmo clique, pra ninguem escrever
+    // scrollTop por cima do outro
+    requestAnimationFrame(() => aoTopo(tr));
+  });
+
+  // ---- clique na TIMELINE
+  // O app.js ja seleciona o turno do bloco clicado, mas com
+  // `scrollIntoView({block:'nearest'})`: se a linha ja estivesse visivel num
+  // canto, ela ficava onde estava. Aqui ela sobe pro topo, como na lista.
+  if (wave) {
+    wave.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 0) return;            // direito abre o menu de falante
+      let hit = null;
+      try {
+        // a MESMA pergunta que o app.js faz pra decidir se seleciona, com as
+        // funcoes dele - perguntar e' acoplamento; reimplementar hitTest aqui
+        // seria uma segunda verdade sobre onde os blocos comecam e terminam
+        const r = wave.getBoundingClientRect();
+        const m = waveMetrics();
+        hit = hitTest(ev.clientX - r.left, ev.clientY - r.top, m.w, m.h);
+      } catch (e) { return; }                 // app.js ainda nao carregou
+      // vazio: nao ha "linha em questao" pra mostrar, e rolar por causa de um
+      // clique no nada seria pior que nao rolar.
+      // borda: e' comeco de arraste - o proprio app.js passa `scroll=false`
+      // ali (linha 770) porque mexer na lista atrapalha o gesto.
+      if (!hit || hit.edge) return;
+      requestAnimationFrame(() => aoTopo(body.querySelector('tr.sel')));
+    });
+  }
+}());
+</script>
+<!-- Importar transcrição. Também fora do shell.js e sem tocar no app.js: o
+     editor é cópia literal, então o que ele não faz é acrescentado por fora.
+     Recarregar a página no fim é de propósito — é assim que o app.js relê
+     /api/config e /api/transcript; ele não tem um caminho para trocar a
+     transcrição em memória, e inventar um exigiria editar a cópia. -->
+<script>
+(function importTranscript() {
+  const slot = document.getElementById('importSlot');
+  if (!slot) return;
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function render(cfg, ctx, tr) {
+    /* O que este arquivo TEM importa tanto quanto qual ele é: a coluna mostra
+       o mesmo texto nos dois casos, mas só o formato do GiAutoSubs carrega o
+       tempo por palavra — sem ele a palavra falada nunca acende no Resolve, e
+       isso só apareceria depois de criar as legendas lá. */
+    const n = tr && tr.with_words;
+    const formato = !tr || !tr.file || tr.error ? ''
+      : n ? `<b>formato GiAutoSubs</b> — ${n} trecho${n > 1 ? 's' : ''} com
+             tempo por palavra`
+        : 'só o texto — <b>sem tempo por palavra</b>; a palavra falada não '
+            + 'acende. Gere a legenda do GiAutoSubs na etapa 2 (a partir de uma '
+            + 'transcrição do Whisper com “tempo por palavra”).';
+    slot.innerHTML = `
+      <label class="field block">
+        <span class="lbl">Transcrição — a coluna “o que foi dito”</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <code style="flex:1">${cfg.transcript_file
+    ? esc(cfg.transcript_file) : 'nenhuma neste corte'}</code>
+          <button id="impBtn" class="btn">Importar…</button>
+        </div>
+      </label>
+      ${formato ? `<p class="note">${formato}</p>` : ''}
+      <p class="note">Aceita <code>.json</code> (o do Whisper, e o que a etapa 2
+        exporta para o GiAutoSubs) e também <code>.srt</code> — legenda pronta é
+        transcrição. O offset é <b>detectado</b>: se os tempos não caírem dentro
+        do corte mas caírem depois de somar ${esc(String(ctx.start))}s, o app
+        entende que o arquivo está em tempo relativo e soma sozinho.</p>`;
+
+    document.getElementById('impBtn').onclick = async () => {
+      const dirty = document.getElementById('dirty');
+      if (dirty && !dirty.classList.contains('hidden')
+          && !confirm('Há alterações não salvas nos turnos.\n\n'
+            + 'Importar a transcrição recarrega a página e elas se perdem. '
+            + 'Continuar?')) return;
+      const b = document.getElementById('impBtn');
+      b.disabled = true; b.textContent = 'aguardando o diálogo…';
+      try {
+        const r = await fetch(`/api/projects/${encodeURIComponent(ctx.project)}`
+          + `/cuts/${encodeURIComponent(ctx.cut)}/transcript`, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || r.statusText);
+        if (d.path) location.reload();
+      } catch (e) {
+        alert(`Não deu para importar: ${e.message}`);
+      } finally {
+        b.disabled = false; b.textContent = 'Importar…';
+      }
+    };
+  }
+
+  /* Duas leituras porque são duas perguntas: qual arquivo (config) e o que ele
+     carrega (transcript). A segunda nunca derruba a primeira — sem transcrição
+     no corte a rota responde com um erro dentro do json, e o painel continua
+     servindo para importar uma. */
+  fetch('/api/config').then((r) => r.json())
+    .then((d) => {
+      if (!d.context) return;
+      fetch('/api/transcript').then((r) => r.json())
+        .then((t) => render(d.config, d.context, t))
+        .catch(() => render(d.config, d.context, null));
+    })
+    .catch(() => { /* sem corte ativo: a rota já redireciona */ });
+}());
+</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

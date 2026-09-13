@@ -1,0 +1,33 @@
+{
+  "projects_dir": "D:\\CanalYtbe\\BatataQuente\\pre_production\\projects",
+  "sources_dir": "D:\\CanalYtbe\\BatataQuente\\Raw_videos",
+  "scripts_dir": "D:\\CanalYtbe\\BatataQuente\\scriptsPrimarios",
+  "python_exe": "C:\\Users\\talco\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+  "ffmpeg": "ffmpeg",
+  "ffprobe": "ffprobe",
+  "wav_sample_rate": 16000,
+  "wav_channels": 1,
+  "fps_fallback": 60.0,
+  "min_span_frames": 2,
+  "silence_min_seconds": 0.5,
+  "silence_label": "no_name",
+  "extra_turns_dirs": [
+    "D:\\CanalYtbe\\BatataQuente\\scriptsPrimarios\\resultados\\EpisodioPiloto"
+  ],
+  "active_project": "DeuMerda",
+  "active_cut": "rank_surpresa",
+  "port": 8740,
+  "reserved_colors": {
+    "no_name": "#6b7280",
+    "cut": "#a78bfa"
+  },
+  "editor_prefs": {
+    "time_base": "relative",
+    "display_zero": null,
+    "speaker_colors": {},
+    "speaker_order": null,
+    "manual_only_names": [
+      "cut"
+    ]
+  }
+}

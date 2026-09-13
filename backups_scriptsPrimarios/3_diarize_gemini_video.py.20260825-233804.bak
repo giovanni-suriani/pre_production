@@ -1,0 +1,189 @@
+"""
+Diarizacao via Gemini usando VIDEO (nao so audio) - alternativa ao
+3_diarize_gemini.py (audio-only) e ao 1_diarize_v3.py (pyannote).
+
+Por que video: a gravacao e um mic unico captando a sala inteira (sem canal
+separado por pessoa), entao qualquer diarizacao BASEADA SO EM AUDIO (pyannote
+ou Gemini com wav) sofre com vazamento de voz entre participantes - o
+pyannote, nesse projeto, chegou a splitar a MESMA pessoa em dois labels
+diferentes (SPEAKER_00/SPEAKER_02) por causa disso. Mandando o VIDEO, o
+Gemini pode usar pistas visuais (boca mexendo, quem esta em quadro) junto
+com o audio pra desambiguar quem fala - contorna o problema na origem em vez
+de tentar consertar depois via re-clustering.
+
+De quebra, pede uma descricao visual de cada speaker (posicao/roupa), que
+ajuda a mapear SPEAKER_XX pra V1/V2/V3 sem precisar so ouvir amostras de audio.
+
+Instalacao:
+    pip install google-genai pydantic
+
+Requer GEMINI_API_KEY no ambiente (chave gratuita em https://aistudio.google.com/apikey).
+
+Uso:
+    python 3_diarize_gemini_video.py trecho.mp4 --speakers 4 --offset 2610 --out turnsGeminiVideo.json
+
+Recomendado recortar/comprimir o video antes (ffmpeg) - o Gemini reamostra
+video pra poucos fps internamente, entao mandar o arquivo original em alta
+resolucao/fps so deixa o upload mais lento sem ganhar precisao:
+    ffmpeg -ss <INICIO> -i original.mkv -t <DURACAO> -vf "scale=640:-2" -r 5 \
+        -c:v libx264 -crf 28 -preset veryfast -c:a aac -b:a 64k trecho.mp4
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+
+from dotenv import load_dotenv
+from google import genai
+from google.genai import errors, types
+from pydantic import BaseModel
+
+# Le GEMINI_API_KEY e GEMINI_MODEL do .env nesta mesma pasta (nao sobrescreve
+# se ja estiverem setados no ambiente do sistema).
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")  # trocavel via .env, sem editar codigo
+
+# Organizacao: cada video tem sua propria pasta em resultados\<VIDEO_TITLE>\
+# com TODOS os arquivos gerados. Troque VIDEO_TITLE (ou use --title) quando
+# processar um episodio novo.
+_RESULTADOS_ROOT = r"D:\CanalYtbe\BatataQuente\scriptsPrimarios\resultados"
+VIDEO_TITLE = "EpisodioPiloto"
+
+
+class Turn(BaseModel):
+    speaker: str
+    start: float
+    end: float
+
+
+class SpeakerDesc(BaseModel):
+    speaker: str
+    description: str
+
+
+class DiarizationResult(BaseModel):
+    speakers: list[SpeakerDesc]
+    turns: list[Turn]
+
+
+SYSTEM_PROMPT = """Voce assiste um video com uma conversa entre multiplas pessoas em \
+quadro (e possivelmente uma pessoa narrando fora de quadro) e faz a diarizacao: \
+identifica QUEM fala QUANDO, sem transcrever o conteudo.
+
+O audio e de um microfone unico captando a sala inteira - vozes vazam umas nas \
+outras. Por isso, USE PISTAS VISUAIS (boca mexendo, gesticulacao, quem esta em \
+quadro) junto com o audio pra decidir quem esta falando, especialmente quando o \
+audio sozinho for ambiguo (duas pessoas com timbre parecido, sobreposicao de fala).
+
+Regras:
+- Rotule cada pessoa como SPEAKER_00, SPEAKER_01, SPEAKER_02 etc, na ordem em que \
+aparecem pela primeira vez. Uma pessoa fora de quadro (so audio, nunca aparece na \
+tela) tambem recebe um label proprio.
+- Cada turno e um trecho continuo (em segundos, desde o inicio do video) em que a \
+MESMA pessoa fala, do inicio ao fim daquele trecho.
+- Ignore trechos de silencio total ou ruido sem fala.
+- Nao junte duas pessoas diferentes no mesmo turno, mesmo que a voz seja parecida -
+use a imagem pra desempatar.
+- Cubra o video inteiro, do segundo 0 ate o final.
+- Para CADA speaker label usado nos turnos, inclua uma descricao visual curta e \
+objetiva (posicao no quadro - esquerda/centro/direita, roupa, cabelo, ou "fora de \
+quadro, so audio" se for o caso) que ajude a identificar quem e quem depois."""
+
+
+def diarize(client, video_path, num_speakers):
+    print(f"[i] enviando {video_path} pro Gemini...")
+    uploaded = client.files.upload(file=video_path)
+
+    while uploaded.state.name == "PROCESSING":
+        print("[i] Gemini processando o video...", file=sys.stderr)
+        time.sleep(5)
+        uploaded = client.files.get(name=uploaded.name)
+    if uploaded.state.name == "FAILED":
+        sys.exit(f"[!] Gemini falhou ao processar o video: {uploaded.error}")
+
+    user_message = (
+        f"Este video tem aproximadamente {num_speakers} pessoas falando (uma "
+        "delas pode estar fora de quadro). Faca a diarizacao completa do video, "
+        "usando pistas visuais pra desambiguar vozes parecidas."
+    )
+
+    max_attempts = 4
+    response = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=[uploaded, user_message],
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    response_schema=DiarizationResult,
+                    temperature=0.2,
+                ),
+            )
+            break
+        except errors.APIError as e:
+            if e.code in (401, 403):
+                sys.exit("Credenciais invalidas: defina GEMINI_API_KEY (https://aistudio.google.com/apikey).")
+            if e.code == 429:
+                sys.exit(f"Rate limit/cota atingida na API do Gemini: {e.message}")
+            if e.code == 503 and attempt < max_attempts:
+                wait = 2 ** attempt
+                print(f"[!] modelo sobrecarregado (503), tentando de novo em {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            sys.exit(f"Erro da API do Gemini ({e.code}): {e.message}")
+
+    return json.loads(response.text)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("video")
+    ap.add_argument("--speakers", type=int, default=4)
+    ap.add_argument("--offset", type=float, default=0.0,
+                     help="segundos a somar em cada timestamp (trecho recortado que nao comeca em t=0 da timeline)")
+    ap.add_argument("--title", default=VIDEO_TITLE, help="pasta de organizacao dos arquivos gerados (resultados\\<title>\\)")
+    ap.add_argument("--out", default=None, help="default: resultados\\<title>\\turnsGeminiVideo.json")
+    args = ap.parse_args()
+    video_dir = os.path.join(_RESULTADOS_ROOT, args.title)
+    os.makedirs(video_dir, exist_ok=True)
+    args.out = args.out or os.path.join(video_dir, "turnsGeminiVideo.json")
+
+    client = genai.Client()
+    result = diarize(client, args.video, args.speakers)
+    turns = result["turns"]
+    turns.sort(key=lambda t: t["start"])
+
+    if args.offset:
+        for t in turns:
+            t["start"] += args.offset
+            t["end"] += args.offset
+        print(f"[i] offset de +{args.offset:.1f}s aplicado")
+
+    print(f"\n[i] {len(turns)} turnos detectados")
+    print("\nDescricao visual de cada speaker:")
+    for spk in result["speakers"]:
+        print(f"   {spk['speaker']}: {spk['description']}")
+
+    labels = sorted({t["speaker"] for t in turns})
+    print("\nPrimeiro turno de cada speaker:")
+    for lb in labels:
+        first = next(t for t in turns if t["speaker"] == lb)
+        print(f"   {lb}: {first['start']:.1f}s - {first['end']:.1f}s")
+
+    with open(args.out, "w", encoding="utf-8") as f:
+        json.dump(turns, f, indent=1)
+    print(f"\n[ok] turnos salvos em {args.out}")
+
+    desc_path = args.out.rsplit(".", 1)[0] + "_speakers.json"
+    with open(desc_path, "w", encoding="utf-8") as f:
+        json.dump(result["speakers"], f, indent=1, ensure_ascii=False)
+    print(f"[ok] descricoes salvas em {desc_path}")
+
+
+if __name__ == "__main__":
+    main()
