@@ -37,12 +37,20 @@ video_script\                             OUTRO serviço (8741) → video_script
 ```
 
 `video_script\` não faz parte deste app: é um serviço separado, na porta 8741,
-para o episódio que **ainda vai ser gravado** — cadastrar os jogos (adivinha
-rank em lista, impostor no quadro, impostor na palavra), montar o roteiro e
-conduzir a mesa ao vivo (vidas, buscas por nome/rank, sorteio do impostor).
-Compartilha só o venv (`.venv`) e o `src\static\shell.css` (montado lá em
-`/shared`, sem cópia) — subir ou derrubar um não afeta o outro. Sobe com
-`video_script\run.bat`.
+para o episódio que **ainda vai ser gravado**. Lá o **roteiro é o dono de
+tudo** — ele guarda quem joga (nome + vidas) e os jogos, com os atributos
+dentro; não há banco de jogos solto. Três abas: Roteiro (inicial), Jogos (edita
+UM jogo do roteiro) e In-game (conduz a mesa: vidas, buscas por nome/rank,
+sorteio do impostor), com uma partida por roteiro. Compartilha só o venv
+(`.venv`) e o `src\static\shell.css` (montado lá em `/shared`, sem cópia) —
+subir ou derrubar um não afeta o outro. Sobe com `video_script\run.bat`.
+
+Se for mexer no CSS de lá — ou criar qualquer tela nova que herde o
+`shell.css` — a régua de contraste é o `turnsEditor`: cada nível de caixa sobe
+de superfície (`--void` < `--slab` < `--riser` < `--lift`), dentro de uma caixa
+o texto é `--chalk` ou `--ash` (nunca `--smoke`), e nada abaixo de 12.5px
+carrega informação, rótulo incluído. Os `.lbl` de 10.5px em caixa alta do
+`shell.css` funcionam onde são quatro; numa tela com dezenas viram chiado.
 
 ## Invariantes — quebrar qualquer uma produz erro silencioso
 
