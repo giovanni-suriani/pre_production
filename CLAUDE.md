@@ -38,12 +38,36 @@ video_script\                             OUTRO serviço (8741) → video_script
 
 `video_script\` não faz parte deste app: é um serviço separado, na porta 8741,
 para o episódio que **ainda vai ser gravado**. Lá o **roteiro é o dono de
-tudo** — ele guarda quem joga (nome + vidas) e os jogos, com os atributos
-dentro; não há banco de jogos solto. Três abas: Roteiro (inicial), Jogos (edita
-UM jogo do roteiro) e In-game (conduz a mesa: vidas, buscas por nome/rank,
-sorteio do impostor), com uma partida por roteiro. Compartilha só o venv
-(`.venv`) e o `src\static\shell.css` (montado lá em `/shared`, sem cópia) —
-subir ou derrubar um não afeta o outro. Sobe com `video_script\run.bat`.
+tudo** — ele guarda quem joga (só o nome) e os jogos, com os atributos dentro;
+não há banco de jogos solto. Três abas: Roteiro (inicial), Jogos (edita UM jogo
+do roteiro) e In-game (conduz a mesa), com uma partida por roteiro. Cinco tipos
+de jogo: adivinha rank em lista, impostor no quadro, impostor na palavra,
+discussão e só resposta errada. Compartilha só o venv (`.venv`) e o
+`src\static\shell.css` (montado lá em `/shared`, sem cópia) — subir ou derrubar
+um não afeta o outro. Sobe com `video_script\run.bat`.
+
+O que decidiu o desenho de lá, e que não se adivinha lendo o código:
+
+- **As vidas são de cada JOGO**, não do participante
+  (`estado[jogo].vidas[pessoa]`, campo "Vidas neste jogo", padrão 2). Um rank
+  de quarenta minutos não precisa do mesmo tanto de coração que um impostor de
+  cinco, e o gasto num jogo não segue pro próximo.
+- **Os dois jogos de impostor são duplas `jogador | impostor`** — o sorteio só
+  escolhe a linha e as pessoas, o par já vem decidido no cadastro. Não há
+  imagem nenhuma no serviço: "quadro" ali é o NOME do quadro, texto.
+- **O que se importa mora em `video_script\listas\<jogo>\`** (os top100 do
+  rank, o .txt de perguntas). Quem lê é o navegador, no clique do import; o
+  conteúdo passa a morar no JSON do roteiro, e mexer no .txt depois não muda
+  jogo já cadastrado.
+- **Pergunta jogada fora vai pra `dados\lixeira_perguntas.json`** com a
+  resposta e o .txt de origem — lixeira única do serviço, porque as perguntas
+  vêm dos mesmos arquivos e o descarte vale pro próximo episódio.
+- **Gabarito fechado é a regra, com duas exceções de propósito**: a Discussão e
+  o Só resposta errada mostram tema e resposta abertos — ali não é prêmio, é a
+  cola de quem apresenta.
+- **`/static` vai com `Cache-Control: no-store`.** Sem isso o Chrome guarda o
+  `.js` e a correção não aparece na tela — e você depura um conserto que já
+  estava certo.
 
 Se for mexer no CSS de lá — ou criar qualquer tela nova que herde o
 `shell.css` — a régua de contraste é o `turnsEditor`: cada nível de caixa sobe

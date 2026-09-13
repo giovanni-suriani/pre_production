@@ -28,6 +28,7 @@ RAIZ = Path(__file__).resolve().parent
 sys.path.insert(0, str(RAIZ))
 
 import jogos          # noqa: E402
+import lixeira       # noqa: E402
 import partidas       # noqa: E402
 import roteiros       # noqa: E402
 import store          # noqa: E402
@@ -38,6 +39,21 @@ PORTA = 8741
 
 app = FastAPI(title="video_script")
 store.preparar()
+
+
+@app.middleware("http")
+async def sem_cache(request, call_next):
+    """O navegador nao pode guardar o .js/.css desta casa.
+
+    Isto roda em 127.0.0.1 e muda o dia inteiro: com o cache normal do Chrome,
+    uma correcao no `roteiro.js` so aparecia depois de um Ctrl+F5 — e o jeito
+    de descobrir isso e achar que o conserto nao funcionou. Em rede local nao
+    ha nada a economizar aqui.
+    """
+    resp = await call_next(request)
+    if request.url.path.startswith(("/static/", "/shared/")):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 def pagina(nome: str) -> FileResponse:
@@ -93,6 +109,17 @@ def api_tipos():
     a partir disto, entao campo novo em jogos.TIPOS aparece sozinho la."""
     return {"tipos": [{"tipo": t, **d} for t, d in jogos.TIPOS.items()],
             "tempo_padrao": jogos.TEMPO_PADRAO, "tempo_passo": jogos.TEMPO_PASSO}
+
+
+@app.get("/api/lixeira")
+def api_lixeira():
+    """O que foi jogado fora, com o .txt de origem de cada linha.
+
+    Nao ha tela pra isto de proposito: a lixeira e pra consultar depois da
+    gravacao, na hora de limpar o arquivo de origem — e uma tela a mais seria
+    uma tela a mais pra manter.
+    """
+    return {"itens": lixeira.listar()}
 
 
 @app.post("/api/parse-lista-rank")
@@ -160,19 +187,6 @@ def api_jogo_apagar(slug: str, jid: str):
     return _acao(roteiros.apagar_jogo, slug, jid)
 
 
-@app.post("/api/roteiros/{slug}/jogos/{jid}/quadros")
-def api_quadro_subir(slug: str, jid: str, body: dict = Body(...)):
-    """Sobe uma imagem do "Impostor no quadro".
-
-    Chega em base64 dentro do JSON, como o lista_do_rank.txt chega como texto:
-    o navegador le o arquivo e manda o conteudo. Assim o servico nao precisa de
-    `python-multipart`, e a copia guardada aqui e servida por /quadros/... —
-    que a pagina consegue mostrar, ao contrario de um `file://`.
-    """
-    return _acao(roteiros.add_quadro, slug, jid,
-                 body.get("nome") or "quadro", body.get("conteudo") or "")
-
-
 # ---------------------------------------------------------------- partidas
 
 @app.get("/api/partidas")
@@ -206,7 +220,8 @@ def api_partida_apagar(slug: str):
 
 @app.post("/api/partidas/{slug}/vida")
 def api_partida_vida(slug: str, body: dict = Body(...)):
-    return _acao(partidas.tocar_vida, slug, body.get("participante") or "",
+    return _acao(partidas.tocar_vida, slug, body.get("jogo") or "",
+                 body.get("participante") or "",
                  int(body.get("indice") or 0))
 
 
@@ -278,6 +293,25 @@ def api_partida_revelar_imp(slug: str, body: dict = Body(...)):
                  bool(body.get("revelado", True)))
 
 
+@app.post("/api/partidas/{slug}/errada-marcar")
+def api_partida_errada_marcar(slug: str, body: dict = Body(...)):
+    """A bolinha do "So resposta errada": liga/desliga aquela pergunta."""
+    return _acao(partidas.marcar_errada, slug, body.get("jogo") or "",
+                 int(body.get("i") or 0))
+
+
+@app.post("/api/partidas/{slug}/errada-lixo")
+def api_partida_errada_lixo(slug: str, body: dict = Body(...)):
+    """Tira a pergunta do jogo e anota na lixeira (com o .txt de origem)."""
+    return _acao(partidas.lixo_errada, slug, body.get("jogo") or "",
+                 int(body.get("i") or 0))
+
+
+@app.post("/api/partidas/{slug}/errada-embaralhar")
+def api_partida_errada_shuffle(slug: str, body: dict = Body(...)):
+    return _acao(partidas.embaralhar_errada, slug, body.get("jogo") or "")
+
+
 @app.post("/api/partidas/{slug}/tempo")
 def api_partida_tempo(slug: str, body: dict = Body(...)):
     # `or` aqui seria errado: 0 e falso, e um "-30s" que chega em zero viraria
@@ -290,8 +324,6 @@ def api_partida_tempo(slug: str, body: dict = Body(...)):
 # ------------------------------------------------------------------ estatico
 
 app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
-# as imagens que subiram pelo "Impostor no quadro"
-app.mount("/quadros", StaticFiles(directory=str(store.QUADROS)), name="quadros")
 if COMPARTILHADO.is_dir():
     # o shell.css e o shell.js do pre_production, sem copia: uma mudanca de
     # aparencia la aparece aqui, e nao existe versao deste arquivo divergindo.

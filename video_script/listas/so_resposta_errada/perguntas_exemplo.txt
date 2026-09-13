@@ -1,0 +1,40 @@
+# So resposta errada — perguntas obvias com MUITA resposta errada por perto
+# Formato: pergunta | resposta certa   (a certa e justamente a que NAO vale)
+# Importe pelo botao "Importar .txt" no jogo.
+#
+# O que faz a pergunta render aqui nao e ser dificil: e ter uma FILA de
+# respostas erradas obvias esperando na porta. "Quem vira Super Saiyajin" tem
+# Vegeta, Gohan, Trunks e Broly prontos pra sair da boca de todo mundo — e por
+# isso errar de proposito da trabalho, e errar igual ao vizinho e facil demais.
+# Pergunta de resposta unica (capital da Franca) morre em dois chutes.
+#
+# O que vem depois do | e a sua cola: a unica que NAO pode passar. O que esta
+# entre parenteses e so lembrete pra voce — some na hora de importar? Nao: vai
+# junto no campo da resposta, e so voce ve.
+
+# --- animes
+Quem vira Super Saiyajin em Dragon Ball | Goku (esperam Vegeta, Gohan, Trunks, Broly)
+Quem grita Kamehameha | Goku (Gohan e Goten tambem gritam, mas a certa e Goku)
+Qual e o Cavaleiro de Pegaso | Seiya (tem Ikki, Shiryu, Hyoga e Shun de isca)
+Quem vira Hokage no fim de Naruto | Naruto (esperam Kakashi, Tsunade, Minato)
+Qual fruta do diabo o Luffy comeu | Gomu Gomu no Mi
+Quem e o dono do Death Note | Light Yagami (esperam L, Ryuk, Misa)
+Qual Pokemon amarelo solta raio e e o mascote | Pikachu (esperam Raichu, Pichu, Zapdos)
+Qual anime tem um menino de chapeu de palha que quer ser o Rei dos Piratas | One Piece
+
+# --- futebol
+Quem e o maior artilheiro da historia da Selecao Brasileira | Neymar (esperam Pele, Ronaldo, Romario)
+Que selecao ganhou a Copa de 2002 | O Brasil (esperam Alemanha, Argentina, Franca)
+Em que pais foi a Copa do Mundo de 2014 | No Brasil
+Quantas Copas do Mundo o Brasil ja ganhou | 5 (esperam 4, 6, 3)
+Quantos jogadores cada time poe em campo | 11 (esperam 10, 12, 23)
+Que cartao o juiz mostra para expulsar um jogador | O vermelho (espera-se o amarelo)
+De quantos em quantos anos acontece a Copa do Mundo | 4 anos (esperam 2, 5, 6)
+
+# --- conhecimento geral
+Quem pintou a Mona Lisa | Da Vinci (esperam Michelangelo, Van Gogh, Picasso)
+Qual e o maior planeta do sistema solar | Jupiter (esperam Saturno, Netuno, o Sol)
+Quem escreveu Dom Casmurro | Machado de Assis (esperam Jose de Alencar, Eca de Queiros)
+Quantas patas tem uma aranha | 8 (esperam 6, 4, 10)
+Quantos dias tem um ano bissexto | 366 (esperam 365, 364, 367)
+Qual e a capital da Franca | Paris

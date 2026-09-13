@@ -23,13 +23,12 @@ RAIZ = Path(__file__).resolve().parent
 DADOS = RAIZ / "dados"
 ROTEIROS = DADOS / "roteiros"
 PARTIDAS = DADOS / "partidas"
-QUADROS = DADOS / "quadros"      # as imagens do impostor, uma pasta por roteiro
 # Nao ha pasta de jogos: os jogos moram dentro do roteiro que os usa
 # (ver roteiros.py). A partida tem o mesmo slug do roteiro — uma por roteiro.
 
 
 def preparar() -> None:
-    for d in (ROTEIROS, PARTIDAS, QUADROS):
+    for d in (ROTEIROS, PARTIDAS):
         d.mkdir(parents=True, exist_ok=True)
 
 

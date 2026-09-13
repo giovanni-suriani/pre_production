@@ -74,42 +74,23 @@ function desenharParts() {
   box.innerHTML = '';
   el('dPartVazio').classList.toggle('hidden', parts.length > 0);
   el('dPartSub').textContent = parts.length
-    ? `${parts.reduce((a, x) => a + (x.vidas_total || 0), 0)} vidas no total` : '';
+    ? `${parts.length} na mesa` : '';
 
   parts.forEach((x, i) => {
     const linha = h('div', 'part');
     linha.innerHTML = `
       <input type="text" class="nm" placeholder="nome" value="${esc(x.nome)}">
-      <div class="row">
-        <input type="number" class="vd" min="0" max="12" style="width:70px"
-               value="${x.vidas_total}">
-        <span class="vidas prev"></span>
-      </div>
       <button class="btn small danger del">×</button>`;
     const q = (s) => linha.querySelector(s);
-    const prev = () => {
-      q('.prev').innerHTML = '';
-      for (let k = 0; k < Math.min(x.vidas_total, 12); k++) {
-        q('.prev').appendChild(h('span', 'vida viva mini'));
-      }
-    };
     q('.nm').oninput = () => { x.nome = q('.nm').value; };
-    q('.vd').onchange = () => {
-      x.vidas_total = Math.max(0, Math.min(parseInt(q('.vd').value || '0', 10) || 0, 12));
-      q('.vd').value = x.vidas_total;
-      prev();
-      el('dPartSub').textContent =
-        `${parts.reduce((a, y) => a + (y.vidas_total || 0), 0)} vidas no total`;
-    };
     q('.del').onclick = () => { parts.splice(i, 1); desenharParts(); };
-    prev();
     box.appendChild(linha);
   });
 }
 
 el('dAddPart').onclick = () => {
-  // 3 vidas e so o palpite mais comum da mesa; muda no campo ao lado.
-  (atual.participantes = atual.participantes || []).push({ nome: '', vidas_total: 3 });
+  // so o nome: com quantas vidas cada um entra e decisao de cada JOGO
+  (atual.participantes = atual.participantes || []).push({ nome: '' });
   desenharParts();
 };
 

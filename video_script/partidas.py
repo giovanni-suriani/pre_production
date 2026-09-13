@@ -16,6 +16,13 @@ placar de quarenta minutos de gravacao.
 As vidas sao uma lista de booleanos, uma por coracao, nao um contador. Assim o
 clique na tela e sempre "este coracao aqui", e nao "descer o numero" — e
 desfazer e clicar de novo no mesmo lugar.
+
+E o placar e **por jogo**: `estado[jogo]["vidas"][participante]`. Cada jogo diz
+com quantos coracoes a mesa entra nele, e o que foi gasto num jogo nao segue
+pro proximo — voltar pro jogo anterior no meio do episodio encontra o placar
+dele exatamente como ficou. Antes as vidas eram do participante e valiam o
+episodio inteiro; um rank de quarenta minutos e um impostor de cinco nao tem
+por que ter o mesmo tanto de coracao.
 """
 
 from __future__ import annotations
@@ -23,6 +30,7 @@ from __future__ import annotations
 import random
 
 import jogos
+import lixeira
 import roteiros
 import store
 
@@ -32,9 +40,7 @@ import store
 def listar() -> list[dict]:
     out = []
     for p in store.listar(store.PARTIDAS):
-        parts = p.get("participantes") or []
-        p["n_participantes"] = len(parts)
-        p["vivos"] = sum(1 for x in parts if any(x.get("vidas") or []))
+        p["n_participantes"] = len(p.get("participantes") or [])
         out.append(p)
     return out
 
@@ -52,16 +58,38 @@ def ler(slug: str) -> dict | None:
     p["jogos"] = (r or {}).get("jogos") or []
     idx = int(p.get("jogo_idx") or 0)
     p["jogo_idx"] = max(0, min(idx, max(0, len(p["jogos"]) - 1)))
+    # o placar so existe de verdade dentro de um jogo; montar aqui deixa a tela
+    # desenhar sem uma segunda ida ao servidor, e nao grava nada
+    if r is not None:
+        _ajustar_vidas(p, r)
     return p
 
 
 # ------------------------------------------------------------------ escrita
 
-def _vidas_iniciais(r: dict) -> list[dict]:
-    return [{"id": x["id"], "nome": x["nome"],
-             "vidas_total": int(x.get("vidas_total") or 0),
-             "vidas": [True] * int(x.get("vidas_total") or 0)}
-            for x in r.get("participantes") or []]
+def _ajustar_vidas(p: dict, r: dict) -> None:
+    """Garante, em cada jogo, um coracao por vida que aquele jogo pede.
+
+    Roda em toda leitura e em toda escrita, e por isso e idempotente: preserva
+    o que ja foi gasto, enche o que falta e corta o que sobra. E assim que
+    mudar "Vidas neste jogo" no meio do episodio funciona sem reiniciar — quem
+    ja gastou continua gastado, e os coracoes novos entram cheios no fim da
+    fila, do mesmo jeito que acontece com quem entra na mesa depois.
+    """
+    ids = [x["id"] for x in p.get("participantes") or []]
+    estado = p.setdefault("estado", {})
+    for j in r.get("jogos") or []:
+        n = jogos.vidas(j.get("attrs") or {})
+        velho = (estado.setdefault(j["id"], {}).get("vidas") or {})
+        novo = {}
+        for pid in ids:
+            v = list(velho.get(pid) or [])
+            if len(v) < n:
+                v += [True] * (n - len(v))
+            elif len(v) > n:
+                v = v[:n]
+            novo[pid] = v
+        estado[j["id"]]["vidas"] = novo
 
 
 def _brindes(r: dict) -> dict:
@@ -110,13 +138,16 @@ def reiniciar(slug: str) -> dict:
     r = roteiros.ler(slug)
     if r is None:
         raise KeyError(slug)
-    store.gravar(store.PARTIDAS, slug, {
+    p = {
         "roteiro": slug,
         "criado": store.agora(),
         "jogo_idx": 0,
-        "participantes": _vidas_iniciais(r),
+        "participantes": [{"id": x["id"], "nome": x["nome"]}
+                          for x in r.get("participantes") or []],
         "estado": _brindes(r),
-    })
+    }
+    _ajustar_vidas(p, r)
+    store.gravar(store.PARTIDAS, slug, p)
     return ler(slug)
 
 
@@ -125,8 +156,8 @@ def sincronizar(slug: str) -> dict:
     nas vidas ja gastas.
 
     Sem isto, acrescentar alguem na mesa no meio do episodio obrigaria a
-    reiniciar e perder o placar. Quem chega entra com as vidas cheias; quem
-    ganhou mais vidas no roteiro ganha corac oes novos no fim da fila.
+    reiniciar e perder o placar. Quem chega entra com as vidas cheias em cada
+    jogo; quem ja estava continua com o que gastou, jogo por jogo.
     """
     r = roteiros.ler(slug)
     if r is None:
@@ -135,27 +166,14 @@ def sincronizar(slug: str) -> dict:
     if p is None:
         return reiniciar(slug)
 
-    antigos = {x["id"]: x for x in p.get("participantes") or []}
-    novos = []
-    for x in r.get("participantes") or []:
-        total = int(x.get("vidas_total") or 0)
-        velho = antigos.get(x["id"])
-        if velho is None:
-            vidas = [True] * total
-        else:
-            vidas = list(velho.get("vidas") or [])
-            if len(vidas) < total:
-                vidas += [True] * (total - len(vidas))
-            elif len(vidas) > total:
-                vidas = vidas[:total]
-        novos.append({"id": x["id"], "nome": x["nome"],
-                      "vidas_total": total, "vidas": vidas})
-    p["participantes"] = novos
+    p["participantes"] = [{"id": x["id"], "nome": x["nome"]}
+                          for x in r.get("participantes") or []]
 
     # estado de jogo que nao existe mais no roteiro nao serve pra nada
     vivos = {j["id"] for j in r.get("jogos") or []}
     p["estado"] = {k: v for k, v in (p.get("estado") or {}).items()
                    if k in vivos}
+    _ajustar_vidas(p, r)
     store.gravar(store.PARTIDAS, slug, p)
     return ler(slug)
 
@@ -172,17 +190,18 @@ def _salvar(slug: str, p: dict) -> dict:
     return ler(slug)
 
 
-def tocar_vida(slug: str, pid: str, i: int) -> dict:
-    """O clique num coracao. Alterna cheio <-> cinza, sempre naquele indice."""
+def tocar_vida(slug: str, jid: str, pid: str, i: int) -> dict:
+    """O clique num coracao. Alterna cheio <-> cinza, naquele jogo e indice."""
     p = _abrir(slug)
-    for x in p.get("participantes") or []:
-        if x.get("id") == pid:
-            vidas = x.setdefault("vidas", [])
-            if 0 <= i < len(vidas):
-                vidas[i] = not vidas[i]
-            break
-    else:
+    r = roteiros.ler(slug)
+    if r is None:
+        raise KeyError(slug)
+    _ajustar_vidas(p, r)
+    vidas = ((p.get("estado") or {}).get(jid) or {}).get("vidas") or {}
+    if pid not in vidas:
         raise KeyError(pid)
+    if 0 <= i < len(vidas[pid]):
+        vidas[pid][i] = not vidas[pid][i]
     return _salvar(slug, p)
 
 
@@ -231,17 +250,26 @@ def errou(slug: str, jid: str, termo: str, quem: str = "") -> dict:
 
 
 def zerar_jogo(slug: str, jid: str) -> dict:
+    """Zera SO aquele jogo: gabarito fechado, sorteio apagado, vidas cheias de
+    novo — e os outros jogos do episodio intactos."""
     p = _abrir(slug)
     p.setdefault("estado", {})[jid] = {}
+    r = roteiros.ler(slug)
+    if r is not None:
+        _ajustar_vidas(p, r)
     return _salvar(slug, p)
 
 
 # ------------------------------------------------ estado por jogo (impostor)
 
 def sortear_impostor(slug: str, jid: str) -> dict:
-    """Sorteia a palavra/quadro e quem sao os impostores, e guarda. Guardar e o
-    ponto: quem apresenta precisa poder reabrir a tela no meio da rodada sem
-    sortear tudo de novo e perder quem era o impostor."""
+    """Sorteia a dupla da rodada e quem sao os impostores, e guarda.
+
+    A dupla ja vem pronta do cadastro (`jogador` / `impostor`): o sorteio so
+    escolhe QUAL linha vai ao ar e QUEM sao os impostores. Guardar e o ponto —
+    quem apresenta precisa poder reabrir a tela no meio da rodada sem sortear
+    tudo de novo e perder quem era o impostor.
+    """
     p = _abrir(slug)
     cheia = ler(slug)
     j = next((x for x in cheia["jogos"] if x.get("id") == jid), None)
@@ -249,31 +277,26 @@ def sortear_impostor(slug: str, jid: str) -> dict:
         raise KeyError(jid)
     a = j.get("attrs") or {}
 
-    if j.get("tipo") == "impostor_palavra":
-        pool = [x for x in (a.get("palavras") or []) if str(x).strip()]
-        modo = a.get("palavra_impostor") or "outra"
-    else:
-        pool = [x for x in (a.get("quadros") or []) if str(x).strip()]
-        modo = a.get("quadro_impostor") or "outro"
+    pool = jogos.duplas(a)
     if not pool:
-        raise ValueError("este jogo nao tem palavra/quadro cadastrado — "
-                         "abra ele na aba Jogos")
+        raise ValueError("este jogo nao tem nenhuma dupla cadastrada — "
+                         "escreva jogador/impostor no conteudo do jogo")
 
-    principal = random.choice(pool)
-    if modo in ("outra", "outro"):
-        resto = [x for x in pool if x != principal]
-        do_impostor = random.choice(resto) if resto else ""
-    else:
-        do_impostor = ""
+    dupla = random.choice(pool)
+    principal, do_impostor = dupla["jogador"], dupla["impostor"]
 
-    vivos = [x for x in (p.get("participantes") or []) if any(x.get("vidas") or [])]
-    alvo = vivos or (p.get("participantes") or [])
+    # quem ja morreu NESTE jogo nao e sorteado impostor nele; se ninguem
+    # sobrou, sorteia entre todos em vez de recusar o sorteio no meio da mesa
+    vidas_aqui = ((p.get("estado") or {}).get(jid) or {}).get("vidas") or {}
+    todos = p.get("participantes") or []
+    vivos = [x for x in todos if any(vidas_aqui.get(x["id"]) or [])]
+    alvo = vivos or todos
     n = max(0, min(int(a.get("n_impostores") or 1), len(alvo)))
     impostores = [x["id"] for x in random.sample(alvo, n)] if n else []
 
     est = _estado_jogo(p, jid)
     est["sorteio"] = {
-        "principal": principal, "impostor": do_impostor, "modo": modo,
+        "principal": principal, "impostor": do_impostor,
         "impostores": impostores, "em": store.agora(), "revelado": False,
     }
     est.setdefault("log", []).append({"acao": "sortear", "em": store.agora()})
@@ -298,7 +321,141 @@ def tempo(slug: str, jid: str, segundos: int) -> dict:
     """
     p = _abrir(slug)
     est = _estado_jogo(p, jid)
-    est["tempo"] = max(jogos.TEMPO_PASSO, min(int(segundos), 3600))
+    est["tempo"] = max(jogos.TEMPO_PASSO, min(int(segundos), jogos.TEMPO_TETO))
+    return _salvar(slug, p)
+
+
+# ------------------------------------------ estado por jogo (so resposta errada)
+
+def _ordem_errada(est: dict, n: int) -> list[int]:
+    """Quais perguntas aparecem, e em que ordem.
+
+    As perguntas sao identificadas pelo indice na lista do jogo. Editar a lista
+    no meio da partida (que a aba 3 deixa fazer) pode mexer nesses indices —
+    e a mesma ressalva do rank, que guarda o revelado por numero de posicao.
+    Por isso a ordem gravada e filtrada e completada aqui, toda vez: indice que
+    nao existe mais cai fora, pergunta nova entra no fim.
+
+    As `escondidas` (marcadas antes de um embaralho) ficam de fora da tela, mas
+    NAO saem do cadastro: "Trazer todas de volta" devolve o jogo inteiro.
+    """
+    fora = {int(x) for x in (est.get("escondidas") or [])}
+    vistos, ordem = set(), []
+    for i in est.get("ordem") or []:
+        i = int(i)
+        if 0 <= i < n and i not in vistos and i not in fora:
+            vistos.add(i)
+            ordem.append(i)
+    ordem += [i for i in range(n) if i not in vistos and i not in fora]
+    return ordem
+
+
+def marcar_errada(slug: str, jid: str, i: int) -> dict:
+    """O clique na bolinha: liga/desliga "esta ja saiu certa".
+
+    Alterna em vez de so marcar, pelo mesmo motivo do coracao: na gravacao se
+    clica na linha errada, e desfazer tem que ser clicar de novo no mesmo
+    lugar, nao procurar um botao de desfazer.
+    """
+    p = _abrir(slug)
+    est = _estado_jogo(p, jid)
+    certas = set(int(x) for x in (est.get("certas") or []))
+    i = int(i)
+    certas.symmetric_difference_update({i})
+    est["certas"] = sorted(certas)
+    return _salvar(slug, p)
+
+
+def embaralhar_errada(slug: str, jid: str) -> dict:
+    """Embaralha as que faltam e TIRA DA TELA as que foram marcadas.
+
+    O embaralho e o fim de uma rodada: o que ja saiu sai da frente, e o que
+    falta volta numa ordem nova. As marcadas vao para `escondidas` — some da
+    tela, continua no cadastro do jogo — e a marcacao em si e limpa, porque a
+    unica coisa verde na tela passa a ser o que foi marcado nesta rodada.
+
+    Nada e apagado: "Trazer todas de volta" (o mesmo zerar_jogo) devolve tudo.
+    Apagar pergunta de cadastro no meio da gravacao seria um caminho sem volta
+    a um clique de distancia, e a tela roda com a camera ligada.
+    """
+    p = _abrir(slug)
+    cheia = ler(slug)
+    j = next((x for x in cheia["jogos"] if x.get("id") == jid), None)
+    if j is None:
+        raise KeyError(jid)
+    n = len(jogos.perguntas(j.get("attrs") or {}))
+    if not n:
+        raise ValueError("este jogo nao tem pergunta cadastrada — "
+                         "escreva ou importe no conteudo do jogo")
+
+    est = _estado_jogo(p, jid)
+    certas = {int(x) for x in (est.get("certas") or []) if 0 <= int(x) < n}
+    escondidas = {int(x) for x in (est.get("escondidas") or []) if 0 <= int(x) < n}
+    escondidas |= certas
+
+    faltam = [i for i in range(n) if i not in escondidas]
+    random.shuffle(faltam)
+    est["ordem"] = faltam
+    est["escondidas"] = sorted(escondidas)
+    est["certas"] = []
+    est.setdefault("log", []).append(
+        {"acao": "embaralhar", "sairam": sorted(certas), "em": store.agora()})
+    return _salvar(slug, p)
+
+
+def _deslocar(est: dict, i: int) -> None:
+    """Tira o indice `i` do estado e puxa todo mundo acima dele um pra tras.
+
+    As perguntas sao identificadas pela posicao na lista, entao tirar uma do
+    meio renumera as de baixo. Sem isto, jogar a 3ª no lixo faria a marcacao da
+    4ª passar a apontar pra 5ª — e no meio da gravacao ninguem ia entender por
+    que a linha errada ficou verde.
+    """
+    def mexer(nums):
+        return sorted({(x - 1 if x > i else x)
+                       for x in (int(n) for n in nums or []) if x != i})
+
+    est["certas"] = mexer(est.get("certas"))
+    est["escondidas"] = mexer(est.get("escondidas"))
+    vistos, ordem = set(), []
+    for n in est.get("ordem") or []:
+        n = int(n)
+        if n == i:
+            continue
+        n = n - 1 if n > i else n
+        if n not in vistos:
+            vistos.add(n)
+            ordem.append(n)
+    est["ordem"] = ordem
+
+
+def lixo_errada(slug: str, jid: str, i: int) -> dict:
+    """Joga a pergunta na lixeira: sai do jogo e vai pro arquivo de descarte.
+
+    E o unico caminho da tela que MEXE NO CADASTRO durante a gravacao, e por
+    isso passa pela lixeira: a linha sai do roteiro, mas fica anotada com o
+    .txt de onde veio — e assim da pra tirar ela da origem depois, em vez de
+    reimportar o mesmo problema no proximo episodio.
+    """
+    cheia = ler(slug)
+    if cheia is None:
+        raise KeyError(slug)
+    j = next((x for x in cheia["jogos"] if x.get("id") == jid), None)
+    if j is None:
+        raise KeyError(jid)
+    lista = jogos.perguntas(j.get("attrs") or {})
+    i = int(i)
+    if not 0 <= i < len(lista):
+        raise ValueError("essa pergunta nao existe mais neste jogo")
+
+    alvo = lista[i]
+    lixeira.jogar(alvo["pergunta"], alvo["resposta"], alvo["origem"],
+                  roteiro=slug, jogo=j.get("nome") or "")
+    roteiros.salvar_jogo(slug, jid, None,
+                         {"perguntas": [x for k, x in enumerate(lista) if k != i]})
+
+    p = _abrir(slug)
+    _deslocar(_estado_jogo(p, jid), i)
     return _salvar(slug, p)
 
 

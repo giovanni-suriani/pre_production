@@ -69,13 +69,30 @@ async function agir(rota, corpo) {
 const jogoAtual = () => (P.jogos || [])[P.jogo_idx] || null;
 const estado = (jid) => ((P.estado || {})[jid]) || {};
 
+/* O placar e por jogo: os coracoes que a mesa mostra sao os do jogo aberto.
+   Sem jogo aberto nao ha placar nenhum — e o caso do roteiro sem jogos. */
+/* O relogio deste jogo: o ajuste gravado ganha do cadastro, que ganha do
+   padrao da casa. So a Discussao cadastra `tempo_min` — no impostor o tempo e
+   decisao de quem esta com a mesa na frente. */
+const segundosDe = (j) => estado(j.id).tempo
+  || ((j.attrs || {}).tempo_min ? (j.attrs || {}).tempo_min * 60 : CFG.tempo_padrao);
+
+const vidasDe = (x) => {
+  const j = jogoAtual();
+  return (j && (estado(j.id).vidas || {})[x.id]) || [];
+};
+
 function desenhar() {
   el('semRoteiro').classList.add('hidden');
   el('jogo').classList.remove('hidden');
   el('gNome').textContent = P.roteiro_nome;
-  const vivos = (P.participantes || []).filter((x) => (x.vidas || []).some(Boolean));
-  el('gSub').innerHTML = `${vivos.length}/${(P.participantes || []).length} `
-    + 'ainda com vida' + (P.notas_roteiro ? ` · ${esc(P.notas_roteiro)}` : '');
+  const j0 = jogoAtual();
+  const vivos = (P.participantes || []).filter((x) => vidasDe(x).some(Boolean));
+  el('gSub').innerHTML = (j0
+    ? `${vivos.length}/${(P.participantes || []).length} ainda com vida `
+      + `em <b>${esc(j0.nome)}</b>`
+    : `${(P.participantes || []).length} na mesa`)
+    + (P.notas_roteiro ? ` · ${esc(P.notas_roteiro)}` : '');
   document.querySelector('nav.nav')?.remove();
   renderNav(3, `<b>${esc(P.roteiro_nome)}</b>`, ROTEIRO);
   desenharMesa();
@@ -93,7 +110,8 @@ function desenharMesa() {
   const mostrar = sort && sort.revelado;
 
   for (const x of P.participantes || []) {
-    const vivo = (x.vidas || []).some(Boolean);
+    const vidas = vidasDe(x);
+    const vivo = vidas.some(Boolean);
     const ehImpostor = mostrar && (sort.impostores || []).includes(x.id);
     const c = h('div', 'jogador' + (vivo ? '' : ' fora')
       + (ehImpostor ? ' impostor' : ''));
@@ -105,14 +123,17 @@ function desenharMesa() {
       <div class="vidas"></div>`;
 
     const vb = c.querySelector('.vidas');
-    (x.vidas || []).forEach((v, i) => {
+    vidas.forEach((v, i) => {
       const b = h('button', 'vida ' + (v ? 'viva' : 'morta'));
       b.title = v ? `vida ${i + 1} — clique para gastar`
         : `vida ${i + 1} gasta — clique para devolver`;
-      b.onclick = () => agir('vida', { participante: x.id, indice: i });
+      b.onclick = () => agir('vida', { jogo: j.id, participante: x.id, indice: i });
       vb.appendChild(b);
     });
-    if (!(x.vidas || []).length) vb.appendChild(h('span', 'note', 'sem vidas'));
+    if (!vidas.length) {
+      vb.appendChild(h('span', 'note',
+        j ? 'este jogo está com 0 vidas' : 'sem jogo aberto'));
+    }
     box.appendChild(c);
   }
 }
@@ -161,6 +182,8 @@ function desenharJogo() {
 
   if (j.in_game === 'rank') box.appendChild(painelRank(j));
   else if (j.in_game === 'impostor') box.appendChild(painelImpostor(j));
+  else if (j.in_game === 'discussao') box.appendChild(painelDiscussao(j));
+  else if (j.in_game === 'errada') box.appendChild(painelErrada(j));
   box.appendChild(editorConteudo(j));
 }
 
@@ -182,9 +205,11 @@ function editorConteudo(j) {
   const aberto = !!editorAberto[j.id];
   const quantos = j.in_game === 'rank'
     ? `${((j.attrs || {}).lista || []).length} posições`
-    : j.tipo === 'impostor_palavra'
-      ? `${((j.attrs || {}).palavras || []).length} palavras`
-      : `${((j.attrs || {}).quadros || []).length} quadros`;
+    : j.in_game === 'discussao'
+      ? `${mmss(segundosDe(j))} de relógio`
+      : j.in_game === 'errada'
+        ? `${((j.attrs || {}).perguntas || []).length} perguntas`
+        : `${((j.attrs || {}).duplas || []).length} duplas`;
 
   const cab = h('header');
   cab.innerHTML = `
@@ -206,8 +231,9 @@ function editorConteudo(j) {
 
   if (!aberto) return card;
   if (j.in_game === 'rank') card.appendChild(editorLista(j));
-  else if (j.tipo === 'impostor_palavra') card.appendChild(editorPalavras(j));
-  else if (j.tipo === 'impostor_quadro') card.appendChild(editorQuadros(j));
+  else if (j.in_game === 'impostor') card.appendChild(editorDuplas(j));
+  else if (j.in_game === 'discussao') card.appendChild(editorTema(j));
+  else if (j.in_game === 'errada') card.appendChild(editorPerguntas(j));
   return card;
 }
 
@@ -284,148 +310,116 @@ function editorLista(j) {
   return wrap;
 }
 
-// --- impostor na palavra
+// --- discussao: o tema e quantos minutos
 
-function editorPalavras(j) {
-  const palavras = (j.attrs || {}).palavras || [];
+/* Como as duplas, o tema so vai pro disco no botao: e texto sendo digitado, e
+   gravar no meio da frase encheria o disco de rascunho. Os minutos, que sao um
+   clique so, gravam sozinhos — e zeram o ajuste do relogio, ou mudar o
+   cadastro para 15min deixaria a tela marcando os 10 de antes. */
+function editorTema(j) {
+  const a = j.attrs || {};
   const wrap = h('div', 'pilha');
   wrap.innerHTML = `
     <div class="field">
-      <span class="lbl">Acrescentar palavra</span>
+      <span class="lbl">Tema da discussão</span>
+      <textarea class="tema" rows="3"
+        placeholder="o que a mesa vai discutir"></textarea>
       <div class="row">
-        <input type="text" class="nova" placeholder="uma palavra — Enter para acrescentar" style="flex:1">
-        <button class="btn primary add">Acrescentar</button>
+        <button class="btn primary gravar">Gravar o tema</button>
+        <span class="note">o tema só vai pro disco no clique</span>
       </div>
     </div>
     <div class="field">
-      <span class="lbl">Palavras (${palavras.length})</span>
-      <div class="chips lista"></div>
-      <p class="note hidden vazio">nenhuma ainda — o sorteio precisa de pelo
-        menos uma (duas, para o impostor receber outra).</p>
-    </div>
-    <div class="field">
-      <span class="lbl">…ou colar várias de uma vez</span>
-      <textarea class="tudo" rows="5" placeholder="uma por linha"></textarea>
-      <div class="row end">
-        <button class="btn aplicar">Substituir a lista</button>
+      <span class="lbl">Tempo (minutos)</span>
+      <div class="row">
+        <input type="number" class="min" min="1" max="60" style="width:90px"
+               value="${Number(a.tempo_min || 10)}">
+        <span class="note">volta o relógio para este tanto</span>
       </div>
     </div>`;
 
-  const q = (s) => wrap.querySelector(s);
-  q('.tudo').value = palavras.join('\n');
-  q('.vazio').classList.toggle('hidden', palavras.length > 0);
-
-  const grade = q('.lista');
-  palavras.forEach((p, i) => {
-    const c = h('span', 'chip', `${esc(p)} <b class="x">×</b>`);
-    c.querySelector('.x').onclick = async () => {
-      try {
-        await salvarAttrs(j, { palavras: palavras.filter((_, k) => k !== i) });
-      } catch (e) { oops(e); }
-    };
-    grade.appendChild(c);
-  });
-
-  const acrescentar = async () => {
-    const v = q('.nova').value.trim();
-    if (!v) return;
-    if (palavras.some((p) => p.toLowerCase() === v.toLowerCase())) {
-      toast(`"${v}" já está na lista`, true);
-      return;
-    }
-    try { await salvarAttrs(j, { palavras: [...palavras, v] }); toast(`"${v}" entrou`); }
+  const q = (sel) => wrap.querySelector(sel);
+  q('.tema').value = a.tema || '';
+  q('.gravar').onclick = async () => {
+    try { await salvarAttrs(j, { tema: q('.tema').value.trim() }); toast('tema gravado'); }
     catch (e) { oops(e); }
   };
-  q('.add').onclick = acrescentar;
-  q('.nova').onkeydown = (e) => { if (e.key === 'Enter') acrescentar(); };
-
-  q('.aplicar').onclick = async () => {
-    const novas = q('.tudo').value.split('\n').map((s) => s.trim()).filter(Boolean);
-    try { await salvarAttrs(j, { palavras: novas }); toast(`${novas.length} palavras`); }
-    catch (e) { oops(e); }
+  q('.min').onchange = async (e) => {
+    const m = Math.max(1, Math.min(parseInt(e.target.value || '10', 10) || 10, 60));
+    try {
+      await salvarAttrs(j, { tempo_min: m });
+      // o ajuste antigo apontava pro cadastro velho; sai junto
+      await agir('tempo', { jogo: j.id, segundos: m * 60 });
+    } catch (err) { oops(err); }
   };
   return wrap;
 }
 
-// --- impostor no quadro
+// --- so resposta errada: as perguntas
 
-function editorQuadros(j) {
-  const lista = (j.attrs || {}).quadros || [];
+function editorPerguntas(j) {
   const wrap = h('div', 'pilha');
-  wrap.innerHTML = `
-    <div class="field">
-      <span class="lbl">Acrescentar quadros</span>
-      <div class="row">
-        <input type="file" class="arq" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" multiple hidden>
-        <button class="btn primary pick">Escolher imagens…</button>
-        <span class="note">${lista.length} ${lista.length === 1 ? 'quadro' : 'quadros'}</span>
-      </div>
-      <p class="note">a imagem é copiada para dentro do projeto e passa a ser
-        servida pelo próprio serviço — por isso ela aparece aqui na tela.</p>
-    </div>
-    <div class="galeria"></div>
-    <div class="field">
-      <span class="lbl">…ou colar o endereço de uma imagem na web</span>
-      <div class="row">
-        <input type="text" class="url" placeholder="https://…" style="flex:1">
-        <button class="btn addUrl">Adicionar</button>
-      </div>
-    </div>`;
+  let rascunho = ((j.attrs || {}).perguntas || []).map((x) => ({ ...x }));
+  const campo = h('div', 'field');
+  campo.appendChild(h('span', 'lbl', 'Perguntas e respostas certas'));
+  campo.appendChild(perguntasEditor(rascunho, (v) => { rascunho = v; }));
+  wrap.appendChild(campo);
 
-  const q = (s) => wrap.querySelector(s);
-  const galeria = q('.galeria');
-  lista.forEach((src, i) => {
-    const c = h('div', 'thumb');
-    c.innerHTML = `
-      <img src="${esc(src)}" alt="quadro ${i + 1}">
-      <div class="cap">${esc(src.startsWith('/quadros/') ? src.split('/').pop() : src)}</div>
-      <button class="x" title="tirar este quadro">×</button>`;
-    c.querySelector('img').onerror = () => {
-      c.classList.add('quebrado');
-      c.querySelector('img').replaceWith(h('div', 'ruim', 'não carrega'));
-    };
-    c.querySelector('.x').onclick = async () => {
-      try {
-        await salvarAttrs(j, { quadros: lista.filter((_, k) => k !== i) });
-        toast('quadro removido');
-      } catch (e) { oops(e); }
-    };
-    galeria.appendChild(c);
-  });
-
-  q('.pick').onclick = () => q('.arq').click();
-  q('.arq').onchange = async () => {
-    const arquivos = [...q('.arq').files];
-    q('.arq').value = '';
-    let n = 0;
-    for (const f of arquivos) {
-      try {
-        const conteudo = await new Promise((ok, fail) => {
-          const fr = new FileReader();
-          fr.onload = () => ok(fr.result);
-          fr.onerror = () => fail(new Error(`não consegui ler ${f.name}`));
-          fr.readAsDataURL(f);
-        });
-        await apiPost(`/api/roteiros/${ROTEIRO}/jogos/${j.id}/quadros`,
-          { nome: f.name, conteudo });
-        n++;
-      } catch (e) { oops(e); }
-    }
-    // uma releitura só no fim: redesenhar a cada arquivo faria a tela piscar
-    P = await api(`/api/partidas/${ROTEIRO}`);
-    desenhar();
-    if (n) toast(`${n} quadro(s) acrescentado(s)`);
+  const linha = h('div', 'row');
+  const gravar = h('button', 'btn primary', 'Gravar as perguntas');
+  gravar.onclick = async () => {
+    try {
+      await salvarAttrs(j, { perguntas: rascunho });
+      toast(`${rascunho.length} perguntas`);
+    } catch (e) { oops(e); }
   };
+  linha.appendChild(gravar);
+  linha.appendChild(h('span', 'note',
+    'como as duplas, só vão pro disco no clique'));
+  wrap.appendChild(linha);
+  return wrap;
+}
 
-  q('.addUrl').onclick = async () => {
-    const url = q('.url').value.trim();
-    if (!/^https?:\/\//i.test(url)) {
-      toast('cole um endereço começando com http:// ou https://', true);
-      return;
-    }
-    try { await salvarAttrs(j, { quadros: [...lista, url] }); }
+// --- impostor: as duplas e quantos impostores
+
+/* As duas colunas mais o numero de impostores — o cadastro inteiro do jogo,
+   aqui mesmo. Ao contrario do resto da tela, as duplas NAO gravam a cada
+   tecla: sao caixas de texto que a pessoa esta digitando, e gravar no meio da
+   palavra encheria o disco de rascunho. O botao grava; o numero de impostores,
+   que e um clique so, grava sozinho. */
+function editorDuplas(j) {
+  const a = j.attrs || {};
+  const wrap = h('div', 'pilha');
+  let rascunho = (a.duplas || []).map((d) => ({ ...d }));
+
+  const campoDuplas = h('div', 'field');
+  campoDuplas.appendChild(h('span', 'lbl', 'Duplas da rodada'));
+  campoDuplas.appendChild(duplasEditor(rascunho, (v) => { rascunho = v; }));
+  wrap.appendChild(campoDuplas);
+
+  const linha = h('div', 'row');
+  const gravar = h('button', 'btn primary', 'Gravar as duplas');
+  gravar.onclick = async () => {
+    try { await salvarAttrs(j, { duplas: rascunho }); toast(`${rascunho.length} duplas`); }
     catch (e) { oops(e); }
   };
+  linha.appendChild(gravar);
+  linha.appendChild(h('span', 'note', 'as duplas só vão pro disco no clique'));
+  wrap.appendChild(linha);
+
+  const nImp = h('div', 'field');
+  nImp.innerHTML = `
+    <span class="lbl">Nº de impostores</span>
+    <div class="row">
+      <input type="number" class="nImp" min="0" max="12" style="width:90px"
+             value="${Number(a.n_impostores || 1)}">
+      <span class="note">vale no próximo sorteio</span>
+    </div>`;
+  nImp.querySelector('.nImp').onchange = async (e) => {
+    try { await salvarAttrs(j, { n_impostores: parseInt(e.target.value || '1', 10) || 0 }); }
+    catch (err) { oops(err); }
+  };
+  wrap.appendChild(nImp);
   return wrap;
 }
 
@@ -556,7 +550,6 @@ function painelImpostor(j) {
   const s = est.sorteio || null;
   const a = j.attrs || {};
   const ehQuadro = j.tipo === 'impostor_quadro';
-  const segundos = est.tempo || CFG.tempo_padrao;
   const card = h('section', 'card');
 
   card.innerHTML = `
@@ -569,21 +562,6 @@ function painelImpostor(j) {
       <button class="btn primary sortear">${s ? 'Sortear de novo' : 'Sortear'}</button>
       ${s ? `<button class="btn revelar">${s.revelado
         ? 'Esconder quem era' : 'Revelar quem era o impostor'}</button>` : ''}
-    </div>
-
-    <div class="field">
-      <span class="lbl">Discussão</span>
-      <div class="row">
-        <span class="cron">${mmss(segundos)}</span>
-        <button class="btn menos">−30s</button>
-        <button class="btn mais">+30s</button>
-        <span class="spacer"></span>
-        <button class="btn start">Iniciar</button>
-        <button class="btn parar" disabled>Parar</button>
-        <button class="btn zerarCron">Voltar ao início</button>
-      </div>
-      <p class="note">começa em ${mmss(CFG.tempo_padrao)}; o ajuste fica gravado
-        neste jogo, o relógio correndo não.</p>
     </div>`;
 
   const q = (s2) => card.querySelector(s2);
@@ -593,23 +571,35 @@ function painelImpostor(j) {
     box.appendChild(h('div', 'holofote vazio',
       'nada sorteado ainda neste jogo — clique em Sortear.'));
   } else {
-    // Os dois segredos ficam tapados e abrem no clique: esta tela fica virada
-    // pra quem apresenta, e a palavra nao pode aparecer de graca no reflexo.
-    const seg = (rot, valor) => {
-      const d = h('div', 'segredo', `${rot}: clique para ver`);
-      d.onclick = () => {
-        d.classList.toggle('aberto');
-        d.textContent = d.classList.contains('aberto')
-          ? `${rot}: ${valor || '(nada)'}` : `${rot}: clique para ver`;
-      };
-      return d;
+    /* O sorteio inteiro fica tapado e abre no clique: esta tela fica virada
+       pra quem apresenta, e nem a palavra nem os nomes podem aparecer de graca
+       num reflexo. Dentro, a lista e por pessoa — "joao (impostor) — bacon" —
+       porque e assim que quem apresenta le, uma pessoa de cada vez, e nao
+       cruzando duas colunas de cabeca. */
+    const impostores = new Set(s.impostores || []);
+    const palco = h('div', 'palco fechado');
+    const tampa = h('button', 'tampa', 'o sorteio: clique para mostrar');
+    tampa.onclick = () => {
+      const fechado = palco.classList.toggle('fechado');
+      tampa.textContent = fechado
+        ? 'o sorteio: clique para mostrar' : 'esconder o sorteio';
     };
-    const g = h('div', 'pilha');
-    g.appendChild(seg(ehQuadro ? 'quadro de todos' : 'palavra de todos', s.principal));
-    g.appendChild(seg('o impostor recebe', s.impostor));
-    box.appendChild(g);
+    palco.appendChild(tampa);
 
-    if (ehQuadro && s.principal) box.appendChild(caixaQuadro(s.principal));
+    const dentro = h('div', 'aberto');
+    dentro.appendChild(h('div', 'par', `
+      <span><i>jogador</i> ${esc(s.principal || '—')}</span>
+      <span><i>impostor</i> ${esc(s.impostor || '(nada)')}</span>`));
+    const quemE = h('div', 'cadaum');
+    for (const x of P.participantes || []) {
+      const eh = impostores.has(x.id);
+      quemE.appendChild(h('div', eh ? 'pessoa imp' : 'pessoa', `
+        <span class="quem">${esc(x.nome)}${eh ? ' <b>(impostor)</b>' : ''}</span>
+        <span class="oque">${esc(eh ? (s.impostor || '(nada)') : s.principal)}</span>`));
+    }
+    dentro.appendChild(quemE);
+    palco.appendChild(dentro);
+    box.appendChild(palco);
 
     const quem = (s.impostores || []).map((id) =>
       ((P.participantes || []).find((x) => x.id === id) || {}).nome || id);
@@ -625,15 +615,41 @@ function painelImpostor(j) {
       { jogo: j.id, revelado: !s.revelado });
   }
 
-  // --- cronometro
+  card.appendChild(blocoCronometro(j, 'Discussão'));
+  return card;
+}
+
+/* O cronometro, que a Discussao e o impostor dividem.
+
+   O ajuste (±30s) e gravado no jogo porque a mesa decide "esse aqui merece 3
+   minutos" e essa decisao tem que sobreviver ao F5. O relogio CORRENDO nao e
+   gravado: e o relogio de quem apresenta, nao um dado do episodio, e gravar
+   isso a cada segundo seria escrita em disco de graca. */
+function blocoCronometro(j, rotulo) {
+  const segundos = segundosDe(j);
+  const inicial = (j.attrs || {}).tempo_min
+    ? (j.attrs || {}).tempo_min * 60 : CFG.tempo_padrao;
+  const campo = h('div', 'field');
+  campo.innerHTML = `
+    <span class="lbl">${esc(rotulo)}</span>
+    <div class="row">
+      <span class="cron">${mmss(segundos)}</span>
+      <button class="btn menos">−30s</button>
+      <button class="btn mais">+30s</button>
+      <span class="spacer"></span>
+      <button class="btn start">Iniciar</button>
+      <button class="btn parar" disabled>Parar</button>
+      <button class="btn zerarCron">Voltar ao início</button>
+    </div>
+    <p class="note">começa em ${mmss(inicial)}; o ajuste fica gravado neste
+      jogo, o relógio correndo não.</p>`;
+
+  const q = (sel) => campo.querySelector(sel);
   const passo = CFG.tempo_passo;
   q('.mais').onclick = () => agir('tempo', { jogo: j.id, segundos: segundos + passo });
   q('.menos').onclick = () => agir('tempo', { jogo: j.id, segundos: segundos - passo });
-  q('.zerarCron').onclick = () => agir('tempo', { jogo: j.id, segundos: CFG.tempo_padrao });
+  q('.zerarCron').onclick = () => agir('tempo', { jogo: j.id, segundos: inicial });
 
-  // O relogio correndo so vive na tela: se recarregar no meio da discussao o
-  // tempo se perde. E o relogio de quem apresenta, nao um dado do episodio, e
-  // gravar isso a cada segundo seria escrita em disco de graca.
   const mostrador = q('.cron');
   q('.start').onclick = () => {
     pararCron();
@@ -647,44 +663,124 @@ function painelImpostor(j) {
     }, 250);
   };
   q('.parar').onclick = () => { pararCron(); q('.parar').disabled = true; };
+  return campo;
+}
+
+// ------------------------------------------- painel do so resposta errada
+
+/* Tres colunas: a bolinha de "ja saiu certa", a resposta certa e a pergunta.
+
+   A resposta certa fica ABERTA, ao contrario do gabarito do rank e da palavra
+   do impostor: aqui ela nao e o premio, e a cola de quem apresenta — a graca
+   do jogo e responder errado de proposito, e quem conduz precisa saber na hora
+   o que NAO pode passar.
+
+   O `Embaralhar` sorteia as que faltam e empurra as marcadas pro fim: o que ja
+   saiu nao reaparece no meio das que faltam, mas continua na tela. */
+function painelErrada(j) {
+  const est = estado(j.id);
+  const lista = ((j.attrs || {}).perguntas || []).filter(
+    (x) => (x && x.pergunta || '').trim());
+  const certas = new Set((est.certas || []).map(Number));
+  const fora = new Set((est.escondidas || []).map(Number));
+
+  // a ordem gravada, filtrada pela lista de agora (editar a lista no meio da
+  // partida pode ter mexido nos indices), sem as que ja sairam num embaralho,
+  // e completada com o que entrou depois
+  const vistos = new Set();
+  const ordem = [];
+  for (const i of est.ordem || []) {
+    const k = Number(i);
+    if (k >= 0 && k < lista.length && !vistos.has(k) && !fora.has(k)) {
+      vistos.add(k);
+      ordem.push(k);
+    }
+  }
+  lista.forEach((_, i) => { if (!vistos.has(i) && !fora.has(i)) ordem.push(i); });
+
+  const sairam = [...fora].filter((i) => i < lista.length).length;
+  const card = h('section', 'card');
+  card.innerHTML = `
+    <header>
+      <h2>Só resposta errada</h2>
+      <p class="sub">${ordem.length} na tela${sairam
+        ? ` · ${sairam} já saíram` : ''}</p>
+    </header>
+    <div class="row">
+      <button class="btn primary shuffle">Embaralhar</button>
+      <span class="note">as marcadas saem da tela; o resto volta em ordem nova</span>
+      <span class="spacer"></span>
+      ${sairam ? '<button class="btn voltar">Trazer todas de volta</button>' : ''}
+    </div>
+    <div class="perguntas"></div>`;
+
+  const box = card.querySelector('.perguntas');
+  if (!lista.length) {
+    box.appendChild(h('div', 'holofote vazio',
+      'nenhuma pergunta ainda — importe o .txt no "Conteúdo do jogo" abaixo.'));
+  } else if (!ordem.length) {
+    box.appendChild(h('div', 'holofote vazio',
+      'todas já saíram — "Trazer todas de volta" recomeça o jogo.'));
+  }
+  for (const i of ordem) {
+    const x = lista[i];
+    const feita = certas.has(i);
+    const ln = h('div', 'pq' + (feita ? ' feita' : ''));
+    /* A bolinha e a cor dizem a MESMA coisa de proposito: com a camera ligada
+       quem apresenta olha de raspao, e um sinal so (a cor, ou so a marca) se
+       perde. Por isso a linha inteira fica verde e a bolinha ganha o ×. */
+    ln.innerHTML = `
+      <button class="marca" title="${feita ? 'ainda não saiu' : 'já saiu certa'}"
+        aria-pressed="${feita}">${feita ? '×' : ''}</button>
+      <span class="certa">${esc(x.resposta || '—')}</span>
+      <span class="pq-t">${esc(x.pergunta)}</span>
+      <button class="lixo" title="jogar na lixeira${x.origem
+        ? ` (veio de ${esc(x.origem)})` : ''}">🗑</button>`;
+    ln.querySelector('.marca').onclick = () => agir('errada-marcar', { jogo: j.id, i });
+    /* O lixo e o unico botao da tela que tira coisa do CADASTRO no meio da
+       gravacao — por isso pergunta antes, e por isso existe a lixeira: a
+       pergunta sai do jogo mas fica anotada, com o .txt de onde veio. */
+    ln.querySelector('.lixo').onclick = () => {
+      if (!confirm(`Jogar na lixeira?\n\n"${x.pergunta}"\n\nSai deste jogo `
+        + 'e fica anotada em dados\\lixeira_perguntas.json'
+        + `${x.origem ? `, junto com o arquivo de origem (${x.origem})` : ''}.`)) return;
+      agir('errada-lixo', { jogo: j.id, i });
+    };
+    box.appendChild(ln);
+  }
+
+  card.querySelector('.shuffle').onclick = () =>
+    agir('errada-embaralhar', { jogo: j.id });
+  const voltar = card.querySelector('.voltar');
+  if (voltar) {
+    voltar.onclick = () => {
+      if (!confirm('Trazer todas as perguntas de volta?\n\nAs que já saíram '
+        + 'voltam para a tela, desmarcadas. Nada foi apagado do cadastro.')) return;
+      agir('zerar-jogo', { jogo: j.id });
+    };
+  }
   return card;
 }
 
-/* O quadro da rodada: nasce tapado como os outros segredos, e abre no clique.
-   E a mesma regra da palavra — esta tela fica virada pra quem apresenta, e o
-   quadro e justamente o que a mesa nao pode ver antes da hora. */
-function caixaQuadro(src) {
-  const wrap = h('div', 'palco fechado');
-  const servido = src.startsWith('/quadros/') || /^https?:\/\//i.test(src);
+// ---------------------------------------------------- painel da discussao
 
-  if (!servido) {
-    // caminho de disco de um cadastro antigo: o navegador bloqueia file://
-    // dentro de uma pagina http, entao nao adianta tentar
-    return h('p', 'note',
-      `este quadro ainda é um caminho de disco (<code>${esc(src)}</code>), que a `
-      + 'página não consegue abrir. Abra o jogo na aba Jogos e suba a imagem — '
-      + 'ela passa a ser servida pelo próprio serviço.');
-  }
-
-  const img = h('img', 'quadro');
-  img.src = src;
-  img.alt = 'quadro da rodada';
-  img.onerror = () => {
-    wrap.innerHTML = '';
-    wrap.appendChild(h('p', 'note',
-      `não consegui carregar <code>${esc(src)}</code> — se for um endereço da `
-      + 'web, confira se ele ainda existe.'));
-  };
-
-  const tampa = h('button', 'tampa', 'quadro da rodada: clique para mostrar');
-  tampa.onclick = () => {
-    const aberto = wrap.classList.toggle('fechado');
-    tampa.textContent = aberto
-      ? 'quadro da rodada: clique para mostrar' : 'esconder o quadro';
-  };
-  wrap.appendChild(tampa);
-  wrap.appendChild(img);
-  return wrap;
+/* O jogo mais simples da casa: o tema na tela e o relogio embaixo. Nao ha
+   gabarito nem sorteio, entao nao ha nada a esconder — o tema aparece aberto,
+   ao contrario da palavra do impostor. */
+function painelDiscussao(j) {
+  const tema = ((j.attrs || {}).tema || '').trim();
+  const card = h('section', 'card');
+  card.innerHTML = `
+    <header>
+      <h2>Discussão</h2>
+      <p class="sub">o tema fica na tela enquanto o relógio corre</p>
+    </header>`;
+  card.appendChild(tema
+    ? h('div', 'holofote', `<div class="grande">${esc(tema)}</div>`)
+    : h('div', 'holofote vazio',
+      'sem tema ainda — escreva no "Conteúdo do jogo", aqui embaixo.'));
+  card.appendChild(blocoCronometro(j, 'Relógio'));
+  return card;
 }
 
 function pararCron() {

@@ -28,29 +28,6 @@
 
     <div id="dCampos" class="pilha"></div>
 
-    <!-- só no tipo impostor_quadro -->
-    <div class="hidden pilha" id="dQuadros">
-      <div class="field">
-        <span class="lbl">Quadros</span>
-        <div class="row">
-          <input type="file" id="qFile" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" multiple hidden>
-          <button class="btn primary" id="qPick">Escolher imagens…</button>
-          <span class="note" id="qN"></span>
-        </div>
-        <p class="note">o arquivo é <b>copiado</b> para dentro do projeto, então
-          mover ou renomear a pasta de origem depois não quebra a gravação.
-          PNG, JPG, GIF, WEBP ou BMP, até 16 MB cada.</p>
-      </div>
-      <div class="galeria" id="qLista"></div>
-      <div class="field">
-        <span class="lbl">…ou colar o endereço de uma imagem na web</span>
-        <div class="row">
-          <input type="text" id="qUrl" placeholder="https://…" style="flex:1">
-          <button class="btn" id="qAddUrl">Adicionar</button>
-        </div>
-      </div>
-    </div>
-
     <!-- só no tipo rank_lista -->
     <div class="hidden pilha" id="dRank">
       <div class="field">

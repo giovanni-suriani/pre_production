@@ -46,97 +46,16 @@ function desenhar() {
   const box = el('dCampos');
   box.innerHTML = '';
   for (const c of (tp ? tp.campos : [])) {
-    // estes dois tem editor proprio embaixo: um textarea nao serve pra
-    // importar 200 linhas de gabarito nem pra escolher imagem
-    if (c.kind === 'lista_rank' || c.kind === 'imagens') continue;
+    // a lista do rank tem editor proprio embaixo: um textarea nao serve pra
+    // importar 200 linhas de gabarito
+    if (c.kind === 'lista_rank') continue;
     box.appendChild(campo(c, rascunho[c.nome], (nome, v) => { rascunho[nome] = v; }));
   }
 
   const ehRank = !!(tp && tp.campos.some((c) => c.kind === 'lista_rank'));
   el('dRank').classList.toggle('hidden', !ehRank);
   if (ehRank) desenharRank();
-
-  const ehQuadro = !!(tp && tp.campos.some((c) => c.kind === 'imagens'));
-  el('dQuadros').classList.toggle('hidden', !ehQuadro);
-  if (ehQuadro) desenharQuadros();
 }
-
-// ---------------------------------------------------------------- quadros
-
-/* Os quadros sao gravados na hora, direto no servidor — nao esperam o Salvar.
-   E um arquivo, nao um campo de texto: segurar ele no rascunho ate alguem
-   lembrar de salvar so criaria a chance de perder o upload. */
-function desenharQuadros() {
-  const qs2 = rascunho.quadros || [];
-  el('qN').textContent = qs2.length
-    ? `${qs2.length} ${qs2.length === 1 ? 'quadro' : 'quadros'}`
-    : 'nenhum quadro ainda';
-  const box = el('qLista');
-  box.innerHTML = '';
-  qs2.forEach((src, i) => {
-    const c = h('div', 'thumb');
-    c.innerHTML = `
-      <img src="${esc(src)}" alt="quadro ${i + 1}">
-      <div class="cap">${esc(src.startsWith('/quadros/')
-        ? src.split('/').pop() : src)}</div>
-      <button class="x" title="tirar este quadro">×</button>`;
-    // caminho de disco antigo (file://) e URL quebrada caem aqui
-    c.querySelector('img').onerror = () => {
-      c.classList.add('quebrado');
-      c.querySelector('img').replaceWith(h('div', 'ruim', 'não carrega'));
-    };
-    c.querySelector('.x').onclick = async () => {
-      const novos = qs2.filter((_, k) => k !== i);
-      try {
-        // salva na hora: o arquivo so e apagado do disco quando o servidor ve
-        // que ninguem mais aponta pra ele
-        jogo = await apiPut(`/api/roteiros/${ROTEIRO}/jogos/${JOGO}`,
-          { attrs: { ...rascunho, quadros: novos } });
-        rascunho = { ...(jogo.attrs || {}) };
-        desenharQuadros();
-        toast('quadro removido');
-      } catch (e) { oops(e); }
-    };
-    box.appendChild(c);
-  });
-}
-
-el('qPick').onclick = () => el('qFile').click();
-el('qFile').onchange = async () => {
-  const arquivos = [...el('qFile').files];
-  el('qFile').value = '';
-  for (const f of arquivos) {
-    try {
-      const conteudo = await new Promise((ok, fail) => {
-        const fr = new FileReader();
-        fr.onload = () => ok(fr.result);        // data:image/png;base64,...
-        fr.onerror = () => fail(new Error(`não consegui ler ${f.name}`));
-        fr.readAsDataURL(f);
-      });
-      jogo = await apiPost(`/api/roteiros/${ROTEIRO}/jogos/${JOGO}/quadros`,
-        { nome: f.name, conteudo });
-      rascunho = { ...(jogo.attrs || {}) };
-      desenharQuadros();
-    } catch (e) { oops(e); }
-  }
-  toast(`${(rascunho.quadros || []).length} quadro(s) no jogo`);
-};
-
-el('qAddUrl').onclick = async () => {
-  const url = el('qUrl').value.trim();
-  if (!/^https?:\/\//i.test(url)) {
-    toast('cole um endereço começando com http:// ou https://', true);
-    return;
-  }
-  try {
-    jogo = await apiPut(`/api/roteiros/${ROTEIRO}/jogos/${JOGO}`, {
-      attrs: { ...rascunho, quadros: [...(rascunho.quadros || []), url] },
-    });
-    rascunho = { ...(jogo.attrs || {}) };
-    el('qUrl').value = '';
-    desenharQuadros();
-  } catch (e) { oops(e); }
-};
 
 // ------------------------------------------------------------- lista do rank
 
