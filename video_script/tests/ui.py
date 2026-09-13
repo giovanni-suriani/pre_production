@@ -11,6 +11,7 @@ As imagens de cada tela ficam em tests\\_telas\\.
 import json
 import sys
 import urllib.request as u
+import zlib
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -27,6 +28,20 @@ def req(m, p, body=None):
     with u.urlopen(r) as f:
         raw = f.read()
         return json.loads(raw) if raw else None
+
+
+def png(cor):
+    """Um PNG 2x2 de verdade, montado na mao — sem Pillow no venv."""
+    linha = b"\x00" + bytes(cor) * 2
+    dados = zlib.compress(linha * 2)
+
+    def bloco(tipo, corpo):
+        return (len(corpo).to_bytes(4, "big") + tipo + corpo
+                + zlib.crc32(tipo + corpo).to_bytes(4, "big"))
+
+    cab = (2).to_bytes(4, "big") * 2 + bytes([8, 2, 0, 0, 0])
+    return (b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", cab)
+            + bloco(b"IDAT", dados) + bloco(b"IEND", b""))
 
 
 LISTA = "\n".join([
@@ -113,6 +128,36 @@ with sync_playwright() as pw:
     pg.wait_for_timeout(700)
     print("[ok] aba Jogos: palavras do impostor cadastradas")
 
+    # --- terceiro jogo: impostor no quadro, com imagem subida pela tela
+    pg.click("#dVoltar")
+    pg.wait_for_selector("#dJogos .jogo")
+    pg.click("#dTipos .chip:has-text('Impostor no quadro')")
+    pg.wait_for_timeout(500)
+    pg.locator("#dJogos .jogo").nth(2).locator(".abrir").click()
+    pg.wait_for_selector("#dQuadros:not(.hidden)")
+    pg.set_input_files("#qFile", [
+        {"name": "Mona Lisa.png", "mimeType": "image/png", "buffer": png((200, 30, 30))},
+        {"name": "O Grito.png", "mimeType": "image/png", "buffer": png((20, 60, 200))},
+    ])
+    pg.wait_for_selector("#qLista .thumb")
+    pg.wait_for_timeout(900)
+    assert pg.locator("#qLista .thumb").count() == 2, pg.locator("#qLista .thumb").count()
+    assert pg.locator("#qLista .thumb.quebrado").count() == 0, "a miniatura nao carregou"
+    # a miniatura tem que estar realmente desenhada, nao so no HTML
+    assert pg.locator("#qLista .thumb img").first.evaluate("i => i.naturalWidth") == 2
+    foto("06_jogo_quadros.png")
+    print("[ok] aba Jogos: 2 quadros subiram e as miniaturas carregam de verdade")
+
+    pg.locator("#qLista .thumb .x").first.click()
+    pg.wait_for_timeout(800)
+    assert pg.locator("#qLista .thumb").count() == 1
+    pg.set_input_files("#qFile", [
+        {"name": "girassois.png", "mimeType": "image/png", "buffer": png((230, 180, 20))},
+    ])
+    pg.wait_for_timeout(900)
+    assert pg.locator("#qLista .thumb").count() == 2
+    print("[ok] aba Jogos: tirar e por quadro de volta")
+
     pg.click("#dVoltar")
     pg.wait_for_selector("#dJogos .jogo")
     assert pg.locator("#dJogos .badge.warn").count() == 0
@@ -182,6 +227,23 @@ with sync_playwright() as pw:
     assert pg.locator(".jogador.impostor").count() == 1
     foto("04_ingame_impostor.png")
     print(f"[ok] sorteio tapado, abre no clique ({aberto}); revelar marca a mesa")
+
+    # --- o quadro no in-game: tapado, e aparece de verdade no clique
+    pg.locator("#gChips .chip").nth(2).click()
+    pg.wait_for_timeout(600)
+    pg.click(".sortear")
+    pg.wait_for_selector(".palco")
+    assert pg.locator(".palco.fechado").count() == 1, "o quadro nasceu aberto"
+    assert not pg.locator(".palco .quadro").is_visible()
+    pg.click(".palco .tampa")
+    pg.wait_for_timeout(400)
+    assert pg.locator(".palco .quadro").is_visible()
+    assert pg.locator(".palco .quadro").evaluate("i => i.naturalWidth") == 2, \
+        "a imagem esta no HTML mas nao carregou"
+    src = pg.locator(".palco .quadro").get_attribute("src")
+    assert src.startswith("/quadros/"), src
+    foto("07_ingame_quadro.png")
+    print(f"[ok] in-game: quadro tapado, abre no clique e RENDERIZA ({src})")
 
     # F5 mantem o placar
     pg.reload()

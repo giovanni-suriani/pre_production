@@ -21,6 +21,7 @@ import random
 import time
 
 import jogos
+import quadros
 import store
 
 
@@ -146,6 +147,19 @@ def ler_jogo(slug: str, jid: str) -> dict | None:
     return {**j, "roteiro": slug, "roteiro_nome": r["nome"]}
 
 
+def _quadros_em_uso(r: dict) -> set[str]:
+    """Todo quadro citado por qualquer jogo do roteiro.
+
+    E o roteiro inteiro, e nao so o jogo que acabou de ser salvo: a pasta de
+    imagens e por roteiro, e dois jogos de quadro nela compartilham o mesmo
+    espaco — varrer olhando so um deles apagaria os arquivos do outro.
+    """
+    uso: set[str] = set()
+    for j in r.get("jogos") or []:
+        uso.update(str(x) for x in ((j.get("attrs") or {}).get("quadros") or []))
+    return uso
+
+
 def salvar_jogo(slug: str, jid: str, nome: str | None,
                 attrs: dict | None) -> dict:
     r = _abrir(slug)
@@ -157,6 +171,23 @@ def salvar_jogo(slug: str, jid: str, nome: str | None,
     if attrs is not None:
         j["attrs"] = {**(j.get("attrs") or {}), **attrs}
     store.gravar(store.ROTEIROS, slug, r)
+    # tirar um quadro da lista tem que levar o arquivo junto, ou a pasta so
+    # cresce com imagens que ninguem mais usa
+    quadros.limpar_orfaos(slug, _quadros_em_uso(r))
+    return ler_jogo(slug, jid)
+
+
+def add_quadro(slug: str, jid: str, nome_arquivo: str, conteudo_b64: str) -> dict:
+    """Sobe uma imagem e acrescenta ela aos quadros daquele jogo."""
+    r = _abrir(slug)
+    j = next((x for x in r.get("jogos") or [] if x.get("id") == jid), None)
+    if j is None:
+        raise KeyError(jid)
+    if j.get("tipo") != "impostor_quadro":
+        raise ValueError("so o 'Impostor no quadro' tem quadros")
+    url = quadros.guardar(slug, nome_arquivo, conteudo_b64)
+    j.setdefault("attrs", {}).setdefault("quadros", []).append(url)
+    store.gravar(store.ROTEIROS, slug, r)
     return ler_jogo(slug, jid)
 
 
@@ -167,11 +198,14 @@ def apagar_jogo(slug: str, jid: str) -> dict:
     if len(r["jogos"]) == antes:
         raise KeyError(jid)
     store.gravar(store.ROTEIROS, slug, r)
+    quadros.limpar_orfaos(slug, _quadros_em_uso(r))
     return ler(slug)
 
 
 def apagar(slug: str) -> bool:
-    """Apaga o roteiro, os jogos dele (moram dentro) e a partida em andamento —
-    sem isso, a partida ficaria apontando pra um roteiro que nao existe mais."""
+    """Apaga o roteiro, os jogos dele (moram dentro), os quadros que subiram e a
+    partida em andamento — sem isso, a partida ficaria apontando pra um roteiro
+    que nao existe mais, e as imagens ficariam ocupando disco para sempre."""
     store.apagar(store.PARTIDAS, slug)
+    quadros.apagar_do_roteiro(slug)
     return store.apagar(store.ROTEIROS, slug)

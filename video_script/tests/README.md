@@ -12,7 +12,10 @@ O servidor precisa estar de pé (`video_script\run.bat`).
 # 1. API ponta a ponta: roteiro -> participantes + jogos -> partida
 ..\..\.venv\Scripts\python.exe tests\smoke.py
 
-# 2. interface: monta um episódio pela tela num Chrome headless
+# 2. os quadros do impostor: subir, servir, trocar e apagar
+..\..\.venv\Scripts\python.exe tests\quadros.py
+
+# 3. interface: monta um episódio pela tela num Chrome headless
 C:\Users\talco\AppData\Local\Programs\Python\Python312\python.exe tests\ui.py
 ```
 
@@ -26,4 +29,5 @@ fora do git.
 | arquivo | cobre |
 |---|---|
 | `smoke.py` | parse do `lista_do_rank.txt` nos 4 formatos de linha; participantes e jogos morando no roteiro; **salvar o roteiro não comer os `attrs` dos jogos**; reordenar; uma partida por roteiro (abrir de novo continua, não recomeça); clicar/desclicar vida; busca por nome parcial e por rank; chute fora da lista virando log; sorteio do impostor; o tempo começando em 2min, andando de 30 em 30 e **não descendo abaixo de 30s**; entrar gente na mesa no meio sem devolver vidas gastas; Reiniciar; apagar o roteiro levando jogos e partida; os 400/404 esperados |
-| `ui.py` | o fluxo inteiro pela tela: criar roteiro → digitar a mesa → adicionar jogos → abrir o jogo pelo clique → importar a lista → Jogar roteiro. Confere que os campos removidos (regras, dica, discussão, vidas sugeridas) não voltaram; que **não há pontuação** e o rótulo é "Jogos do roteiro"; que o coração mede **45px** (1.5×); que o clique grava no disco; as duas buscas; o gabarito fechado; o cronômetro ±30s gravando; F5 mantendo o placar; e o Reinício zerando tudo |
+| `quadros.py` | upload em base64 → arquivo **servido** por `/quadros/…` byte a byte igual (é o motivo de tudo isto existir: caminho de disco nunca aparecia na página); o `data:image/…;base64,` do FileReader; a extensão decidida pelo conteúdo e não pelo nome; o sorteio do in-game devolvendo uma URL que carrega; tirar um quadro apagando **só** o arquivo dele; recusa de não-imagem, base64 quebrado e vazio; só o jogo de quadro aceitando quadro; apagar o roteiro levando a pasta de imagens |
+| `ui.py` | o fluxo inteiro pela tela: criar roteiro → digitar a mesa → adicionar jogos → abrir o jogo pelo clique → importar a lista → Jogar roteiro. Confere que os campos removidos (regras, dica, discussão, vidas sugeridas) não voltaram; que **não há pontuação** e o rótulo é "Jogos do roteiro"; que o coração mede **45px** (1.5×); que o clique grava no disco; as duas buscas; o gabarito fechado; o cronômetro ±30s gravando; F5 mantendo o placar; e o Reinício zerando tudo. Também sobe duas imagens de verdade pelo `<input type=file>` e confere que a miniatura e o quadro do in-game **renderizam** (`naturalWidth`), não só que a tag existe |

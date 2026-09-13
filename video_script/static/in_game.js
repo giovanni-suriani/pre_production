@@ -336,20 +336,7 @@ function painelImpostor(j) {
     g.appendChild(seg('o impostor recebe', s.impostor));
     box.appendChild(g);
 
-    if (ehQuadro && s.principal) {
-      const img = h('img', 'quadro');
-      img.src = /^https?:\/\//.test(s.principal) ? s.principal : `file:///${s.principal}`;
-      img.alt = 'quadro sorteado';
-      // Caminho local costuma NAO carregar (o navegador bloqueia file:// dentro
-      // de uma pagina http). Em vez de um retangulo quebrado, mostra o caminho
-      // pra abrir na mao — e o caso normal aqui.
-      img.onerror = () => {
-        img.replaceWith(h('p', 'note',
-          `o navegador não abre <code>${esc(s.principal)}</code> de dentro da página — `
-          + 'abra o arquivo direto, ou use uma URL http.'));
-      };
-      box.appendChild(img);
-    }
+    if (ehQuadro && s.principal) box.appendChild(caixaQuadro(s.principal));
 
     const quem = (s.impostores || []).map((id) =>
       ((P.participantes || []).find((x) => x.id === id) || {}).nome || id);
@@ -388,6 +375,43 @@ function painelImpostor(j) {
   };
   q('.parar').onclick = () => { pararCron(); q('.parar').disabled = true; };
   return card;
+}
+
+/* O quadro da rodada: nasce tapado como os outros segredos, e abre no clique.
+   E a mesma regra da palavra — esta tela fica virada pra quem apresenta, e o
+   quadro e justamente o que a mesa nao pode ver antes da hora. */
+function caixaQuadro(src) {
+  const wrap = h('div', 'palco fechado');
+  const servido = src.startsWith('/quadros/') || /^https?:\/\//i.test(src);
+
+  if (!servido) {
+    // caminho de disco de um cadastro antigo: o navegador bloqueia file://
+    // dentro de uma pagina http, entao nao adianta tentar
+    return h('p', 'note',
+      `este quadro ainda é um caminho de disco (<code>${esc(src)}</code>), que a `
+      + 'página não consegue abrir. Abra o jogo na aba Jogos e suba a imagem — '
+      + 'ela passa a ser servida pelo próprio serviço.');
+  }
+
+  const img = h('img', 'quadro');
+  img.src = src;
+  img.alt = 'quadro da rodada';
+  img.onerror = () => {
+    wrap.innerHTML = '';
+    wrap.appendChild(h('p', 'note',
+      `não consegui carregar <code>${esc(src)}</code> — se for um endereço da `
+      + 'web, confira se ele ainda existe.'));
+  };
+
+  const tampa = h('button', 'tampa', 'quadro da rodada: clique para mostrar');
+  tampa.onclick = () => {
+    const aberto = wrap.classList.toggle('fechado');
+    tampa.textContent = aberto
+      ? 'quadro da rodada: clique para mostrar' : 'esconder o quadro';
+  };
+  wrap.appendChild(tampa);
+  wrap.appendChild(img);
+  return wrap;
 }
 
 function pararCron() {

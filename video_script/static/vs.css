@@ -169,9 +169,56 @@ body.page .cron {
 body.page .cron.acabou { color: var(--alert); }
 
 body.page .quadro {
-  max-width: 100%; max-height: 320px; border-radius: var(--r-s);
+  max-width: 100%; max-height: 420px; border-radius: var(--r-s);
   border: 1px solid var(--edge-2); background: var(--void);
+  display: block;
 }
+
+/* o quadro da rodada, tapado ate o clique — mesma regra da palavra */
+body.page .palco { display: grid; gap: 8px; justify-items: start; }
+body.page .palco .tampa {
+  font-family: var(--f-mono); font-size: 14px;
+  background: var(--riser); border: 1px dashed var(--edge-2);
+  border-radius: var(--r-s); padding: 13px 15px; color: var(--ash);
+  cursor: pointer; width: 100%; text-align: left;
+}
+body.page .palco .tampa:hover { border-color: #4a515d; }
+body.page .palco.fechado .quadro { display: none; }
+body.page .palco:not(.fechado) .tampa {
+  border-style: solid; color: var(--chalk); background: var(--lift);
+}
+
+/* a galeria de quadros da aba Jogos */
+body.page .galeria {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+body.page .thumb {
+  position: relative; display: grid; gap: 6px;
+  background: var(--riser); border: 1px solid var(--edge-2);
+  border-radius: var(--r-s); padding: 8px;
+}
+body.page .thumb.quebrado { border-color: var(--alert); }
+body.page .thumb img {
+  width: 100%; height: 118px; object-fit: cover;
+  border-radius: 5px; background: var(--void); display: block;
+}
+body.page .thumb .ruim {
+  height: 118px; display: grid; place-items: center;
+  color: var(--alert); font-size: 12.5px; background: var(--void);
+  border-radius: 5px;
+}
+body.page .thumb .cap {
+  font-size: 11.5px; color: var(--ash); font-family: var(--f-mono);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+body.page .thumb .x {
+  position: absolute; top: 4px; right: 4px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(18, 19, 22, .85); border: 1px solid var(--edge-2);
+  color: var(--chalk); font-size: 15px; cursor: pointer; line-height: 1;
+}
+body.page .thumb .x:hover { border-color: var(--alert); color: var(--alert); }
 
 /* ------------------------------------------------- os jogos do roteiro */
 

@@ -160,6 +160,19 @@ def api_jogo_apagar(slug: str, jid: str):
     return _acao(roteiros.apagar_jogo, slug, jid)
 
 
+@app.post("/api/roteiros/{slug}/jogos/{jid}/quadros")
+def api_quadro_subir(slug: str, jid: str, body: dict = Body(...)):
+    """Sobe uma imagem do "Impostor no quadro".
+
+    Chega em base64 dentro do JSON, como o lista_do_rank.txt chega como texto:
+    o navegador le o arquivo e manda o conteudo. Assim o servico nao precisa de
+    `python-multipart`, e a copia guardada aqui e servida por /quadros/... —
+    que a pagina consegue mostrar, ao contrario de um `file://`.
+    """
+    return _acao(roteiros.add_quadro, slug, jid,
+                 body.get("nome") or "quadro", body.get("conteudo") or "")
+
+
 # ---------------------------------------------------------------- partidas
 
 @app.get("/api/partidas")
@@ -277,6 +290,8 @@ def api_partida_tempo(slug: str, body: dict = Body(...)):
 # ------------------------------------------------------------------ estatico
 
 app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
+# as imagens que subiram pelo "Impostor no quadro"
+app.mount("/quadros", StaticFiles(directory=str(store.QUADROS)), name="quadros")
 if COMPARTILHADO.is_dir():
     # o shell.css e o shell.js do pre_production, sem copia: uma mudanca de
     # aparencia la aparece aqui, e nao existe versao deste arquivo divergindo.

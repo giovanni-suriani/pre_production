@@ -45,7 +45,7 @@ lista de jogos e a propria aba Roteiro.
 | tipo | atributos |
 |---|---|
 | **Adivinha rank em lista** | tema, **a lista do rank** (importada), revelados no inicio, aceitar nome parcial |
-| **Impostor no quadro** | tema, quadros (caminho/URL), o que o impostor recebe, nº de impostores |
+| **Impostor no quadro** | tema, **os quadros** (imagens subidas), o que o impostor recebe, nº de impostores |
 | **Impostor na palavra** | tema, palavras, o que o impostor recebe, nº de impostores |
 
 O formulario **nao conhece nenhum jogo**: e montado a partir de `jogos.TIPOS`,
@@ -69,6 +69,20 @@ Mbappe                            sem posicao (vira a 4a)
 O valor depois de TAB, ` | `, ` — ` ou `;` vira o campo `extra`, e aparece
 junto na hora da revelacao.
 
+**Os quadros** entram por `Escolher imagens…`: o servico **guarda uma copia** em
+`dados\quadros\<roteiro>\` e serve por `/quadros/...`. Antes o jogo guardava o
+caminho do arquivo no disco e a pagina nunca conseguia mostrar — o navegador
+bloqueia `file://` dentro de uma pagina `http://`. Com a copia, a imagem
+aparece no in-game, o roteiro fica autossuficiente (mover a pasta de origem
+depois nao quebra a gravacao) e tirar um quadro da lista apaga o arquivo junto.
+Endereco `http` da web tambem serve, pelo campo de colar.
+
+O arquivo sobe em **base64 dentro do JSON**, como o `lista_do_rank.txt` sobe
+como texto — assim o servico nao precisa de `python-multipart` num venv que so
+tem fastapi/uvicorn/numpy. A extensao e decidida pelo **conteudo**, nao pelo
+nome: o `.png` que na verdade e um JPEG e comum, e quem decide como servir e o
+byte. SVG fica de fora de proposito (e documento que pode carregar script).
+
 ### 3. In-game (`/in-game?roteiro=X`)
 A mesa jogando aquele roteiro. **Uma partida por roteiro**: abrir continua de
 onde parou; **Reiniciar** devolve as vidas, fecha o gabarito e apaga os
@@ -84,8 +98,9 @@ sorteios, com os mesmos jogadores.
   na lista vira "chute perdido" no log — material de edicao.
 - **Impostor**: sorteia a palavra/quadro e quem sao os impostores, **e grava** —
   reabrir a tela no meio da rodada nao re-sorteia nem perde quem era. Fica
-  tapado ate clicar. A discussao comeca em **2min** e anda de 30 em 30
-  (`+30s`/`-30s`); o ajuste fica gravado, o relogio correndo nao.
+  tapado ate clicar — inclusive o quadro, que so aparece no clique da tampa.
+  A discussao comeca em **2min** e anda de 30 em 30 (`+30s`/`-30s`); o ajuste
+  fica gravado, o relogio correndo nao.
 - Trocar a mesa no roteiro no meio do episodio **nao** zera o placar: quem
   chega entra com vidas cheias, quem ja gastou continua gastado.
 
@@ -107,8 +122,10 @@ video_script\
   jogos.py         TIPOS (o catalogo) + parse do lista_do_rank.txt + as buscas
   partidas.py      vidas, revelacoes e sorteios de uma gravacao
   store.py         um JSON por coisa, escrita atomica (.tmp + rename)
+  quadros.py       guarda/serve/apaga as imagens do "Impostor no quadro"
   static\          3 telas, vs.js (comum), vs.css (so o que o shell nao tem)
   dados\roteiros|partidas\<slug>.json
+  dados\quadros\<roteiro>\        as imagens, servidas em /quadros/...
 ```
 
 `dados\` fica fora do git, como `projects\` do 8740.
@@ -126,9 +143,11 @@ video_script\
 - **Cuidado com `or` em numero que pode ser zero.** `body.get("segundos") or
   PADRAO` transformava o `-30s` que chega em zero no tempo padrao, em vez de
   bater no piso. Ja mordeu uma vez.
-- **Imagem de quadro por caminho local nao carrega** dentro da pagina: o
-  navegador bloqueia `file://` dentro de uma pagina `http://`. A tela mostra o
-  caminho pra abrir na mao. Use URL `http` se quiser a imagem na tela.
+- **Nunca guarde caminho de disco de imagem.** O navegador bloqueia `file://`
+  dentro de uma pagina `http://`, entao a imagem simplesmente nao aparece. Por
+  isso o upload copia o arquivo pra `dados\quadros\` e devolve uma URL. Um
+  cadastro antigo com caminho de disco continua no JSON e o in-game explica o
+  que fazer, em vez de mostrar um retangulo quebrado.
 - **Contraste** — a regra desta casa, na regua do `turnsEditor`: cada nivel de
   caixa sobe de superficie (`--void` < `--slab` < `--riser` < `--lift`), e
   dentro de uma caixa o texto e `--chalk` ou `--ash`, nunca `--smoke`. Nada
