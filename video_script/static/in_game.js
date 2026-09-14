@@ -571,6 +571,19 @@ function painelImpostor(j) {
       <button class="btn primary sortear">${s ? 'Sortear de novo' : 'Sortear'}</button>
     </div>`;
 
+  /* O contador manual de rodada, so na palavra: quem apresenta bate o proprio
+     numero, sem relacao nenhuma com o sorteio por baixo dos panos. */
+  if (!ehQuadro) {
+    const campoRodada = h('div', 'row');
+    campoRodada.innerHTML = `
+      <span class="lbl">Rodada</span>
+      <span class="cron">${Number(est.rodada || 0)}</span>
+      <button class="btn maisRodada">+1 rodada</button>`;
+    card.appendChild(campoRodada);
+    campoRodada.querySelector('.maisRodada').onclick = () =>
+      agir('rodada', { jogo: j.id });
+  }
+
   const q = (s2) => card.querySelector(s2);
   const box = q('.sorteio');
 

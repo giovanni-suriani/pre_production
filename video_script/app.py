@@ -306,6 +306,11 @@ def api_partida_errada_shuffle(slug: str, body: dict = Body(...)):
     return _acao(partidas.embaralhar_errada, slug, body.get("jogo") or "")
 
 
+@app.post("/api/partidas/{slug}/rodada")
+def api_partida_rodada(slug: str, body: dict = Body(...)):
+    return _acao(partidas.incrementar_rodada, slug, body.get("jogo") or "")
+
+
 @app.post("/api/partidas/{slug}/tempo")
 def api_partida_tempo(slug: str, body: dict = Body(...)):
     # `or` aqui seria errado: 0 e falso, e um "-30s" que chega em zero viraria

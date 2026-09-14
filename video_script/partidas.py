@@ -262,6 +262,28 @@ def zerar_jogo(slug: str, jid: str) -> dict:
 
 # ------------------------------------------------ estado por jogo (impostor)
 
+def _proxima_rodada(est: dict, pool: list[dict]) -> dict:
+    """A proxima dupla do impostor_palavra, sem repetir ate passar por todas.
+
+    Espelha o `_ordem_errada`: uma ordem embaralhada e consumida do inicio: ao
+    esvaziar, embaralha de novo do tamanho atual do pool — uma rodada nova.
+    `rodada_pos`/`rodada_tam` sao so para a tela mostrar "rodada 3 de 8"; nao
+    influenciam o sorteio em si.
+    """
+    n = len(pool)
+    ordem = [i for i in (est.get("ordem") or []) if isinstance(i, int) and 0 <= i < n]
+    vistos = set()
+    ordem = [i for i in ordem if not (i in vistos or vistos.add(i))]
+    if not ordem:
+        ordem = list(range(n))
+        random.shuffle(ordem)
+        est["rodada_tam"] = n
+    idx = ordem.pop(0)
+    est["ordem"] = ordem
+    est["rodada_pos"] = est.get("rodada_tam", n) - len(ordem)
+    return pool[idx]
+
+
 def sortear_impostor(slug: str, jid: str) -> dict:
     """Sorteia a dupla da rodada e quem sao os impostores, e guarda.
 
@@ -269,6 +291,10 @@ def sortear_impostor(slug: str, jid: str) -> dict:
     escolhe QUAL linha vai ao ar e QUEM sao os impostores. Guardar e o ponto —
     quem apresenta precisa poder reabrir a tela no meio da rodada sem sortear
     tudo de novo e perder quem era o impostor.
+
+    No impostor_palavra o sorteio percorre as duplas sem repetir uma rodada
+    inteira antes de embaralhar de novo (`_proxima_rodada`); o impostor_quadro
+    continua sorteando com reposicao, como sempre foi.
     """
     p = _abrir(slug)
     cheia = ler(slug)
@@ -282,7 +308,11 @@ def sortear_impostor(slug: str, jid: str) -> dict:
         raise ValueError("este jogo nao tem nenhuma dupla cadastrada — "
                          "escreva jogador/impostor no conteudo do jogo")
 
-    dupla = random.choice(pool)
+    est = _estado_jogo(p, jid)
+    if j.get("tipo") == "impostor_palavra":
+        dupla = _proxima_rodada(est, pool)
+    else:
+        dupla = random.choice(pool)
     principal, do_impostor = dupla["jogador"], dupla["impostor"]
 
     # quem ja morreu NESTE jogo nao e sorteado impostor nele; se ninguem
@@ -294,12 +324,24 @@ def sortear_impostor(slug: str, jid: str) -> dict:
     n = max(0, min(int(a.get("n_impostores") or 1), len(alvo)))
     impostores = [x["id"] for x in random.sample(alvo, n)] if n else []
 
-    est = _estado_jogo(p, jid)
     est["sorteio"] = {
         "principal": principal, "impostor": do_impostor,
         "impostores": impostores, "em": store.agora(),
     }
     est.setdefault("log", []).append({"acao": "sortear", "em": store.agora()})
+    return _salvar(slug, p)
+
+
+def incrementar_rodada(slug: str, jid: str) -> dict:
+    """+1 no contador manual de rodada do impostor_palavra.
+
+    Nao tem relacao com o `_proxima_rodada` do sorteio (aquele e automatico,
+    por baixo dos panos). Este e o numero que quem apresenta bate na tela,
+    de proposito manual — o clique e o unico jeito de mexer nele.
+    """
+    p = _abrir(slug)
+    est = _estado_jogo(p, jid)
+    est["rodada"] = int(est.get("rodada") or 0) + 1
     return _salvar(slug, p)
 
 
