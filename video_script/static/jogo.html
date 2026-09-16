@@ -18,7 +18,6 @@
   <section class="card hidden" id="det">
     <header>
       <h2 id="dNome">—</h2>
-      <p class="sub" id="dTipo"></p>
     </header>
 
     <div class="field">
@@ -35,15 +34,11 @@
         <div class="row">
           <input type="file" id="dFile" accept=".txt,.csv,.md,text/plain" hidden>
           <button class="btn" id="dPick">Escolher lista_do_rank.txt</button>
-          <span class="note" id="dRankN"></span>
         </div>
       </div>
-      <textarea id="dCola" rows="6" placeholder="ou cole a lista aqui — uma por linha:&#10;1. Nome — valor opcional&#10;2. Outro"></textarea>
+      <textarea id="dCola" rows="6"></textarea>
       <div class="row">
         <button class="btn" id="dParse">Ler o texto colado</button>
-        <span class="spacer"></span>
-        <span class="note">aceita <code>1. Nome</code>, <code>1 - Nome</code> ou
-          só <code>Nome</code> (a posição vira a ordem das linhas)</span>
       </div>
       <div class="rank" id="dPrev"></div>
     </div>

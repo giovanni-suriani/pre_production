@@ -60,13 +60,13 @@ TIPOS: dict[str, dict] = {
     "impostor_quadro": {
         "rotulo": "Impostor no quadro",
         "in_game": "impostor",
-        "sub": "Todos ouvem o mesmo quadro; o impostor ouve o outro da dupla "
+        "sub": "Todos ouvem o mesmo quadro; o impostor ouve o outro da linha "
                "e tem que fingir.",
         "campos": [
             {"nome": "tema", "rotulo": "Tema", "kind": "texto",
              "dica": "ex.: pinturas famosas"},
             {"nome": "duplas", "rotulo": "Quadros", "kind": "duplas",
-             "dica": "uma dupla por rodada: o quadro da mesa e o do impostor"},
+             "dica": "uma por rodada: o quadro da mesa e o do impostor"},
             {"nome": "n_impostores", "rotulo": "Nº de impostores",
              "kind": "num", "padrao": 1},
         ],
@@ -75,12 +75,12 @@ TIPOS: dict[str, dict] = {
         "rotulo": "Impostor na palavra",
         "in_game": "impostor",
         "sub": "Todos recebem a mesma palavra; o impostor recebe a outra da "
-               "dupla e tem que descrever sem saber.",
+               "linha e tem que descrever sem saber.",
         "campos": [
             {"nome": "tema", "rotulo": "Tema", "kind": "texto",
              "dica": "ex.: comidas de festa junina"},
             {"nome": "duplas", "rotulo": "Palavras", "kind": "duplas",
-             "dica": "uma dupla por rodada: a palavra da mesa e a do impostor"},
+             "dica": "uma por rodada: a palavra da mesa e a do impostor"},
             {"nome": "n_impostores", "rotulo": "Nº de impostores",
              "kind": "num", "padrao": 1},
         ],
@@ -185,7 +185,7 @@ def resumo(tipo: str | None, a: dict) -> str:
         n = len(a.get("lista") or [])
         corpo = f"{n} posicoes"
     elif in_game(tipo) == "impostor":
-        corpo = f"{len(duplas(a))} duplas"
+        corpo = f"{len(duplas(a))} palavras"
     elif in_game(tipo) == "errada":
         corpo = f"{len(perguntas(a))} perguntas"
     elif in_game(tipo) == "discussao":
@@ -207,7 +207,7 @@ def pendencia(tipo: str | None, a: dict) -> str:
     if tipo == "rank_lista" and not (a.get("lista") or []):
         return "sem lista importada"
     if in_game(tipo) == "impostor" and not duplas(a):
-        return "sem duplas"
+        return "sem palavras"
     if in_game(tipo) == "errada" and not perguntas(a):
         return "sem perguntas"
     if in_game(tipo) == "discussao" and not (a.get("tema") or "").strip():

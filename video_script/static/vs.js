@@ -46,12 +46,6 @@ const h = (tag, cls, html) => {
 
 const qs = (k) => new URLSearchParams(location.search).get(k);
 
-function minutos(n) {
-  n = Math.round(n || 0);
-  if (!n) return '—';
-  return n < 60 ? `${n}min` : `${Math.floor(n / 60)}h ${n % 60}min`;
-}
-
 function mmss(s) {
   s = Math.max(0, Math.round(s || 0));
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -194,34 +188,37 @@ function paresEditor(valor, onChange, cfg) {
     : { ...d, [A.chave]: (d || {})[A.chave] || '',
         [B.chave]: (d || {})[B.chave] || '' }));
 
-  const wrap = h('div', 'duplas');
+  const wrap = h('div', 'duplas' + (cfg.classe ? ` ${cfg.classe}` : ''));
   wrap.innerHTML = `
-    <div class="cab">
+    ${cfg.cabecalho === false ? '' : `<div class="cab">
       <span>${esc(A.rotulo)} <i>— ${esc(A.nota)}</i></span>
       <span>${esc(B.rotulo)} <i>— ${esc(B.nota)}</i></span>
       <span></span>
-    </div>
+    </div>`}
     <div class="linhas"></div>
     <div class="row">
-      <button type="button" class="btn add">+ ${esc(cfg.acrescentar)}</button>
+      ${cfg.acrescentar === false ? ''
+        : `<button type="button" class="btn add">+ ${esc(cfg.acrescentar)}</button>`}
       ${cfg.arquivo ? '<button type="button" class="btn imp">Importar .txt</button>'
         + `<input type="file" class="arq" accept="${esc(cfg.arquivo)}" hidden>` : ''}
       <span class="spacer"></span>
-      <span class="note quantas"></span>
+      ${cfg.contador === false ? '' : '<span class="note quantas"></span>'}
     </div>
-    <details class="colar">
+    ${cfg.colar === false ? '' : `<details class="colar">
       <summary>…ou colar várias de uma vez</summary>
       <textarea rows="5" class="tudo"
         placeholder="uma por linha:&#10;${esc(cfg.exemplo)}"></textarea>
       <div class="row end">
         <button type="button" class="btn aplicar">${esc(cfg.substituir)}</button>
       </div>
-    </details>`;
+    </details>`}`;
 
   const q = (sel) => wrap.querySelector(sel);
   const validas = () => linhas.filter((l) => (l[A.chave] || '').trim());
   const contar = () => {
-    q('.quantas').textContent = `${validas().length} ${cfg.plural}`;
+    if (q('.quantas')) {
+      q('.quantas').textContent = `${validas().length} ${cfg.plural}`;
+    }
   };
 
   const avisar = () => {
@@ -255,18 +252,22 @@ function paresEditor(valor, onChange, cfg) {
       box.appendChild(ln);
     });
     if (!linhas.length) box.appendChild(h('p', 'note', cfg.vazio));
-    q('.tudo').value = linhas
-      .map((l) => `${l[A.chave]}${l[B.chave] ? ` | ${l[B.chave]}` : ''}`)
-      .join('\n');
+    if (q('.tudo')) {
+      q('.tudo').value = linhas
+        .map((l) => `${l[A.chave]}${l[B.chave] ? ` | ${l[B.chave]}` : ''}`)
+        .join('\n');
+    }
     contar();
   };
 
-  q('.add').onclick = () => {
-    linhas.push({ [A.chave]: '', [B.chave]: '' });
-    desenhar();
-    const todas = wrap.querySelectorAll('.ln .a');
-    if (todas.length) todas[todas.length - 1].focus();
-  };
+  if (q('.add')) {
+    q('.add').onclick = () => {
+      linhas.push({ [A.chave]: '', [B.chave]: '' });
+      desenhar();
+      const todas = wrap.querySelectorAll('.ln .a');
+      if (todas.length) todas[todas.length - 1].focus();
+    };
+  }
 
   const aplicarTexto = (texto, deOndeVeio) => {
     linhas = texto.split('\n').map((linha) => {
@@ -284,7 +285,7 @@ function paresEditor(valor, onChange, cfg) {
     toast(`${linhas.length} ${cfg.plural}`);
   };
 
-  q('.aplicar').onclick = () => aplicarTexto(q('.tudo').value);
+  if (q('.aplicar')) q('.aplicar').onclick = () => aplicarTexto(q('.tudo').value);
 
   if (cfg.arquivo) {
     q('.imp').onclick = () => q('.arq').click();
@@ -317,14 +318,18 @@ function paresEditor(valor, onChange, cfg) {
 function duplasEditor(valor, onChange) {
   return paresEditor(valor, onChange, {
     a: { chave: 'jogador', rotulo: 'Jogador', nota: 'todo mundo ouve',
-         dica: 'o que a mesa ouve' },
+         dica: 'Mesa' },
     b: { chave: 'impostor', rotulo: 'Impostor', nota: 'vazio: não recebe nada',
-         dica: 'o que o impostor ouve' },
-    acrescentar: 'Acrescentar dupla',
-    substituir: 'Substituir as duplas',
-    plural: 'duplas',
+         dica: 'Impostor' },
+    cabecalho: false,
+    contador: false,
+    classe: 'impostor',
+    acrescentar: 'Acrescentar palavra',
+    colar: false,
+    substituir: 'Substituir as palavras',
+    plural: 'palavras',
     exemplo: 'arara | bacon\nmonalisa | guernica',
-    vazio: 'nenhuma dupla ainda — o sorteio precisa de pelo menos uma.',
+    vazio: 'nenhuma palavra ainda — o sorteio precisa de pelo menos uma.',
   });
 }
 
@@ -335,9 +340,10 @@ function duplasEditor(valor, onChange) {
 function perguntasEditor(valor, onChange) {
   return paresEditor(valor, onChange, {
     a: { chave: 'pergunta', rotulo: 'Pergunta', nota: 'o que se pergunta',
-         dica: 'a pergunta' },
+         dica: 'Pergunta' },
     b: { chave: 'resposta', rotulo: 'Resposta certa',
-         nota: 'a que NÃO vale', dica: 'a resposta certa' },
+         nota: 'a que NÃO vale', dica: 'Resposta certa' },
+    cabecalho: false,
     acrescentar: 'Acrescentar pergunta',
     substituir: 'Substituir as perguntas',
     plural: 'perguntas',

@@ -97,6 +97,15 @@ body.page .jogador {
 body.page .jogador.fora { opacity: .5; }
 body.page .jogador.fora .nome { text-decoration: line-through; }
 body.page .jogador.impostor { border-color: var(--alert); background: var(--lift); }
+body.page .jogador .palavra { text-align: center; }
+/* o placar de moedas da pessoa, no card dela */
+body.page .jogador .pontos {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: var(--f-mono); font-size: 17px; color: var(--cor);
+}
+body.page .jogador .pontos .moeda {
+  width: 14px; height: 14px; border-width: 1px; cursor: default;
+}
 body.page .jogador .nome {
   font-size: 17px; font-family: var(--f-display); color: var(--chalk);
 }
@@ -157,65 +166,41 @@ body.page .cron {
 }
 body.page .cron.acabou { color: var(--alert); }
 
-/* o sorteio do impostor, tapado ate o clique: esta tela fica virada pra quem
-   apresenta, e o reflexo na tela entrega a rodada inteira */
-body.page .palco { display: grid; gap: 8px; }
-body.page .palco .tampa {
-  font-family: var(--f-mono); font-size: 14px;
-  background: var(--riser); border: 1px dashed var(--edge-2);
-  border-radius: var(--r-s); padding: 13px 15px; color: var(--ash);
-  cursor: pointer; width: 100%; text-align: left;
-}
-body.page .palco .tampa:hover { border-color: #4a515d; }
-body.page .palco.fechado .aberto { display: none; }
-body.page .palco:not(.fechado) .tampa {
-  border-style: solid; color: var(--chalk); background: var(--lift);
-}
-body.page .palco .aberto {
-  display: grid; gap: 10px;
-  background: var(--lift); border: 1px solid var(--edge-2);
-  border-radius: var(--r-s); padding: 13px 15px;
-}
-body.page .palco .par {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-  font-size: 17px; color: var(--chalk); font-weight: 600;
-}
-body.page .palco .par i {
-  display: block; font-style: normal; font-size: 11px; font-weight: 400;
-  letter-spacing: .08em; text-transform: uppercase; color: var(--ash);
-}
-body.page .cadaum { display: grid; gap: 4px; border-top: 1px solid var(--edge-2); padding-top: 10px; }
-body.page .cadaum .pessoa {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-  font-family: var(--f-mono); font-size: 14px; color: var(--chalk);
-  padding: 4px 0;
-}
-body.page .cadaum .pessoa.imp .quem { color: var(--alert); }
-body.page .cadaum .pessoa .oque { color: var(--ash); }
-
 /* o "So resposta errada": bolinha | resposta certa | pergunta.
    A resposta vem antes da pergunta de proposito — e a coluna que quem
    apresenta procura com o olho enquanto le a pergunta em voz alta. */
 body.page { --feito: #57c98a; --feito-bg: #1d2b23; }
 body.page .perguntas { display: grid; gap: 6px; margin-top: 4px; }
 body.page .pq {
-  display: grid; grid-template-columns: 34px minmax(120px, 1fr) 2fr 34px;
+  display: grid; grid-template-columns: 28px minmax(120px, 1fr) 2fr auto 34px;
   gap: 12px;
-  align-items: center;
+  align-items: center; cursor: pointer;
   background: var(--riser); border: 1px solid var(--edge-2);
   border-radius: var(--r-s); padding: 10px 12px;
 }
+body.page .marcadas { justify-content: flex-end; align-items: baseline; gap: 10px; }
+body.page .marcadas .quanto {
+  font-family: var(--f-mono); font-size: 17px; color: var(--feito);
+}
+body.page .pq .n {
+  font-family: var(--f-mono); font-size: 14px; color: var(--info);
+  text-align: center;
+}
 body.page .pq .certa {
-  font-family: var(--f-mono); font-size: 14px; color: var(--caution);
+  font-family: var(--f-mono); font-size: 14px; color: var(--info);
 }
 body.page .pq .pq-t { font-size: 15px; color: var(--chalk); }
-body.page .pq .marca {
-  width: 24px; height: 24px; border-radius: 50%;
+body.page .moedas { display: flex; gap: 6px; }
+body.page .moeda {
+  width: 22px; height: 22px; border-radius: 50%; padding: 0;
   background: var(--void); border: 2px solid var(--edge-2);
-  color: transparent; font-size: 15px; line-height: 1;
-  cursor: pointer; padding: 0;
+  color: transparent; font-size: 11px; line-height: 1;
+  cursor: pointer; transition: background .12s, border-color .12s;
 }
-body.page .pq .marca:hover { border-color: var(--ash); }
+body.page .moeda:hover { border-color: var(--cor); }
+body.page .moeda.ganha {
+  background: var(--cor); border-color: var(--cor);
+}
 
 /* o lixo fica apagado ate a linha ser tocada: e o unico botao daqui que mexe
    no cadastro, e nao pode competir com a bolinha pelo olho de quem apresenta */
@@ -234,18 +219,17 @@ body.page .pq .lixo:hover {
    mesma coisa de proposito — com a camera ligada quem apresenta olha de
    raspao, e um sinal so (so a cor, ou so a marca) se perde. */
 body.page .pq.feita { border-color: var(--feito); background: var(--feito-bg); }
+body.page .pq.porMoeda { cursor: default; }
 body.page .pq.feita .certa,
 body.page .pq.feita .pq-t { color: var(--feito); }
-body.page .pq.feita .marca {
-  background: var(--feito); border-color: var(--feito);
-  color: var(--void); font-weight: 700;
-}
 
 @media (max-width: 700px) {
-  body.page .pq { grid-template-columns: 34px 1fr 34px; }
+  body.page .pq { grid-template-columns: 28px 1fr auto 34px; }
+  body.page .pq .n { grid-row: 1 / -1; grid-column: 1; align-self: center; }
   body.page .pq .certa { grid-column: 2; }
   body.page .pq .pq-t { grid-column: 2; }
-  body.page .pq .lixo { grid-row: 1; grid-column: 3; opacity: 1; }
+  body.page .pq .moedas { grid-row: 1 / -1; grid-column: 3; }
+  body.page .pq .lixo { grid-row: 1; grid-column: 4; opacity: 1; }
 }
 
 /* as duas colunas do impostor: jogador | impostor, uma linha por rodada */
@@ -273,21 +257,65 @@ body.page .duplas .colar summary {
 }
 body.page .duplas .colar textarea { margin-top: 6px; }
 
+/* a caixa do impostor em rosa — a mesma cor do tipo, no lugar do rotulo que
+   dizia qual coluna era qual */
+body.page .duplas.impostor .ln .b {
+  border-color: color-mix(in srgb, #ef7fa8 55%, var(--edge-2));
+  color: #ef7fa8;
+}
+body.page .duplas.impostor .ln .b:focus {
+  border-color: #ef7fa8; outline: none;
+}
+body.page .duplas.impostor .ln .b::placeholder {
+  color: color-mix(in srgb, #ef7fa8 55%, var(--smoke));
+}
+
 /* ------------------------------------------------- os jogos do roteiro */
 
+/* Uma cor por TIPO de jogo, para achar o jogo na lista sem ler o nome. Os
+   tons sao os da casa (mesma clareza do --info/--caution do shell.css), e nao
+   os puros: sobre o #23262b do card, verde e rosa saturados vibram.
+
+   As regras nao citam `.jogo` nem `.chip`: o mesmo `t-<tipo>` pinta o card na
+   lista E o chip que cria aquele jogo, entao a mesma cor significa a mesma
+   coisa nos dois lugares. */
+/* O padrao vem ANTES da paleta de proposito: `.jogo` e `.t-<tipo>` tem a mesma
+   especificidade, entao quem vier depois ganha — com o fallback la embaixo,
+   todo card sairia cinza. */
+body.page .jogo, body.page .chip { --t: var(--smoke); }
+
+body.page .t-rank_lista       { --t: #7cb6ea; }   /* azul    */
+body.page .t-impostor_quadro  { --t: #b08ce8; }   /* roxo    */
+body.page .t-impostor_palavra { --t: #ef7fa8; }   /* rosa    */
+body.page .t-discussao        { --t: #6fce9f; }   /* verde   */
+body.page .t-resposta_errada  { --t: #c9ced6; }   /* prata   */
+
 body.page .jogo {
-  display: grid; grid-template-columns: 30px 1fr auto; gap: 12px;
-  align-items: start;
-  background: var(--riser); border: 1px solid var(--edge-2);
+  display: grid; grid-template-columns: 30px 1fr auto;
+  grid-template-rows: auto; gap: 8px 12px;
+  align-items: start; cursor: pointer;
+  background: var(--riser);
+  border: 1px solid var(--t);
   border-radius: var(--r); padding: 13px 15px;
+  transition: border-color .12s, background .12s;
 }
-body.page .jogo.pendente { border-color: var(--caution); }
+/* o card INTEIRO abre o editor, entao e ele que acende no hover */
+body.page .jogo:hover {
+  background: color-mix(in srgb, var(--t) 14%, var(--lift));
+}
 body.page .jogo .n {
-  font-family: var(--f-mono); color: var(--ash); font-size: 13px;
-  padding-top: 9px;
+  font-family: var(--f-mono); color: var(--t); font-size: 19px;
+  grid-row: 1 / -1; align-self: center; text-align: center;
 }
-body.page .jogo .corpo { display: grid; gap: 8px; min-width: 0; }
-body.page .jogo .acoes { display: flex; gap: 5px; flex-direction: column; }
+body.page .jogo .corpo {
+  grid-column: 2; grid-row: 1; display: grid; gap: 10px; min-width: 0;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); align-items: center;
+}
+/* o x fica na terceira coluna e centrado na altura do card, igual ao da .part */
+body.page .jogo .del { grid-column: 3; grid-row: 1 / -1; align-self: center; }
+body.page .jogo .acoes {
+  display: flex; gap: 5px; justify-content: center; flex-wrap: wrap;
+}
 
 /* o nome do jogo e um link: clicar abre a aba Jogos naquele jogo */
 body.page .abrir {
@@ -297,11 +325,6 @@ body.page .abrir {
   color: var(--chalk); text-decoration: none; font-size: 15px;
   font-family: var(--f-display);
   transition: border-color .12s, background .12s;
-}
-body.page .abrir:hover { border-color: var(--chalk); }
-body.page .abrir .seta { margin-left: auto; color: var(--ash); font-size: 13px; }
-body.page .abrir .resumo {
-  font-family: var(--f-ui); font-size: 12.5px; color: var(--ash);
 }
 
 /* a mesa, na aba 2: uma linha por participante */
@@ -322,8 +345,62 @@ body.page .chip {
   color: var(--ash); cursor: pointer; font-family: inherit;
 }
 body.page .chip:hover { border-color: var(--chalk); color: var(--chalk); }
+/* o contador de rodada: fica entre a mesa e os chips, centralizado */
+body.page .rodada { display: flex; justify-content: center; align-items: center; }
+body.page .rodada:empty { display: none; }
+body.page .rodada .vencedor { align-items: baseline; gap: 12px; }
+body.page .rodada .vencedor .quem {
+  font-family: var(--f-mono); font-size: 40px; line-height: 1;
+  color: var(--cor);
+}
+/* no empate ninguem esta na frente, entao a palavra nao leva cor de pessoa */
+body.page .rodada .vencedor .quem.empate { color: var(--ash); }
+body.page .rodada .lbl {
+  font-family: var(--f-mono); font-size: 40px; letter-spacing: 1px;
+  font-weight: 400; text-transform: none; color: var(--chalk); line-height: 1;
+}
+
+/* o sorteio do numero de impostores: cores de badge roxo, forma de botao */
+body.page .btn.sortearN {
+  color: #b08ce8;
+  background: color-mix(in srgb, #b08ce8 13%, transparent);
+  border-color: color-mix(in srgb, #b08ce8 40%, transparent);
+}
+body.page .btn.sortearN:hover:not(:disabled) {
+  background: color-mix(in srgb, #b08ce8 18%, transparent);
+  border-color: #b08ce8;
+}
+
+/* duas colunas: o que e largo (as duplas) e o que e estreito (um numero) */
+body.page .ladoalado {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px;
+  align-items: start;
+}
+@media (max-width: 700px) {
+  body.page .ladoalado { grid-template-columns: 1fr; }
+}
+
+/* o card que edita UM jogo (aba 2) leva a cor do tipo na borda */
+body.page .card[class*="t-"] { border-color: var(--t); }
+
+/* os chips de "+ jogo" usam a mesma cor do card daquele tipo */
+body.page .chip[class*="t-"] {
+  color: var(--t);
+  border-color: color-mix(in srgb, var(--t) 45%, var(--edge-2));
+  background: color-mix(in srgb, var(--t) 10%, var(--riser));
+}
+body.page .chip[class*="t-"]:hover {
+  border-color: var(--t);
+  background: color-mix(in srgb, var(--t) 20%, var(--riser));
+}
 body.page .chip.on {
   background: var(--lift); border-color: var(--chalk); color: var(--chalk);
+}
+body.page .chip[class*="t-"].on,
+body.page .chip[class*="t-"].on:hover {
+  color: var(--chalk);
+  border-color: var(--t);
+  background: color-mix(in srgb, var(--t) 16%, var(--riser));
 }
 /* o × de tirar, dentro do chip (lista de palavras do impostor) */
 body.page .chip .x {
@@ -335,4 +412,3 @@ body.page .chip .x:hover { color: var(--alert); }
 /* item de lista (roteiros): sobe de superficie como o resto */
 body.page .item { background: var(--riser); border-color: var(--edge-2); }
 body.page .item .t { font-size: 15px; }
-body.page .item .d { color: var(--ash); font-size: 12.5px; }

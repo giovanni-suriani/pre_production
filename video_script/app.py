@@ -45,7 +45,7 @@ store.preparar()
 async def sem_cache(request, call_next):
     """O navegador nao pode guardar o .js/.css desta casa.
 
-    Isto roda em 127.0.0.1 e muda o dia inteiro: com o cache normal do Chrome,
+    Isto roda na rede de casa e muda o dia inteiro: com o cache normal do Chrome,
     uma correcao no `roteiro.js` so aparecia depois de um Ctrl+F5 — e o jeito
     de descobrir isso e achar que o conserto nao funcionou. Em rede local nao
     ha nada a economizar aqui.
@@ -294,6 +294,13 @@ def api_partida_errada_marcar(slug: str, body: dict = Body(...)):
                  int(body.get("i") or 0))
 
 
+@app.post("/api/partidas/{slug}/errada-moeda")
+def api_partida_errada_moeda(slug: str, body: dict = Body(...)):
+    """A moeda de uma pessoa numa pergunta do "So resposta errada"."""
+    return _acao(partidas.moeda_errada, slug, body.get("jogo") or "",
+                 body.get("i"), body.get("participante") or "")
+
+
 @app.post("/api/partidas/{slug}/errada-lixo")
 def api_partida_errada_lixo(slug: str, body: dict = Body(...)):
     """Tira a pergunta do jogo e anota na lixeira (com o .txt de origem)."""
@@ -330,14 +337,42 @@ if COMPARTILHADO.is_dir():
               name="shared")
 
 
+def ip_da_lan() -> str:
+    """O IP desta maquina na rede de casa, pra imprimir o link do notebook.
+
+    O truque do socket UDP nao manda pacote nenhum: o `connect` so faz o
+    sistema escolher qual interface usaria pra falar com a internet, e e a
+    unica forma confiavel de saber isso numa maquina com WSL/VPN/Docker, onde
+    `gethostbyname(hostname)` devolve o adaptador errado na metade das vezes.
+    """
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"          # sem rede: o link local ainda serve
+    finally:
+        s.close()
+
+
 def main() -> None:
     import uvicorn
     porta = PORTA
     argv = sys.argv[1:]
     if "--port" in argv:
         porta = int(argv[argv.index("--port") + 1])
+
+    # `0.0.0.0` = qualquer interface, e nao um endereco: sem isto o kernel
+    # recusa (RST) quem chega pela placa de rede antes de o pedido virar
+    # request, e o notebook leva "conexao recusada" com o firewall liberado.
+    # `--local` volta ao loopback pra quando o servico rodar fora de casa.
+    host = "127.0.0.1" if "--local" in argv else "0.0.0.0"
+
     print(f"video_script em http://127.0.0.1:{porta}  (dados em {store.DADOS})")
-    uvicorn.run(app, host="127.0.0.1", port=porta, log_level="warning")
+    if host != "127.0.0.1":
+        print(f"            no notebook:  http://{ip_da_lan()}:{porta}")
+    uvicorn.run(app, host=host, port=porta, log_level="warning")
 
 
 if __name__ == "__main__":

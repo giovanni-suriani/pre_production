@@ -59,6 +59,78 @@ O que decidiu o desenho de lá, e que não se adivinha lendo o código:
   rank, o .txt de perguntas). Quem lê é o navegador, no clique do import; o
   conteúdo passa a morar no JSON do roteiro, e mexer no .txt depois não muda
   jogo já cadastrado.
+- **A tela do desktop fica virada para quem COMANDA, nunca para a mesa.** Os
+  jogadores nao enxergam o monitor: o que esta nele e a cola de quem apresenta.
+  Por isso a palavra de cada pessoa pode aparecer aberta na mesa do In-game, e
+  por isso a tampa do sorteio serve contra reflexo e gente passando atras — nao
+  contra os jogadores, que nunca teriam visto de qualquer jeito. Ao desenhar
+  qualquer tela deste servico, assuma UM leitor: quem conduz.
+- **Impostor: o layout inteiro e a rodada.** A palavra da mesa e a coluna
+  Jogador da LINHA 1; cada impostor sorteado leva a coluna Impostor da sua
+  linha, na ordem (1o impostor -> linha 1, 2o -> linha 2), entao dois
+  impostores recebem palavras DIFERENTES. O sorteio escolhe so as pessoas —
+  nao escolhe linha. Trocar de rodada e reescrever as linhas.
+
+- **O padrao visual do video_script e "limpo, com cor so no que distingue".**
+  Decisao do usuario para o projeto INTEIRO, nao so para a tela de Roteiro:
+  - **Texto que so explica sai.** Subtitulo de cabecalho, nota de rodape de
+    campo, aviso de estado vazio, contagem de status ("3 na mesa", "2 sem
+    conteudo"), cracha de pendencia. A tela e lida de relance com a camera
+    ligada; quem esta gravando ja sabe o que a tela faz.
+  - **Campo que ninguem preenche sai** — nao nasce "por completude".
+  - **A cor serve para DISTINGUIR, nunca para decorar.** Hoje sao cinco, uma
+    por tipo de jogo (ver a paleta no `video_script/static/vs.css`): azul,
+    roxo, rosa, verde e prata. A mesma cor tem que significar a mesma coisa em
+    todo lugar onde aparecer — o card na lista e o chip que cria aquele jogo
+    dividem o token `--t` justamente por isso.
+  - **Um portador de cor por elemento.** No card do jogo a cor esta na BORDA e
+    no numero; o fundo fica neutro. Pintar borda e fundo juntos vira cerca de
+    cores com cinco itens na tela.
+  - **Tons na clareza da casa** (a faixa do `--info`/`--caution` do
+    `shell.css`), nunca as cores puras: sobre o `--riser` escuro, verde e rosa
+    saturados vibram.
+
+- **Como o usuario itera em tela, e o que ele quer de volta.** Aprendido na
+  faxina de 14-15/09/2026, quando ele reviu as tres telas uma a uma:
+  - **Ele cola o HTML renderizado e diz o que esta errado.** O pedido e sobre
+    AQUELE elemento. Mude so ele, verifique, e diga o que mudou — nao
+    aproveite a visita para "melhorar junto" o que esta em volta.
+  - **"Gostei, nao mexa aqui" e definitivo.** A mesa do In-game (`.mesa` /
+    `.jogador` / `.vidas`) e o botao Sortear foram congelados assim. Quando
+    ele quis a palavra no card do jogador, ele mesmo abriu a excecao.
+  - **Sem botao de Gravar.** "O que estiver nesse layout vai ser o que vai ser
+    considerado" — a tela E o dado. Se tirar o botao, grave sozinho: com pausa
+    na digitacao e SEM redesenhar (redesenhar leva o foco e o cursor junto,
+    ver `salvarAttrsQuieto`).
+  - **O alvo do clique e o card inteiro**, nao um link dentro dele. Os botoes
+    que vivem dentro precisam de `closest('button')` para nao navegarem junto.
+  - **Rotulo e valor do mesmo mostrador tem o mesmo tamanho** ("Rodada" saiu de
+    10.5px para os 40px do numero). Rotulo pequeno ao lado de numero grande ele
+    le como ruido, nao como legenda.
+  - **Selecionado nao pode perder a identidade.** O chip do jogo aberto
+    continua na cor do tipo (borda cheia + texto claro); virar branco fazia do
+    unico jogo que importa o unico sem cor.
+  - **Ele nao pede tudo de uma vez, e isso e de proposito.** Botao virou
+    horizontal, depois ganhou texto, depois perdeu o texto, depois mudou de
+    lugar. Nao antecipe os proximos passos — faca o pedido e espere.
+
+- **0 e um valor de verdade neste servico, nao "vazio".** `n_impostores: 0` e
+  uma rodada sem impostor nenhum, e `segundos: 0` e o piso do cronometro.
+  Todo `x or padrao` em cima desses campos e bug esperando o dia em que alguem
+  escolher zero — foi assim no `app.py` (tempo) e no `partidas.py`
+  (impostores). Use `None if x is None else x`.
+
+- **A lista de jogos do Roteiro e so a lista.** Cada item mostra o numero, o
+  nome e os tres botoes (subir, descer, remover); o card INTEIRO abre o editor,
+  e a cor do tipo vive na borda. Nao ha resumo, seta de "editar", cracha de
+  tipo nem aviso de pendencia — tudo isso foi removido a pedido do usuario.
+  **Nao acrescente campo de duracao, caixa de "notas de fala", nem cracha
+  repetindo o tipo do jogo**: o tipo ja esta no nome, e os outros dois
+  eram campos que ninguem preenchia ocupando altura numa tela que se le de
+  relance com a camera ligada. Isso vale para **todo tipo de jogo novo**. As
+  chaves `duracao_min` e `notas` continuam no JSON e o `atualizar()` so grava a
+  que VEM no corpo — quem nao manda, preserva.
+
 - **Pergunta jogada fora vai pra `dados\lixeira_perguntas.json`** com a
   resposta e o .txt de origem — lixeira única do serviço, porque as perguntas
   vêm dos mesmos arquivos e o descarte vale pro próximo episódio.

@@ -112,8 +112,14 @@ def salvar(slug: str, campos: dict) -> dict:
             if base is None:
                 continue                      # jogo que nao e deste roteiro
             base["nome"] = (j.get("nome") or "").strip() or base["nome"]
-            base["duracao_min"] = int(j.get("duracao_min") or 0)
-            base["notas"] = j.get("notas") or ""
+            # So grava a chave que VEIO no corpo. A tela do roteiro nao edita
+            # mais duracao/notas do jogo, entao ela nao manda essas chaves — e
+            # sobrescrever com o default apagaria, a cada save, o que ficou
+            # gravado de antes.
+            if "duracao_min" in j:
+                base["duracao_min"] = int(j.get("duracao_min") or 0)
+            if "notas" in j:
+                base["notas"] = j.get("notas") or ""
             novos.append(base)
         r["jogos"] = novos
 

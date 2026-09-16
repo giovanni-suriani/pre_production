@@ -25,18 +25,11 @@ async function carregar() {
 function desenharLista() {
   const box = el('lista');
   box.innerHTML = '';
-  el('cont').textContent = ROTEIROS.length ? `${ROTEIROS.length} no total` : '';
   el('vazio').classList.toggle('hidden', ROTEIROS.length > 0);
   for (const r of ROTEIROS) {
     const it = h('div', 'item' + (atual && atual.slug === r.slug ? ' on' : ''));
     it.innerHTML = `
-      <div class="t">${esc(r.nome)}</div>
-      <div class="d">${r.n_participantes} na mesa · ${r.n_jogos}
-        ${r.n_jogos === 1 ? 'jogo' : 'jogos'}
-        ${r.duracao_prevista ? ` · ${minutos(r.duracao_prevista)}` : ''}</div>
-      ${r.pendencias.length
-        ? `<div class="side"><span class="badge warn">${r.pendencias.length} pendente(s)</span></div>`
-        : ''}`;
+      <div class="t">${esc(r.nome)}</div>`;
     it.onclick = () => abrir(r.slug);
     box.appendChild(it);
   }
@@ -47,7 +40,7 @@ async function abrir(slug) {
   lembrar('roteiro', slug);
   history.replaceState(null, '', `/roteiro?roteiro=${encodeURIComponent(slug)}`);
   document.querySelector('nav.nav').remove();
-  renderNav(1, `<b>${esc(atual.nome)}</b>`, slug);
+  renderNav(1, null, slug);
   desenharLista();
   desenharDetalhe();
 }
@@ -56,11 +49,6 @@ function desenharDetalhe() {
   el('det').classList.remove('hidden');
   el('dNome').textContent = atual.nome;
   el('dNomeIn').value = atual.nome;
-  el('dNotas').value = atual.notas || '';
-  el('dResumo').textContent =
-    `${atual.n_participantes} na mesa · ${atual.n_jogos} `
-    + `${atual.n_jogos === 1 ? 'jogo' : 'jogos'}`
-    + (atual.duracao_prevista ? ` · ${minutos(atual.duracao_prevista)} previstos` : '');
   desenharParts();
   desenharJogos();
   desenharTipos();
@@ -72,9 +60,6 @@ function desenharParts() {
   const parts = atual.participantes || [];
   const box = el('dParts');
   box.innerHTML = '';
-  el('dPartVazio').classList.toggle('hidden', parts.length > 0);
-  el('dPartSub').textContent = parts.length
-    ? `${parts.length} na mesa` : '';
 
   parts.forEach((x, i) => {
     const linha = h('div', 'part');
@@ -101,40 +86,32 @@ function desenharJogos() {
   const box = el('dJogos');
   box.innerHTML = '';
   el('dJogosVazio').classList.toggle('hidden', js.length > 0);
-  el('dJogosSub').textContent = atual.pendencias.length
-    ? `${atual.pendencias.length} sem conteúdo cadastrado` : '';
 
   js.forEach((j, idx) => {
-    const p = h('div', 'jogo' + (j.pendencia ? ' pendente' : ''));
+    const p = h('div', `jogo t-${j.tipo}`);
     p.innerHTML = `
       <div class="n">${idx + 1}</div>
       <div class="corpo">
-        <a class="abrir" href="/jogo?roteiro=${encodeURIComponent(atual.slug)}&jogo=${encodeURIComponent(j.id)}">
-          <span>${esc(j.nome)}</span>
-          <span class="resumo">${esc(j.resumo || '')}</span>
-          <span class="seta">editar →</span>
-        </a>
-        <div class="row">
-          <span class="badge">${esc(j.tipo_rotulo)}</span>
-          ${j.pendencia ? `<span class="badge warn">${esc(j.pendencia)}</span>` : ''}
-          <span class="spacer"></span>
-          <span class="note">duração</span>
-          <input type="number" class="dur" min="0" style="width:78px"
-                 value="${j.duracao_min || 0}"> <span class="note">min</span>
+        <div class="abrir"><span>${esc(j.nome)}</span></div>
+        <div class="acoes">
+          <button class="btn small up" title="mover para cima"
+                  aria-label="mover para cima" ${idx === 0 ? 'disabled' : ''}>↑</button>
+          <button class="btn small down" title="mover para baixo"
+                  aria-label="mover para baixo" ${idx === js.length - 1 ? 'disabled' : ''}>↓</button>
         </div>
-        <textarea class="obs" rows="2" placeholder="notas de fala deste jogo">${esc(j.notas || '')}</textarea>
       </div>
-      <div class="acoes">
-        <button class="btn small up"   ${idx === 0 ? 'disabled' : ''}>↑</button>
-        <button class="btn small down" ${idx === js.length - 1 ? 'disabled' : ''}>↓</button>
-        <button class="btn small danger del">×</button>
-      </div>`;
+      <button class="btn small danger del">×</button>`;
+
+    // O card inteiro abre o editor, e nao so o nome. Os botoes vivem dentro
+    // dele, entao o clique neles subiria ate aqui e navegaria no meio de um
+    // "mover" ou de um "remover" — por isso o closest('button') sai fora.
+    p.onclick = (ev) => {
+      if (ev.target.closest('button')) return;
+      location.href = `/jogo?roteiro=${encodeURIComponent(atual.slug)}`
+        + `&jogo=${encodeURIComponent(j.id)}`;
+    };
 
     const q = (s) => p.querySelector(s);
-    q('.dur').onchange = () => {
-      j.duracao_min = parseInt(q('.dur').value || '0', 10) || 0;
-    };
-    q('.obs').onchange = () => { j.notas = q('.obs').value; };
     q('.up').onclick = () => mover(idx, -1);
     q('.down').onclick = () => mover(idx, +1);
     q('.del').onclick = async () => {
@@ -166,7 +143,7 @@ function desenharTipos() {
   const box = el('dTipos');
   box.innerHTML = '';
   for (const t of TIPOS) {
-    const c = h('button', 'chip', `+ ${esc(t.rotulo)}`);
+    const c = h('button', `chip t-${t.tipo}`, `+ ${esc(t.rotulo)}`);
     c.title = t.sub;
     c.onclick = async () => {
       try {
@@ -195,13 +172,12 @@ el('nCriar').onclick = async () => {
 async function salvar(opts) {
   opts = opts || {};
   atual.nome = el('dNomeIn').value;
-  atual.notas = el('dNotas').value;
   const limpos = (atual.participantes || []).filter((x) => (x.nome || '').trim());
   atual = await apiPut(`/api/roteiros/${atual.slug}`, {
-    nome: atual.nome, notas: atual.notas,
+    nome: atual.nome,
     participantes: limpos,
     jogos: (atual.jogos || []).map((j) => ({
-      id: j.id, nome: j.nome, duracao_min: j.duracao_min, notas: j.notas,
+      id: j.id, nome: j.nome,
     })),
   });
   if (!opts.silencioso) {

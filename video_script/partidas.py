@@ -262,39 +262,17 @@ def zerar_jogo(slug: str, jid: str) -> dict:
 
 # ------------------------------------------------ estado por jogo (impostor)
 
-def _proxima_rodada(est: dict, pool: list[dict]) -> dict:
-    """A proxima dupla do impostor_palavra, sem repetir ate passar por todas.
-
-    Espelha o `_ordem_errada`: uma ordem embaralhada e consumida do inicio: ao
-    esvaziar, embaralha de novo do tamanho atual do pool — uma rodada nova.
-    `rodada_pos`/`rodada_tam` sao so para a tela mostrar "rodada 3 de 8"; nao
-    influenciam o sorteio em si.
-    """
-    n = len(pool)
-    ordem = [i for i in (est.get("ordem") or []) if isinstance(i, int) and 0 <= i < n]
-    vistos = set()
-    ordem = [i for i in ordem if not (i in vistos or vistos.add(i))]
-    if not ordem:
-        ordem = list(range(n))
-        random.shuffle(ordem)
-        est["rodada_tam"] = n
-    idx = ordem.pop(0)
-    est["ordem"] = ordem
-    est["rodada_pos"] = est.get("rodada_tam", n) - len(ordem)
-    return pool[idx]
-
-
 def sortear_impostor(slug: str, jid: str) -> dict:
-    """Sorteia a dupla da rodada e quem sao os impostores, e guarda.
+    """Sorteia QUEM sao os impostores e reparte as palavras, e guarda.
 
-    A dupla ja vem pronta do cadastro (`jogador` / `impostor`): o sorteio so
-    escolhe QUAL linha vai ao ar e QUEM sao os impostores. Guardar e o ponto —
-    quem apresenta precisa poder reabrir a tela no meio da rodada sem sortear
-    tudo de novo e perder quem era o impostor.
+    O conteudo ja vem pronto do cadastro, e o layout inteiro e a rodada: a
+    palavra da mesa e a coluna Jogador da LINHA 1, e cada impostor sorteado
+    leva a coluna Impostor da sua linha, na ordem (1o impostor -> linha 1, 2o
+    -> linha 2). Dois impostores recebem, portanto, palavras diferentes.
 
-    No impostor_palavra o sorteio percorre as duplas sem repetir uma rodada
-    inteira antes de embaralhar de novo (`_proxima_rodada`); o impostor_quadro
-    continua sorteando com reposicao, como sempre foi.
+    O sorteio so escolhe as PESSOAS. Guardar e o ponto — quem apresenta
+    precisa poder reabrir a tela no meio da rodada sem sortear tudo de novo e
+    perder quem era o impostor.
     """
     p = _abrir(slug)
     cheia = ler(slug)
@@ -305,15 +283,14 @@ def sortear_impostor(slug: str, jid: str) -> dict:
 
     pool = jogos.duplas(a)
     if not pool:
-        raise ValueError("este jogo nao tem nenhuma dupla cadastrada — "
-                         "escreva jogador/impostor no conteudo do jogo")
+        raise ValueError("este jogo nao tem nenhuma palavra cadastrada — "
+                         "escreva a linha Mesa/Impostor no painel da rodada")
 
     est = _estado_jogo(p, jid)
-    if j.get("tipo") == "impostor_palavra":
-        dupla = _proxima_rodada(est, pool)
-    else:
-        dupla = random.choice(pool)
-    principal, do_impostor = dupla["jogador"], dupla["impostor"]
+    # A palavra da mesa vem SEMPRE da linha 1: o layout inteiro e a rodada, e
+    # nao um banco de onde sortear uma linha. Quem troca a rodada e quem
+    # reescreve as linhas antes de clicar em Sortear.
+    principal = pool[0]["jogador"]
 
     # quem ja morreu NESTE jogo nao e sorteado impostor nele; se ninguem
     # sobrou, sorteia entre todos em vez de recusar o sorteio no meio da mesa
@@ -321,12 +298,20 @@ def sortear_impostor(slug: str, jid: str) -> dict:
     todos = p.get("participantes") or []
     vivos = [x for x in todos if any(vidas_aqui.get(x["id"]) or [])]
     alvo = vivos or todos
-    n = max(0, min(int(a.get("n_impostores") or 1), len(alvo)))
+    n_cfg = a.get("n_impostores")
+    n_cfg = 1 if n_cfg is None else int(n_cfg)
+    n = max(0, min(n_cfg, len(alvo)))
     impostores = [x["id"] for x in random.sample(alvo, n)] if n else []
+    palavras = {pid: (pool[k]["impostor"] if k < len(pool) else "")
+                for k, pid in enumerate(impostores)}
 
     est["sorteio"] = {
-        "principal": principal, "impostor": do_impostor,
-        "impostores": impostores, "em": store.agora(),
+        "principal": principal,
+        # `impostor` continua aqui pelo par de cima da tela e por sorteio ja
+        # gravado que so tinha esta chave: e a palavra do PRIMEIRO impostor.
+        "impostor": pool[0]["impostor"],
+        "impostores": impostores, "palavras": palavras,
+        "em": store.agora(),
     }
     est.setdefault("log", []).append({"acao": "sortear", "em": store.agora()})
     return _salvar(slug, p)
@@ -335,9 +320,8 @@ def sortear_impostor(slug: str, jid: str) -> dict:
 def incrementar_rodada(slug: str, jid: str) -> dict:
     """+1 no contador manual de rodada do impostor_palavra.
 
-    Nao tem relacao com o `_proxima_rodada` do sorteio (aquele e automatico,
-    por baixo dos panos). Este e o numero que quem apresenta bate na tela,
-    de proposito manual — o clique e o unico jeito de mexer nele.
+    E o numero que quem apresenta bate na tela, de proposito manual — o clique
+    e o unico jeito de mexer nele. O sorteio nao encosta aqui.
     """
     p = _abrir(slug)
     est = _estado_jogo(p, jid)
@@ -398,8 +382,41 @@ def marcar_errada(slug: str, jid: str, i: int) -> dict:
     return _salvar(slug, p)
 
 
+def moeda_errada(slug: str, jid: str, i: int, participante: str) -> dict:
+    """A moeda de UMA pessoa numa pergunta: liga/desliga.
+
+    Guardado como `moedas[<i da pergunta>] = [ids das pessoas]`, e nao como um
+    placar somado: assim da pra ver de quem foi cada ponto, desfazer o clique
+    errado no lugar onde ele foi dado, e o total continua sendo uma conta
+    (quantas vezes a pessoa aparece) em vez de um numero que pode divergir do
+    que esta na tela.
+
+    A pergunta jogada na lixeira leva as moedas dela junto — ver `lixo_errada`.
+    """
+    p = _abrir(slug)
+    if not any(x.get("id") == participante for x in p.get("participantes") or []):
+        raise KeyError(participante)
+    est = _estado_jogo(p, jid)
+    moedas = est.setdefault("moedas", {})
+    chave = str(int(i))
+    quem = [str(x) for x in (moedas.get(chave) or [])]
+    if participante in quem:
+        quem.remove(participante)
+    else:
+        quem.append(participante)
+    if quem:
+        moedas[chave] = quem
+    else:
+        moedas.pop(chave, None)
+    return _salvar(slug, p)
+
+
 def embaralhar_errada(slug: str, jid: str) -> dict:
     """Embaralha as que faltam e TIRA DA TELA as que foram marcadas.
+
+    Marcada e a que tem check na mao OU moeda de alguem — dar a moeda ja diz
+    que a pergunta saiu, e pedir os dois cliques seria pedir a mesma coisa
+    duas vezes com a camera ligada.
 
     O embaralho e o fim de uma rodada: o que ja saiu sai da frente, e o que
     falta volta numa ordem nova. As marcadas vao para `escondidas` — some da
@@ -422,6 +439,8 @@ def embaralhar_errada(slug: str, jid: str) -> dict:
 
     est = _estado_jogo(p, jid)
     certas = {int(x) for x in (est.get("certas") or []) if 0 <= int(x) < n}
+    certas |= {int(k) for k, quem in (est.get("moedas") or {}).items()
+               if quem and 0 <= int(k) < n}
     escondidas = {int(x) for x in (est.get("escondidas") or []) if 0 <= int(x) < n}
     escondidas |= certas
 
@@ -449,6 +468,13 @@ def _deslocar(est: dict, i: int) -> None:
 
     est["certas"] = mexer(est.get("certas"))
     est["escondidas"] = mexer(est.get("escondidas"))
+    moedas = {}
+    for k, quem in (est.get("moedas") or {}).items():
+        k = int(k)
+        if k == i:
+            continue
+        moedas[str(k - 1 if k > i else k)] = quem
+    est["moedas"] = moedas
     vistos, ordem = set(), []
     for n in est.get("ordem") or []:
         n = int(n)

@@ -38,9 +38,8 @@ async function carregar() {
 
 function desenhar() {
   const tp = TIPOS.find((x) => x.tipo === jogo.tipo);
-  el('det').classList.remove('hidden');
+  el('det').className = `card t-${jogo.tipo}`;
   el('dNome').textContent = jogo.nome;
-  el('dTipo').textContent = tp ? tp.sub : jogo.tipo;
   el('dNomeIn').value = jogo.nome;
 
   const box = el('dCampos');
@@ -61,8 +60,6 @@ function desenhar() {
 
 function desenharRank() {
   const itens = rascunho.lista || [];
-  el('dRankN').textContent = itens.length
-    ? `${itens.length} posições carregadas` : 'nenhuma posição ainda';
   const prev = el('dPrev');
   prev.innerHTML = '';
   // Prévia só das 30 primeiras: a lista pode ter 500 linhas, e desenhar as 500
