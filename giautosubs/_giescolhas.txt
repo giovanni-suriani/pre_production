@@ -1,4 +1,0 @@
-estilo	GiAutoSubs TikTokNovo
-conflito	substituir
-preset	D:\CanalYtbe\BatataQuente\pre_production\giautosubs\presets\TikTokAtual.txt
-arquivo	D:\CanalYtbe\BatataQuente\pre_production\projects\DeuMerda\cortes\rank_surpresa\legendas\legenda_por_track.lua

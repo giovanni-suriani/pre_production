@@ -5,3 +5,10 @@ __pycache__/
 *.pyc
 *.pyo
 projects/
+
+# Estado de execucao do GiAutoSubs: log e escolhas da ultima rodada. Sao
+# reescritos a cada geracao de macro -- o `_gimacro.log` sozinho tem 1,8 MB
+# e entrava como blob novo em cada commit, afogando o diff real (2.446
+# linhas de ruido contra 277 de trabalho, medido em 23/09/2026).
+giautosubs/_gi*.log
+giautosubs/_gi*.txt
