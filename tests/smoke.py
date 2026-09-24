@@ -1,4 +1,4 @@
-r"""Teste de fumaca: dirige o servidor de verdade, de ponta a ponta.
+﻿r"""Teste de fumaca: dirige o servidor de verdade, de ponta a ponta.
 
 Nao usa mock nenhum. Ele cria um projeto, extrai o wav, fatia um corte, roda um
 metodo e confere o que foi parar no disco - que e' onde os erros deste app
@@ -42,6 +42,19 @@ def check(cond, msg):
         fail_count += 1
         print(f"  [FALHOU] {msg}")
     return cond
+
+
+ALVO = ""   # "projeto=X&corte=Y" - preenchido quando o corte de teste nasce
+
+
+def etapa3(path):
+    """Acrescenta projeto/corte a uma rota da etapa 3.
+
+    As rotas do editor de turnos recebem o alvo na propria URL, como o
+    `comAlvo` do app.js faz no navegador. Antes elas liam o "corte ativo" do
+    servidor, e este teste so' precisava de um POST /api/state antes.
+    """
+    return path + ("&" if "?" in path else "?") + ALVO
 
 
 def call(path, data=None, method=None):
@@ -180,8 +193,16 @@ def main():
 
     # --------------------------------------------------------- etapa 3
     print("\n4. editor de turnos")
+    global ALVO
+    ALVO = (f"projeto={urllib.parse.quote(slug)}"
+            f"&corte={urllib.parse.quote('corte_teste')}")
+    # o /api/state agora so' LEMBRA onde o usuario parou; nao e' mais o
+    # endereco de nada. Continua sendo chamado pra cobrir essa funcao.
     call("/api/state", {"project": slug, "cut": "corte_teste"})
-    cfg = call("/api/config")
+    st = call("/api/state")
+    check(st["active"] and st["active"]["cut"]["name"] == "corte_teste",
+          "/api/state lembra o ultimo corte visitado")
+    cfg = call(etapa3("/api/config"))
     c = cfg["config"]
     check(c["audio_offset"] == args.start,
           f"o editor recebe audio_offset = {c['audio_offset']}")
@@ -193,7 +214,7 @@ def main():
     check(any(f["name"] == out for f in cfg["turn_files"]),
           f"{out} aparece na lista do editor")
     if args.method == "whisper":
-        tr = call("/api/transcript")
+        tr = call(etapa3("/api/transcript"))
         check(len(tr["segments"]) > 0,
               f"transcricao servida ao editor ({len(tr['segments'])} trechos)")
         check(tr["offset"] == 0.0,
@@ -216,7 +237,7 @@ def main():
         check(not abs_first.startswith("00:00:0"),
               f"base midia mantem o tempo absoluto ({abs_first})")
         # o parser existe pra poder importar legenda de volta como transcricao
-        back = call(f"/api/turns?file={urllib.parse.quote(out)}")
+        back = call(etapa3(f"/api/turns?file={urllib.parse.quote(out)}"))
         check(len(back["turns"]) == r["count"] or r["count"] > 0,
               "o srt cobre os trechos da transcricao")
 
@@ -256,7 +277,7 @@ def main():
         # leitores - e' o que impede a coluna e a legenda de divergirem
         check(g["transcript"] == "teste.giautosubs.json",
               "o corte passou a apontar a transcricao para o arquivo exportado")
-        tr2 = call("/api/transcript")
+        tr2 = call(etapa3("/api/transcript"))
         check(tr2["file"] == "teste.giautosubs.json" and tr2["with_words"] == 1,
               "o editor de turnos le o mesmo arquivo, com o tempo por palavra")
         # a caixa "Tracks de legenda separadas" do corte vence o projeto, nos
@@ -283,7 +304,7 @@ def main():
     for bad in ["../../../../Windows/win.ini", r"..\..\config.json",
                 r"D:\CanalYtbe\BatataQuente\scriptsPrimarios\1_diarize.py"]:
         try:
-            call(f"/api/turns?file={urllib.parse.quote(bad)}")
+            call(etapa3(f"/api/turns?file={urllib.parse.quote(bad)}"))
             check(False, f"caminho fora do corte NAO foi bloqueado: {bad}")
         except RuntimeError as e:
             check("404" in str(e) or "400" in str(e),
