@@ -279,29 +279,8 @@ function textFor(t) {
 
 // ============================================================ rede
 
-/* QUAL corte esta sendo editado vem da URL da pagina, nao de um "corte ativo"
-   guardado no servidor. Enquanto o alvo morava no config.json havia um so por
-   SERVIDOR: abrir dois cortes em duas abas fazia a segunda roubar a primeira,
-   e o /turnos precisava setar o global ANTES de servir o HTML pra ganhar a
-   corrida com o primeiro /api/config deste arquivo.
-
-   A etapa 2 ja monta o link com ?projeto=X&corte=Y (ver goEditor no
-   cortes.js). Aqui so' repassamos adiante em cada chamada. */
-const ALVO = (() => {
-  const q = new URLSearchParams(location.search);
-  return { projeto: q.get('projeto') || '', corte: q.get('corte') || '' };
-})();
-
-/* Acrescenta projeto/corte a uma URL da API, preservando o que ja estiver la
-   (?file=..., ?clear=...). So' mexe em /api/ - caminho de pagina passa
-   intacto. */
-function comAlvo(path) {
-  if (!path.startsWith('/api/')) return path;
-  const u = new URL(path, location.origin);
-  if (ALVO.projeto) u.searchParams.set('projeto', ALVO.projeto);
-  if (ALVO.corte) u.searchParams.set('corte', ALVO.corte);
-  return u.pathname + u.search;
-}
+/* O `comAlvo` e o `ALVO` moram no alvo.js, carregado antes deste arquivo
+   pelo turnos.html - ver o cabecalho de la. */
 
 async function api(path, opts) {
   const r = await fetch(comAlvo(path), opts);

@@ -230,6 +230,7 @@
      `api` e `toast`, e carregar o shell.js junto daria "identifier already
      declared" - o editor inteiro pararia de carregar. Este trecho e' curto e
      nao compartilha nome nenhum com ele. -->
+<script src="/static/alvo.js"></script>
 <script>
 (async function nav() {
   const fmt = (s) => {
@@ -303,7 +304,7 @@
 
   async function pull() {
     try {
-      const d = await (await fetch('/api/config')).json();
+      const d = await (await fetch(comAlvo('/api/config'))).json();
       CTX = d.context || CTX;
       FILES = d.turn_files || [];
       WANT = (d.config && d.config.last_turns_file) || WANT;
@@ -516,10 +517,10 @@ outra pasta — salvar continua caindo dentro do corte.">Abrir…</button>
      carrega (transcript). A segunda nunca derruba a primeira — sem transcrição
      no corte a rota responde com um erro dentro do json, e o painel continua
      servindo para importar uma. */
-  fetch('/api/config').then((r) => r.json())
+  fetch(comAlvo('/api/config')).then((r) => r.json())
     .then((d) => {
       if (!d.context) return;
-      fetch('/api/transcript').then((r) => r.json())
+      fetch(comAlvo('/api/transcript')).then((r) => r.json())
         .then((t) => render(d.config, d.context, t))
         .catch(() => render(d.config, d.context, null));
     })
