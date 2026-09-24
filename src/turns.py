@@ -247,53 +247,6 @@ def shift_file(src, dest, offset, label_map=None, fps=None):
     return len(out)
 
 
-def fill_gaps(path, inicio, fim, fps=None, minimo=0.5, nome="no_name"):
-    """Vazio de >= `minimo` segundos vira um turno `no_name`, in-place.
-
-    Por que existe: onde ninguem fala o arquivo simplesmente NAO tem turno, e
-    o vazio aparece em branco no editor. `no_name` ja e' o rotulo de "voz sem
-    cara na tela" (fora de camera, cai na BASE_TRACK igual) - entao dizer
-    "ninguem falando" com ele cobre o corte inteiro sem inventar conceito
-    novo, e o editor passa a mostrar bloco em vez de buraco.
-
-    Cobre tambem a cabeca (`inicio` -> primeiro turno) e a cauda (ultimo ->
-    `fim`), que sao vazios como qualquer outro.
-
-    So mexe em arquivo de DIARIZACAO: sem chave de rotulo (transcricao pura)
-    devolve 0 sem tocar em nada - encher uma transcricao de turnos mudos
-    quebraria a legenda.
-
-    Consequencia que NAO e' bug: o "silencio: remover" do SpeakerSwitch acha o
-    silencio pelo vazio ENTRE turnos. Preenchido, nao ha mais vazio - aqueles
-    trechos viram clipe da BASE_TRACK em vez de sumir. Trocar de ideia e' so
-    apagar os turnos `no_name` no editor.
-    """
-    raw = read_raw(path)
-    key = detect_label_key(raw)
-    if not key or not raw:
-        return 0
-    ordenados = sorted(raw, key=lambda x: float(x["start"]))
-    out, cursor, criados = [], float(inicio), 0
-
-    def _vazio(a, b):
-        if fps:
-            a, b = tc.snap_to_frame(a, fps), tc.snap_to_frame(b, fps)
-        return {"start": round(a, 5), "end": round(b, 5), key: nome}
-
-    for it in ordenados:
-        s, e = float(it["start"]), float(it["end"])
-        if s - cursor >= minimo:
-            out.append(_vazio(cursor, s))
-            criados += 1
-        out.append(it)
-        cursor = max(cursor, e)
-    if float(fim) - cursor >= minimo:
-        out.append(_vazio(cursor, float(fim)))
-        criados += 1
-    if criados:
-        write(path, out, backup=False)
-    return criados
-
 
 def rename_labels(path, mapping, label_key="name"):
     """Renomeia rotulos in-place, com backup, e opcionalmente troca a chave.

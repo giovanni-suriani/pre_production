@@ -53,10 +53,12 @@ DEFAULT_CONFIG = {
     # minimo que o Resolve aceita num clipe - espelha MIN_SPAN_FRAMES do
     # SpeakerSwitch.py. Turno abaixo disso SOME do corte final sem avisar.
     "min_span_frames": 2,
-    # Vazio (ninguem falando) >= isto vira um turno com o rotulo abaixo, ao
-    # gravar o arquivo canonico de DIARIZACAO - ver turns.fill_gaps(). Menos
-    # que isso e' pausa de respiracao entre frases, nao silencio. 0 desliga.
-    "silence_min_seconds": 0.5,
+    # Rotulo LEGADO de silencio. Nao e' mais gerado: marcar vazio com turno
+    # mudo foi removido em 16/09/2026 - onde ninguem fala o arquivo volta a
+    # nao ter turno, que e' o que o "silencio: remover" do SpeakerSwitch
+    # espera. A chave fica porque arquivo JA rodado tem esses turnos gravados,
+    # e eles precisam continuar sendo reconhecidos (ver app._off_camera_names,
+    # sem isso o SpeakerSwitch aborta com "nome desconhecido no json").
     "silence_label": "no_name",
     # Pastas EXTRAS de turns*.json que a etapa 3 pode abrir, alem da pasta do
     # corte. So leitura - gravar continua acontecendo dentro do projeto.

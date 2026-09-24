@@ -15,7 +15,7 @@ agente precisa saber antes de mexer.
 
 | rota | etapa | sai |
 |---|---|---|
-| `/` | **ProjectEditor** — vídeo, nome, quantas pessoas (1–4) na mesa, cadeira de cada uma e se há voz fora de quadro | `project.json` + `media\<projeto>.wav` |
+| `/` | **ProjectEditor** — vídeo, nome, quantas pessoas (1–4) na mesa, cadeira de cada uma e quantas vozes há fora de quadro | `project.json` + `media\<projeto>.wav` |
 | `/cortes` | **CutsEditor** — trecho na onda, mapa de tracks, método, rodar | `corte.json` + `audio.wav` + `turns*.json` |
 | `/turnos` | **turnsEditor** — corrigir turnos ouvindo/lendo/arrastando | `turnsManual.json` |
 

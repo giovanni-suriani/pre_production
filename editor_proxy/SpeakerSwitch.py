@@ -311,6 +311,7 @@ def _read_preprod(folder):
             "corte": c.get("name"),
             "name_to_track": c["track_map"],
             "off_camera_names": c.get("off_camera"),
+            "fps": c.get("fps"),
             "range_start": c.get("start"),
             "range_end": c.get("end"),
             "origin_frame": c.get("origin_frame"),
@@ -1160,6 +1161,45 @@ def read_layers(src_tl):
     return layers
 
 
+def audio_source(src_tl, vlayer, clip_origin):
+    """De onde tirar o audio: (layer com "mpi", frame_do_arquivo(x_absoluto)).
+
+    Normalmente e' a propria midia da V1. Mas quando a V1 e' um compound clip
+    (trecho + texto por jogador mesclados), o compound nao carrega o audio - o
+    AppendToTimeline "da certo", sai [SUCESSO] e a A1 fica sem som (ep4,
+    impostor_fantasma). Nesse caso o audio vem do clipe na A1 da
+    timeline-fonte, alinhado pela posicao na timeline.
+    """
+    def pelo_video(x):
+        return vlayer["left_offset"] + (x - clip_origin)
+    try:
+        nome = str(vlayer["mpi"].GetName() or "")
+    except Exception:
+        nome = ""
+    if not nome.lower().startswith("compound clip"):
+        return vlayer, pelo_video
+    try:
+        itens = src_tl.GetItemListInTrack("audio", 1) or []
+    except Exception as e:
+        print(f"[!] nao consegui ler a A1 da timeline-fonte ({e})")
+        itens = []
+    it = next((i for i in itens if i.GetMediaPoolItem()), None)
+    if not it:
+        print("[!] V1 e' compound clip e a A1 da timeline-fonte esta vazia - "
+              "usando o audio do compound (pode sair mudo)")
+        return vlayer, pelo_video
+    mpi = it.GetMediaPoolItem()
+    left_a, start_a = int(it.GetLeftOffset()), int(it.GetStart())
+    start_v = int(vlayer["src_item"].GetStart())
+
+    # x absoluto -> posicao na timeline-fonte -> frame do arquivo de audio
+    def pelo_audio(x):
+        return left_a + (start_v + (x - clip_origin) - start_a)
+    print(f"[i] V1 e' compound clip - audio tirado da A1 da timeline-fonte "
+          f"('{mpi.GetName()}', offset={left_a}, inicio={start_a})")
+    return {"mpi": mpi}, pelo_audio
+
+
 def media_base(pp, layer):
     """Frame do EPISODIO onde o frame 0 DA MIDIA da timeline-fonte cai.
 
@@ -1201,6 +1241,31 @@ def media_base(pp, layer):
         print(f"[!] cortes diferentes: ou abra a timeline do outro corte, ou "
               f"escolha o json deste. Nao adianta reposicionar o clipe.")
         return 0, None
+    # Compound clip: o nome ("Compound Clip 3") nao diz de que arquivo veio.
+    # Se o trecho do corte cabe exatamente nele (a partir do frame 0 do trecho
+    # o corte planejado inteiro fica dentro do compound), e' o trecho
+    # embrulhado - caso real do ep4/impostor_fantasma, 0 segmentos sem isto.
+    # Com base 0 os turnos (segundos absolutos do episodio) caem todos fora.
+    if base is not None and nome.lower().startswith("compound clip"):
+        try:
+            frames = int(layer["mpi"].GetClipProperty("Frames") or 0)
+        except Exception:
+            frames = 0
+        frames = frames or layer.get("duration") or 0
+        ini = (pp or {}).get("origin_frame")
+        dur = None
+        if pp and pp.get("range_start") is not None and pp.get("range_end") is not None:
+            dur = (float(pp["range_end"]) - float(pp["range_start"]))
+        fps_c = (pp or {}).get("fps")
+        cabe = (ini is not None and int(ini) >= int(base) and frames and
+                (dur is None or not fps_c or
+                 int(ini) + dur * float(fps_c) <= int(base) + frames + 1))
+        if cabe:
+            print(f"[!] a midia da timeline e' '{nome}' (compound clip) - "
+                  f"assumindo que embrulha o trecho do corte ('{esperado}', "
+                  f"comeca no frame {base} do episodio): o corte planejado "
+                  f"cabe nos {frames} frames dele")
+            return int(base), nome
     # nem o trecho do corte, nem o episodio: quase sempre e' o trecho
     # RENOMEADO (ou copiado pra outra pasta), e sem casar o nome o offset nao
     # e' compensado. Dizer isso aqui, com os dois nomes, em vez de deixar o
@@ -1348,7 +1413,10 @@ def main():
         if pp.get("name_to_track"):
             NAME_TO_TRACK = {k: int(v) for k, v in pp["name_to_track"].items()}
         if pp.get("off_camera_names") is not None:
-            OFF_CAMERA_NAMES = set(pp["off_camera_names"])
+            # o `no_name` puro entra sempre, igual ao _off_camera_names() do
+            # app.py: e' o rotulo de silencio que rodadas antigas carimbaram,
+            # e com as vozes numeradas (no_name1..N) ele nao estaria na lista.
+            OFF_CAMERA_NAMES = set(pp["off_camera_names"]) | {"no_name"}
         print(f"[i] pre_production: corte '{pp.get('corte')}' do projeto "
               f"'{pp.get('projeto')}'")
         print(f"[i] mapa de tracks vindo do {pp['fonte']}: {NAME_TO_TRACK}"
@@ -1754,15 +1822,15 @@ def main():
     audio_expected = 0
     if COPY_AUDIO:
         print("\n----- AUDIO -----")
-        base = layers[BASE_TRACK]
+        base, af = audio_source(src_tl, layers[BASE_TRACK], clip_origin)
         if SPLIT_AUDIO_BY_SPEAKER:
             while int(new_tl.GetTrackCount("audio")) < needed:
                 new_tl.AddTrack("audio")
             copy_track_attrs(src_tl, new_tl, "audio", min(needed, int(src_tl.GetTrackCount("audio"))))
             audio_clips = [{
                 "mediaPoolItem": base["mpi"],
-                "startFrame": base["left_offset"] + (s["a"] - clip_origin),
-                "endFrame": base["left_offset"] + (s["b"] - clip_origin),
+                "startFrame": af(s["a"]),
+                "endFrame": af(s["b"]),
                 "trackIndex": s["track"],
                 "recordFrame": s["rec"],
                 "mediaType": 2,          # audio only
@@ -1780,8 +1848,8 @@ def main():
             # o motivo de o caminho de clipe unico existir).
             audio_clips = [{
                 "mediaPoolItem": base["mpi"],
-                "startFrame": base["left_offset"] + (s["a"] - clip_origin),
-                "endFrame": base["left_offset"] + (s["b"] - clip_origin),
+                "startFrame": af(s["a"]),
+                "endFrame": af(s["b"]),
                 "trackIndex": 1,
                 "recordFrame": s["rec"],
                 "mediaType": 2,          # audio only
@@ -1795,8 +1863,8 @@ def main():
             audio_expected = 1
             added = mp.AppendToTimeline([{
                 "mediaPoolItem": base["mpi"],
-                "startFrame": base["left_offset"] + (range_a - clip_origin),
-                "endFrame": base["left_offset"] + (range_b - clip_origin),
+                "startFrame": af(range_a),
+                "endFrame": af(range_b),
                 "trackIndex": 1,
                 "recordFrame": tl_start,
                 "mediaType": 2,          # audio only

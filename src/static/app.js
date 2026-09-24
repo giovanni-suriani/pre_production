@@ -713,7 +713,9 @@ function wireWave() {
     const { w } = waveMetrics();
     const rect = c.getBoundingClientRect();
     const x = ev.clientX - rect.left;
-    if (ev.shiftKey) {
+    // Shift e ctrl deslocam a timeline. O preventDefault la em cima e' o que
+    // impede o ctrl+roda de virar zoom DA PAGINA no navegador.
+    if (ev.shiftKey || ev.ctrlKey || ev.metaKey) {
       const d = (S.view.b - S.view.a) * (ev.deltaY > 0 ? .12 : -.12);
       S.view.a += d; S.view.b += d; clampView(); draw();
     } else {

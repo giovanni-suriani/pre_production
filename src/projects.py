@@ -45,7 +45,56 @@ import config
 import timecode as tc
 
 SCHEMA = 1
+# O pseudo-corte do episodio inteiro - ver `list_cuts` e `app._legendona`.
+CORTE_COMPLETO = "Completo"
+
 OFF_CAMERA_DEFAULT = "no_name"
+# Quantas vozes SEM enquadramento o projeto aceita. Nao e' limite tecnico -
+# nem o SpeakerSwitch nem o diarizador se importam - e' o ponto em que a
+# pergunta "quem e' cada uma dessas?" deixa de ter resposta no editor, ja que
+# nenhuma delas aparece na imagem pra voce reconhecer.
+OFF_CAMERA_MAX = 4
+
+
+def off_camera_labels(n):
+    """Os rotulos de `n` vozes fora de quadro: no_name1, no_name2, ...
+
+    Numerado desde o primeiro de proposito: acrescentar uma segunda voz nao
+    pode renomear a que ja estava (`no_name` -> `no_name1`), senao todo
+    turns.json ja rotulado do projeto vira "nome desconhecido" no SpeakerSwitch.
+    Projeto antigo guarda `no_name` puro e continua valendo - ver
+    `clean_off_camera`, que nao reescreve nome que ja veio.
+    """
+    return [f"{OFF_CAMERA_DEFAULT}{i}" for i in range(1, int(n) + 1)]
+
+
+def clean_off_camera(off_camera, participants=()):
+    """Valida a lista de vozes fora de quadro que veio da tela.
+
+    Aceita nome ja existente como esta (nao renumera projeto antigo). Barra o
+    que quebraria o corte depois: repetido, ou igual ao nome de alguem na mesa
+    - dois rotulos iguais com destinos diferentes (track propria x BASE_TRACK)
+    e' decidido por ordem de dict, o que e' o mesmo que sorteio.
+    """
+    na_mesa = {str(x.get("name", "")).strip().lower()
+               for x in (participants or ())}
+    out, vistos = [], set()
+    for n in (off_camera or []):
+        n = str(n).strip()
+        if not n:
+            continue
+        if n.lower() in vistos:
+            raise ProjectError(f"voz fora de quadro repetida: {n}")
+        if n.lower() in na_mesa:
+            raise ProjectError(
+                f"{n} ja e' participante na mesa - uma voz fora de quadro "
+                f"precisa de nome proprio")
+        vistos.add(n.lower())
+        out.append(n)
+    if len(out) > OFF_CAMERA_MAX:
+        raise ProjectError(
+            f"no maximo {OFF_CAMERA_MAX} vozes fora de quadro (veio {len(out)})")
+    return out
 MANUAL_TRACK_NAME = "cut"          # nao e' pessoa: e' a track do corte manual
 SEATS = ["left", "center", "right", "offcam", "none"]
 
@@ -174,7 +223,11 @@ def new_project(name, source_video, participants, info, off_camera=None):
     # `[]` e' uma resposta legitima ("nao tem ninguem falando fora de quadro")
     # e precisa sobreviver: `or` a transformaria de volta no default e o
     # projeto voltaria a procurar uma voz a mais do que existe.
-    off = [OFF_CAMERA_DEFAULT] if off_camera is None else list(off_camera)
+    # quem NAO diz nada continua ganhando o `no_name` puro de sempre: o
+    # numero so aparece quando a tela pede N vozes. Mudar o default
+    # renomearia a voz de todo projeto criado pela API.
+    off = ([OFF_CAMERA_DEFAULT] if off_camera is None
+           else clean_off_camera(off_camera, parts))
 
     (d / "media").mkdir(parents=True, exist_ok=True)
     (d / "cortes").mkdir(parents=True, exist_ok=True)
@@ -283,12 +336,23 @@ def legendas_dir(slug, cut_name):
     return d
 
 
-def list_cuts(slug):
+def list_cuts(slug, incluir_completo=False):
+    """Os cortes do projeto - sem o pseudo-corte `Completo` por padrao.
+
+    `Completo` nao e' um corte: e' a pasta que o `_legendona` inventa pro
+    GiAutoSubs poder legendar o episodio inteiro (so' `giautosubs.py` sabe ler
+    uma PASTA de corte). Ele nasce com o minimo - sem `fps`, sem `audio`, sem
+    `track_map`, sem `speakers` - entao aparecer na lista da etapa 2 so' servia
+    pra ser clicado e estourar `KeyError: 'fps'` no servidor. Quem precisa dele
+    chama `load_cut` pelo nome, que continua funcionando.
+    """
     out = []
     d = cuts_dir(slug)
     if not d.is_dir():
         return out
     for c in sorted(d.iterdir()):
+        if c.name == CORTE_COMPLETO and not incluir_completo:
+            continue
         f = c / "corte.json"
         if f.is_file():
             try:

@@ -302,15 +302,34 @@ texto era fixo, escrito para as três cadeiras do `EpisodioPiloto`: num projeto
 de duas pessoas ele oferecia uma cadeira vazia e ainda dizia “N pessoas, uma
 delas pode estar fora de quadro” — e o modelo inventava um falante no centro.
 
-**Voz fora de quadro (`no_name`).** É uma caixa de seleção, ligada por padrão.
-Marcada, `no_name` entra na lista de vozes que a diarização vai procurar (é o
-caso do `EpisodioPiloto`: 3 na câmera + 1 fora); desmarcada, o projeto para de
-procurar uma voz a mais do que existe. `no_name` **não ganha track própria** e
-cai na V1, igual ao `OFF_CAMERA_NAMES` do SpeakerSwitch. Ele não é editável na
-lista de participantes de propósito: apagá-lo por engano faria toda fala fora de
-quadro virar erro de digitação em vez de cair onde deve.
+**Vozes fora de quadro (`no_name1`, `no_name2`…).** É um seletor de
+quantidade, de 0 a 4, começando em 1. Cada voz escolhida entra na lista que a
+diarização vai procurar (o `EpisodioPiloto` é 3 na câmera + 1 fora; uma mesa com
+dois produtores falando atrás da câmera é + 2). Nenhuma delas **ganha track
+própria** — todas caem na V1, igual ao `OFF_CAMERA_NAMES` do SpeakerSwitch. Não
+são editáveis na lista de participantes de propósito: apagar uma por engano
+faria toda fala fora de quadro virar erro de digitação em vez de cair onde deve.
 
-O número total (pessoas + fora de quadro) é o `speakers` que a etapa 2 já traz
+Os rótulos são numerados **desde o primeiro**. Acrescentar uma segunda voz não
+pode renomear a que já estava (`no_name` → `no_name1`), senão todo `turns.json`
+já rotulado do projeto viraria "nome desconhecido" no SpeakerSwitch — por isso
+`clean_off_camera` aceita o nome que já veio em vez de renumerar, e um projeto
+antigo continua guardando `no_name` puro.
+
+**Marcar silêncio não existe mais** (removido em 16/09/2026). Havia um
+`turns.fill_gaps()` que transformava todo vazio de ≥ 0,5 s num turno `no_name`,
+para o editor mostrar bloco em vez de buraco. Na prática era o contrário do que
+se quer: enchia a diarização de turnos mudos para apagar à mão, e tirava do
+SpeakerSwitch o "silêncio: remover", que acha o silêncio justamente pelo vazio
+ENTRE turnos. Agora onde ninguém fala simplesmente não há turno.
+
+O que ficou: `config.silence_label` (`no_name`), porque **arquivo já rodado tem
+esses turnos gravados** e eles precisam continuar sendo reconhecidos. Ele entra
+sempre em `off_camera_names` — sem isso o SpeakerSwitch aborta o corte inteiro
+com "nome desconhecido no json" no primeiro turno mudo antigo. E é por isso que
+ele tem cinza próprio (`#6b7280`), separado dos tons das vozes fora de quadro.
+
+O número total (pessoas + vozes fora de quadro) é o `speakers` que a etapa 2 já traz
 preenchido em **todo** corte novo do projeto — a tela mostra a conta escrita,
 para não se rodar procurando 3 vozes numa conversa de 2.
 

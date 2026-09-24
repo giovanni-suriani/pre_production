@@ -195,10 +195,21 @@ def main():
         check("3 vozes" in (page.js("document.getElementById('nVoices').textContent") or ""),
               "2 na mesa + a voz fora de quadro (ligada por padrao) = 3 vozes")
         page.js("(() => { const c = document.getElementById('nOffcam');"
-                " c.checked = false; c.onchange(); })()")
+                " c.value = '0'; c.onchange(); })()")
         page.pump(0.3)
         check("2 vozes" in (page.js("document.getElementById('nVoices').textContent") or ""),
-              "desligar a voz fora de quadro tira uma voz da conta")
+              "zerar as vozes fora de quadro tira uma voz da conta")
+        # mais de uma voz sem enquadramento: a conta tem que somar TODAS, senao
+        # o diarizador procura menos vozes do que existem e junta duas pessoas
+        # num rotulo so' (foi o caso que criou o campo)
+        page.js("(() => { const c = document.getElementById('nOffcam');"
+                " c.value = '3'; c.onchange(); })()")
+        page.pump(0.3)
+        check("5 vozes" in (page.js("document.getElementById('nVoices').textContent") or ""),
+              "2 na mesa + 3 fora de quadro = 5 vozes")
+        page.js("(() => { const c = document.getElementById('nOffcam');"
+                " c.value = '1'; c.onchange(); })()")
+        page.pump(0.3)
         page.js("(() => { const s = document.getElementById('nCount');"
                 " s.value = '3'; s.onchange(); })()")
         page.pump(0.3)

@@ -60,15 +60,30 @@ function setPartCount(container, n) {
    etapa 2 vai pedir ao diarizador (projects.default_speakers). Escrever isto
    na tela evita o caso que gerou tudo isto: rodar procurando 3 vozes numa
    conversa de 2. */
-function voicesNote(container, offcamOn) {
+function voicesNote(container, off) {
   // conta LINHAS, não nomes preenchidos: no formulário novo os campos começam
   // vazios e a nota precisa dizer o tamanho da mesa desde antes de digitar.
   const n = container.querySelectorAll('.row').length;
-  const off = offcamOn ? 1 : 0;
   const total = n + off;
   return `A diarização vai procurar <b>${total} ${total === 1 ? 'voz' : 'vozes'}</b>`
     + ` em todo corte deste projeto (${n} em quadro`
-    + (off ? ' + 1 fora de quadro' : ', ninguém fora de quadro') + ').';
+    + (off ? ` + ${off} fora de quadro` : ', ninguém fora de quadro') + ').';
+}
+
+/* Os rótulos das vozes sem enquadramento. Numerados desde a primeira - espelha
+   projects.off_camera_labels(); ver lá por que acrescentar a segunda não pode
+   renomear a primeira. OFFCAM_ATUAL guarda o que o projeto aberto JÁ tinha:
+   salvar sem mexer na quantidade preserva o nome gravado (um projeto antigo
+   guarda `no_name` puro, e renomear isso quebraria os turns.json dele). */
+let OFFCAM_ATUAL = [];
+
+function offcamLabels(n, atuais) {
+  if (atuais && atuais.length === n) return atuais.slice();
+  return Array.from({ length: n }, (_, i) => `no_name${i + 1}`);
+}
+
+function offcamCount(pref) {
+  return parseInt(el(pref + 'Offcam').value, 10) || 0;
 }
 
 function partRow(container, value) {
@@ -104,7 +119,7 @@ function readParts(container) {
 function syncVoices(pref) {
   const nota = el(pref + 'Voices');
   if (!nota) return;
-  nota.innerHTML = voicesNote(el(pref + 'Parts'), el(pref + 'Offcam').checked);
+  nota.innerHTML = voicesNote(el(pref + 'Parts'), offcamCount(pref));
   const sel = el(pref + 'Count');
   const n = el(pref + 'Parts').querySelectorAll('.row').length;
   if (sel && n >= 1 && n <= 4) sel.value = String(n);
@@ -173,7 +188,8 @@ async function openDetail(slug) {
   el('dSpecs').innerHTML = specsHtml(p.media || {});
   el('dTitle').value = p.name;
   fillParts(el('dParts'), p.participants);
-  el('dOffcam').checked = (p.off_camera || []).length > 0;
+  OFFCAM_ATUAL = (p.off_camera || []).slice();
+  el('dOffcam').value = String(Math.min(OFFCAM_ATUAL.length, 4));
   el('dSplit').checked = !!p.split_screen;
   syncVoices('d');
   const note = el('dAudioNote');
@@ -380,7 +396,7 @@ async function createProject() {
   try {
     const r = await apiPost('/api/projects', {
       name, source_video: NEW_SRC.path, participants,
-      off_camera: el('nOffcam').checked ? ['no_name'] : [],
+      off_camera: offcamLabels(offcamCount('n')),
     });
     toast(`projeto ${r.project.slug} criado — extraindo o áudio`);
     if (r.job) {
@@ -484,7 +500,7 @@ async function doctor() {
       await apiPatch(`/api/projects/${encodeURIComponent(SELECTED.slug)}`, {
         name: el('dTitle').value.trim(),
         participants: readParts(el('dParts')),
-        off_camera: el('dOffcam').checked ? ['no_name'] : [],
+        off_camera: offcamLabels(offcamCount('d'), OFFCAM_ATUAL),
         split_screen: el('dSplit').checked,
       });
       toast('projeto salvo');

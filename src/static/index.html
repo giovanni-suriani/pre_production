@@ -44,17 +44,20 @@
     <div class="field">
       <span class="lbl">Participantes</span>
       <div class="list" id="dParts"></div>
-      <label class="chk">
-        <input type="checkbox" id="dOffcam">
-        <span>tem voz fora de quadro (<code>no_name</code>)</span>
-      </label>
+      <select id="dOffcam" style="width:210px;margin-top:6px">
+          <option value="0">nenhuma voz fora de quadro</option>
+          <option value="1" selected>1 voz fora de quadro</option>
+          <option value="2">2 vozes fora de quadro</option>
+          <option value="3">3 vozes fora de quadro</option>
+          <option value="4">4 vozes fora de quadro</option>
+      </select>
       <p class="note" id="dVoices"></p>
       <div class="row">
         <button class="btn small" id="dAddPart">+ participante</button>
         <span class="sub" style="font-size:12px">
-          <code>no_name</code> é a voz fora de quadro — não ganha track própria
-          (cai na V1). Desmarque acima se esta gravação não tem ninguém falando
-          fora do quadro: assim a diarização para de procurar uma voz a mais.</span>
+          Voz <b>fora de quadro</b> (<code>no_name1</code>, <code>no_name2</code>…)
+          não ganha track própria — cai na V1. Escolha acima quantas são: é
+          exatamente quantas vozes a mais a diarização vai procurar.</span>
       </div>
     </div>
 
@@ -134,10 +137,13 @@
           <option value="3" selected>3 participantes</option>
           <option value="4">4 participantes</option>
         </select>
-        <label class="row" style="gap:6px;margin:0">
-          <input type="checkbox" id="nOffcam" checked>
-          <span>tem voz fora de quadro (<code>no_name</code>)</span>
-        </label>
+        <select id="nOffcam" style="width:210px">
+          <option value="0">nenhuma voz fora de quadro</option>
+          <option value="1" selected>1 voz fora de quadro</option>
+          <option value="2">2 vozes fora de quadro</option>
+          <option value="3">3 vozes fora de quadro</option>
+          <option value="4">4 vozes fora de quadro</option>
+        </select>
       </div>
       <p class="note" id="nVoices"></p>
     </div>

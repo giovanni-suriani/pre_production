@@ -53,6 +53,14 @@ STATIC = Path(__file__).resolve().parent / "static"
 PALETTE = ["#5b9cf8", "#f2a341", "#4ecb8f", "#e879b9", "#7dd3fc",
            "#c4b5fd", "#fca5a5", "#86efac", "#fcd34d"]
 
+# Vozes fora de quadro ficam FORA da PALETTE de proposito: cinza e a cor de
+# "nao tem ninguem na imagem". Mas com mais de uma voz sem enquadramento o
+# cinza unico deixaria de distinguir quem e quem no editor - entao sao tons
+# diferentes do mesmo cinza, ainda lidos como a mesma familia.
+# (o #6b7280 reservado fica de fora: ele e o rotulo de SILENCIO, e um vazio
+#  com a mesma cor da voz 1 e' um erro de leitura esperando pra acontecer)
+OFF_CAMERA_SHADES = ["#9ca3af", "#4b5563", "#d1d5db", "#374151"]
+
 app = FastAPI(title="pre_production")
 
 
@@ -376,7 +384,11 @@ def api_project_patch(slug: str, body: ProjectPatch):
             fail(400, "um projeto precisa de pelo menos um participante")
         p["participants"] = parts
     if body.off_camera is not None:
-        p["off_camera"] = list(body.off_camera)
+        try:
+            p["off_camera"] = P.clean_off_camera(body.off_camera,
+                                                 p["participants"])
+        except P.ProjectError as e:
+            fail(400, str(e))
     if body.split_screen is not None:
         p["split_screen"] = bool(body.split_screen)
     return {"project": P.save_project(p)}
@@ -612,23 +624,6 @@ def api_cut_new(slug: str, body: CutIn):
     return {"cut": cut, "job": job.id, "reused_transcript": reused}
 
 
-def _fill_silence(path, cut):
-    """Tapa os vazios do arquivo canonico com o rotulo de silencio.
-
-    Fica aqui, e nao dentro do `shift_file`, porque depende do TRECHO (cabeca
-    e cauda saem do corte, nao do arquivo) e porque so vale pra diarizacao -
-    quem chama e' que sabe se aquilo tem falante ou e' transcricao.
-    """
-    minimo = float(CFG.get("silence_min_seconds") or 0)
-    if minimo <= 0:
-        return 0
-    n = T.fill_gaps(path, cut["start"], cut["end"], fps=cut["fps"],
-                    minimo=minimo, nome=CFG.get("silence_label") or "no_name")
-    if n:
-        print(f"[i] {Path(path).name}: {n} vazio(s) de >= {minimo}s viraram "
-              f"'{CFG.get('silence_label')}'")
-    return n
-
 
 def _crop_entire_transcript(p, cut):
     """Reaproveita `entire_transcribe.json` no corte novo, recortando pelo
@@ -863,8 +858,6 @@ def _plan_run(slug, name, p, cut, m, options, out_name=None):
             raise RuntimeError(f"o script terminou mas nao gravou {raw_out.name}")
         nested = _rename_nested_raw(raw_out)
         n = T.shift_file(raw_out, final_out, offset, label_map, fps=cut["fps"])
-        if m["kind"] == "diarization":
-            n += _fill_silence(final_out, cut)
         summary = T.summarize(final_out, cut["fps"], CFG["min_span_frames"])
 
         c = P.load_cut(slug, name)
@@ -1074,8 +1067,16 @@ def _ensure_video(p, cut):
     label = (f"ffmpeg: remuxando o trecho de video "
              f"(keyframe em {tc.format_time(kf)}, {frames} frames antes do "
              f"corte, sem recodificar)")
+    # O `-ss` vai no INICIO DO CORTE, nao no keyframe: pedir o tempo exato do
+    # keyframe faz o ffmpeg voltar mais um GOP (ep4/impostor_fantasma: pediu
+    # 3144.0, o mkv comecou em 3136 - legenda 8 s adiantada no Resolve, medido
+    # por correlacao do audio). Entre `kf` e `start` nao ha outro keyframe,
+    # entao buscar em `start` cai exatamente em `kf`. O `-t` conta a partir do
+    # `-ss`, por isso a duracao e' a do corte; o preroll ate o kf vem de brinde.
+    busca = max(float(kf), float(cut["start"]))
     return [jobs.Step(label=label,
-                      cmd=media.cut_video_cmd(p["source_video"], dest, kf, dur),
+                      cmd=media.cut_video_cmd(p["source_video"], dest, busca,
+                                              cut["end"] - busca),
                       progress_kind="ffmpeg", total_seconds=dur)], float(kf)
 
 
@@ -1155,9 +1156,6 @@ def _finalize_orphans(slug, name, only=None):
         summary = T.summarize(final, cut["fps"], CFG["min_span_frames"])
         has_text = any((x.get("text") or "").strip() for x in items)
         kind = "transcript" if (has_text and not summary["labels"]) else "diarization"
-        if kind == "diarization":
-            n += _fill_silence(final, cut)
-            summary = T.summarize(final, cut["fps"], CFG["min_span_frames"])
         c = P.load_cut(slug, name)
         c["runs"] = [r for r in c.get("runs", []) if r["out"] != final.name]
         c["runs"].append({
@@ -1256,7 +1254,7 @@ def _rodar_giautosubs(argv, lua):
     return {"lua": str(lua), "lua_erro": None}
 
 
-CORTE_COMPLETO = "Completo"
+CORTE_COMPLETO = P.CORTE_COMPLETO   # o nome mora no projects.py, com o list_cuts que o esconde
 
 
 def _gerar_legendona(slug, transcript):
@@ -1563,12 +1561,21 @@ def _editor_prefs():
     })
 
 
+def _off_camera_names(p):
+    """Quem cai na BASE_TRACK: as vozes fora de quadro + o rotulo de silencio."""
+    out = list(p.get("off_camera", []))
+    silencio = CFG.get("silence_label")
+    if silencio and silencio not in out:
+        out.append(silencio)
+    return out
+
+
 def _colors_for(p, prefs):
     cols = dict(CFG["reserved_colors"])
     for i, x in enumerate(p["participants"]):
         cols[x["name"]] = PALETTE[i % len(PALETTE)]
-    for n in p.get("off_camera", []):
-        cols.setdefault(n, CFG["reserved_colors"]["no_name"])
+    for i, n in enumerate(p.get("off_camera", [])):
+        cols.setdefault(n, OFF_CAMERA_SHADES[i % len(OFF_CAMERA_SHADES)])
     cols.update(prefs.get("speaker_colors") or {})
     return cols
 
@@ -1604,7 +1611,13 @@ def editor_config():
         "speaker_order": prefs.get("speaker_order") or order,
         "manual_only_names": prefs.get("manual_only_names",
                                        [P.MANUAL_TRACK_NAME]),
-        "off_camera_names": list(p.get("off_camera", [])),
+        # o rotulo de silencio entra SEMPRE, mesmo que nao seja um dos
+        # nomes do projeto: rodada ANTIGA carimbou `no_name` nos vazios (o
+        # fill_gaps ja saiu), e com as vozes numeradas esse `no_name`
+        # nao estaria em lista nenhuma - o SpeakerSwitch aborta o corte
+        # inteiro com "nome desconhecido no json". Silencio nao tem track
+        # por definicao, entao o lugar dele eh aqui.
+        "off_camera_names": _off_camera_names(p),
     }
 
 
