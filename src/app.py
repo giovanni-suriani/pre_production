@@ -1546,10 +1546,21 @@ def api_project_audio_stream(slug: str, request: Request, file: str | None = Non
 # endpoints, com estes formatos. O que muda e' a origem: o "config" abaixo e'
 # derivado do corte ativo, nao lido de um arquivo fixo.
 
-def _active():
-    slug, name = CFG.get("active_project"), CFG.get("active_cut")
+def _alvo(projeto=None, corte=None):
+    """QUAL corte a etapa 3 esta editando, vindo da URL da requisicao.
+
+    O `?projeto=&corte=` e' montado pelo `goEditor` do cortes.js e repassado
+    em cada chamada pelo `comAlvo` do app.js. Enquanto isso morava no
+    config.json havia um corte ativo por SERVIDOR: duas abas brigavam, e o
+    `page_turns` precisava gravar o global antes de servir o HTML pra ganhar
+    a corrida com o primeiro /api/config.
+
+    O fallback no CFG existe so' durante a transicao - sai no passo 3.
+    """
+    slug = projeto or CFG.get("active_project")
+    name = corte or CFG.get("active_cut")
     if not slug or not name:
-        fail(409, "nenhum corte ativo - escolha um na etapa 2 (Cortes)")
+        fail(409, "nenhum corte na URL - abra o editor pela etapa 2 (Cortes)")
     return _guard(P.load_project, slug), _guard(P.load_cut, slug, name)
 
 
@@ -1580,14 +1591,13 @@ def _colors_for(p, prefs):
     return cols
 
 
-def editor_config():
-    """O config.json do turnsEditor, montado a partir do corte ativo.
+def editor_config(p, cut):
+    """O config.json do turnsEditor, montado a partir do corte da URL.
 
     `audio_offset` = inicio do corte: o wav fatiado comeca no zero e os turnos
     estao em tempo absoluto, entao a soma alinha os dois. Era exatamente esse
     numero que antes vivia sendo redescoberto a mao.
     """
-    p, cut = _active()
     d = P.cut_dir(p["slug"], cut["name"])
     prefs = _editor_prefs()
     order = ([x["name"] for x in p["participants"]]
@@ -1638,18 +1648,17 @@ def _extra_dirs():
     return out
 
 
-def _roots():
-    p, cut = _active()
+def _roots(p, cut):
     return [P.cut_dir(p["slug"], cut["name"]).resolve(),
             P.turns_dir(p["slug"], cut["name"]).resolve(),
             P.legendas_dir(p["slug"], cut["name"]).resolve(),
             (P.project_dir(p["slug"]) / "media").resolve()] + _extra_dirs()
 
 
-def _safe_path(name, must_exist=True):
+def _safe_path(p, cut, name, must_exist=True):
     if not name:
         fail(400, "nome de arquivo vazio")
-    roots = _roots()
+    roots = _roots(p, cut)
     q = Path(name)
     cands = [q] if q.is_absolute() else [r / name for r in roots]
     for c in cands:
@@ -1667,9 +1676,9 @@ def _safe_path(name, must_exist=True):
 
 
 @app.get("/api/config")
-def api_config():
-    cfg = editor_config()
-    p, cut = _active()
+def api_config(projeto: str | None = None, corte: str | None = None):
+    p, cut = _alvo(projeto, corte)
+    cfg = editor_config(p, cut)
     results = Path(cfg["results_dir"])
     turn_files = []
     # a pasta do corte primeiro (nome curto), depois as pastas extras. Nas
@@ -1703,7 +1712,7 @@ def api_config():
             "mtime": f.stat().st_mtime,
         })
     audios = []
-    for folder in _roots():
+    for folder in _roots(p, cut):
         for f in sorted(folder.glob("*.wav")):
             try:
                 audios.append(media.wav_info(f))
@@ -1750,8 +1759,10 @@ _PREF_KEYS = {"time_base", "display_zero", "speaker_colors", "speaker_order",
 
 
 @app.post("/api/config")
-def api_config_set(patch: ConfigPatch, clear: str = ""):
-    p, cut = _active()
+def api_config_set(patch: ConfigPatch, clear: str = "",
+                   projeto: str | None = None,
+                   corte: str | None = None):
+    p, cut = _alvo(projeto, corte)
     prefs = _editor_prefs()
     data = patch.model_dump(exclude_none=True)
     touched_cut = False
@@ -1773,13 +1784,15 @@ def api_config_set(patch: ConfigPatch, clear: str = ""):
             cut["origin_frame"] = tc.seconds_to_frame(cut["start"], cut["fps"])
         P.save_cut(p["slug"], cut)
     config.save(CFG)
-    return {"ok": True, "config": editor_config()}
+    return {"ok": True, "config": editor_config(p, cut)}
 
 
 @app.get("/api/turns")
-def api_turns(file: str = Query(...)):
-    path = _safe_path(file)
-    cfg = editor_config()
+def api_turns(file: str = Query(...), projeto: str | None = None,
+              corte: str | None = None):
+    p, cut = _alvo(projeto, corte)
+    path = _safe_path(p, cut, file)
+    cfg = editor_config(p, cut)
     data = _guard(T.load, path)
     data["issues"] = T.analyze(data["turns"], cfg["fps"], cfg["min_span_frames"])
     data["file"] = path.name
@@ -1807,11 +1820,12 @@ class SaveIn(BaseModel):
 
 
 @app.post("/api/turns")
-def api_save(body: SaveIn):
+def api_save(body: SaveIn, projeto: str | None = None,
+             corte: str | None = None):
     if not re.fullmatch(r"[\w.\-]+\.json", body.save_as):
         fail(400, "nome de destino invalido (algo como turnsMeuCorte.json, "
                   "sem barras)")
-    p, cut = _active()
+    p, cut = _alvo(projeto, corte)
     dest = P.turns_dir(p["slug"], cut["name"]) / body.save_as
     if dest.exists() and not body.overwrite:
         fail(409, f"{dest.name} ja existe - confirme a sobrescrita "
@@ -1835,8 +1849,10 @@ def api_save(body: SaveIn):
 
 
 @app.get("/api/transcript")
-def api_transcript(file: str | None = None, offset: float | None = None):
-    cfg = editor_config()
+def api_transcript(file: str | None = None, offset: float | None = None,
+                   projeto: str | None = None, corte: str | None = None):
+    p, cut = _alvo(projeto, corte)
+    cfg = editor_config(p, cut)
     name = file or cfg["transcript_file"]
     off = cfg["transcript_offset"] if offset is None else offset
     if not name:
@@ -1844,7 +1860,7 @@ def api_transcript(file: str | None = None, offset: float | None = None):
                 "error": "este corte ainda nao tem transcricao - rode o "
                          "metodo Whisper na etapa 2"}
     try:
-        path = _safe_path(name)
+        path = _safe_path(p, cut, name)
     except HTTPException:
         return {"segments": [], "file": name, "offset": off,
                 "error": f"transcricao nao encontrada: {name}"}
@@ -1878,9 +1894,11 @@ def _peaks_response(wav):
 
 
 @app.get("/api/peaks")
-def api_peaks(file: str | None = None):
-    cfg = editor_config()
-    return _peaks_response(_safe_path(file or cfg["audio_file"]))
+def api_peaks(file: str | None = None, projeto: str | None = None,
+              corte: str | None = None):
+    p, cut = _alvo(projeto, corte)
+    cfg = editor_config(p, cut)
+    return _peaks_response(_safe_path(p, cut, file or cfg["audio_file"]))
 
 
 def _audio_response(request, path):
@@ -1924,9 +1942,12 @@ def _audio_response(request, path):
 
 
 @app.api_route("/api/audio", methods=["GET", "HEAD"])
-def api_audio(request: Request, file: str | None = None):
-    cfg = editor_config()
-    return _audio_response(request, _safe_path(file or cfg["audio_file"]))
+def api_audio(request: Request, file: str | None = None,
+              projeto: str | None = None, corte: str | None = None):
+    p, cut = _alvo(projeto, corte)
+    cfg = editor_config(p, cut)
+    return _audio_response(request,
+                           _safe_path(p, cut, file or cfg["audio_file"]))
 
 
 # =========================================================== jobs
