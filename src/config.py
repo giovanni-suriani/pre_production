@@ -1,4 +1,4 @@
-"""Config do pre_production - caminhos, interpretadores e estado ativo.
+﻿"""Config do pre_production - caminhos, interpretadores e estado ativo.
 
 O app inteiro so escreve dentro de `projects_dir`. Tudo que fica fora dele
 (`sources_dir`, `scripts_dir`) e' so LEITURA: os videos-fonte sao do usuario e
@@ -67,11 +67,6 @@ DEFAULT_CONFIG = {
     # copiar arquivo pra ca. A tela da etapa 2 acrescenta pasta aqui sozinha
     # quando voce escolhe um arquivo no dialogo.
     "extra_turns_dirs": [],
-    # qual projeto/corte a etapa 3 (turnsEditor) esta olhando agora. Fica no
-    # servidor porque o app.js copiado do turnsEditor chama /api/config sem
-    # parametro nenhum - quem sabe o contexto e' o servidor, nao a pagina.
-    "active_project": None,
-    "active_cut": None,
     "port": 8740,
     # cores por participante sao geradas do nome; estas duas sao fixas porque
     # significam coisas, nao pessoas (ver README).
@@ -216,7 +211,76 @@ def save(cfg):
     tmp.replace(CONFIG_PATH)
 
 
+# ===================================================================== estado
+#
+# `config.json` e' CONFIGURACAO DA MAQUINA: caminhos, python_exe, fps_fallback.
+# Muda uma vez por instalacao e vale a pena versionar.
+#
+# `estado.json` e' SESSAO: onde voce parou, como a tela estava. Muda a cada
+# clique. Ficavam no mesmo arquivo, e isso tinha dois custos: o config.json
+# era reescrito (e aparecia no `git status`) a cada navegacao, e o
+# `active_project`/`active_cut` de la eram o ENDERECO da etapa 3 - um por
+# servidor, entao duas abas brigavam. O endereco agora vem da URL
+# (`?projeto=&corte=`); o que sobrou aqui e' so' lembranca, e perder nao
+# quebra nada.
+
+STATE_PATH = ROOT / "estado.json"
+
+DEFAULT_STATE = {
+    # onde voce parou - usado pela barra de etapas e pelo "continuar de onde
+    # parei". NAO e' o endereco de nenhuma rota.
+    "ultimo_projeto": None,
+    "ultimo_corte": None,
+    # preferencias do editor de turnos (base de tempo, cores, ordem)
+    "editor_prefs": {},
+}
+
+
+def load_state():
+    st = dict(DEFAULT_STATE)
+    if STATE_PATH.exists():
+        try:
+            st.update(json.loads(STATE_PATH.read_text(encoding="utf-8-sig")))
+        except Exception as e:
+            print(f"[!] estado.json ilegivel ({e}) - comecando do zero. "
+                  f"So' se perde 'onde eu parei'.")
+    return st
+
+
+def save_state(st):
+    tmp = STATE_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(st, indent=2, ensure_ascii=False),
+                   encoding="utf-8")
+    tmp.replace(STATE_PATH)
+
+
+def _migra_estado(cfg, st):
+    """Tira o active_project/active_cut/editor_prefs de um config.json antigo.
+
+    Roda uma vez: acha as chaves velhas, copia pro estado.json e regrava o
+    config sem elas. Sem isto, quem ja tinha o arquivo perderia calado a
+    ultima posicao e as cores dos falantes.
+    """
+    mexeu = False
+    for velho, novo in (("active_project", "ultimo_projeto"),
+                        ("active_cut", "ultimo_corte"),
+                        ("editor_prefs", "editor_prefs")):
+        if velho in cfg:
+            if cfg[velho] and not st.get(novo):
+                st[novo] = cfg.pop(velho)
+            else:
+                cfg.pop(velho)
+            mexeu = True
+    if mexeu:
+        save(cfg)
+        save_state(st)
+        print("[i] config.json: estado de sessao movido pro estado.json")
+    return cfg, st
+
+
 CONFIG = load()
+STATE = load_state()
+CONFIG, STATE = _migra_estado(CONFIG, STATE)
 load_env(CONFIG["scripts_dir"])   # depois do load: respeita scripts_dir do config
 
 

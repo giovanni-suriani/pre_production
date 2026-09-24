@@ -9,25 +9,14 @@
   "wav_channels": 1,
   "fps_fallback": 60.0,
   "min_span_frames": 2,
-  "silence_min_seconds": 0.5,
   "silence_label": "no_name",
   "extra_turns_dirs": [
     "D:\\CanalYtbe\\BatataQuente\\scriptsPrimarios\\resultados\\EpisodioPiloto"
   ],
-  "active_project": "ep4",
-  "active_cut": "impostor_fantasma",
   "port": 8740,
   "reserved_colors": {
     "no_name": "#6b7280",
     "cut": "#a78bfa"
   },
-  "editor_prefs": {
-    "time_base": "relative",
-    "display_zero": null,
-    "speaker_colors": {},
-    "speaker_order": null,
-    "manual_only_names": [
-      "cut"
-    ]
-  }
+  "silence_min_seconds": 0.5
 }

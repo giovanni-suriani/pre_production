@@ -28,6 +28,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import (FileResponse, JSONResponse, RedirectResponse,
@@ -45,6 +46,7 @@ import timecode as tc
 import turns as T
 
 CFG = config.CONFIG
+EST = config.STATE
 STATIC = Path(__file__).resolve().parent / "static"
 
 # paleta dos participantes. As duas reservadas ficam no config: cinza pro
@@ -98,37 +100,60 @@ def page_cuts():
 
 @app.get("/turnos")
 def page_turns(projeto: str | None = None, corte: str | None = None):
-    """Define o corte ativo ANTES de servir o HTML.
+    """Serve o editor. O corte vem da URL - nada e' guardado no servidor.
 
-    Tem que ser aqui: o app.js dispara /api/config assim que carrega, entao
-    setar o ativo por javascript depois seria uma corrida - as vezes o editor
-    abriria com o corte anterior.
+    Antes havia uma corrida aqui: o app.js dispara /api/config assim que
+    carrega, entao o "corte ativo" tinha que estar gravado no servidor ANTES
+    do HTML sair. Com `?projeto=&corte=` na URL, o proprio app.js repassa o
+    alvo em cada chamada (ver `comAlvo`) e a corrida deixa de existir.
+
+    Sem corte na URL nao ha o que editar - o editor abriria vazio, com todas
+    as chamadas voltando 409. Tenta o ultimo visitado; se ele tambem nao
+    servir (foi pra lixeira desde a ultima visita, por exemplo), manda pra
+    etapa 2, que e' onde a escolha e' feita.
     """
-    if projeto and corte:
-        _guard(P.load_cut, projeto, corte)
-        CFG["active_project"], CFG["active_cut"] = projeto, corte
-        config.save(CFG)
-    # sem corte ativo nao ha o que editar - o editor abriria vazio, com todas
-    # as chamadas dele voltando 409. Melhor mandar pra etapa 2, que e' onde a
-    # escolha e' feita. Acontece de verdade: basta o corte ativo ter ido pra
-    # lixeira desde a ultima visita.
-    if not (CFG.get("active_project") and CFG.get("active_cut")):
+    if not (projeto and corte):
+        projeto = EST.get("ultimo_projeto")
+        corte = EST.get("ultimo_corte")
+        if projeto and corte:
+            return RedirectResponse(
+                f"/turnos?projeto={quote(projeto)}&corte={quote(corte)}",
+                status_code=303)
         return RedirectResponse("/cortes", status_code=303)
+    try:
+        P.load_cut(projeto, corte)
+    except P.ProjectError:
+        return RedirectResponse("/cortes", status_code=303)
+    _lembrar(projeto, corte)
     return _page("turnos.html")
 
 
 # =========================================================== estado
 
+def _lembrar(slug, name):
+    """Guarda onde o usuario parou. E' conveniencia, nao endereco.
+
+    Quem diz em que corte uma rota opera e' a URL dela. Isto aqui so' alimenta
+    a barra de etapas e o "continuar de onde parei" - perder o arquivo nao
+    quebra nada, so' faz a proxima visita comecar na etapa 2.
+    """
+    if (EST.get("ultimo_projeto"), EST.get("ultimo_corte")) == (slug, name):
+        return
+    EST["ultimo_projeto"], EST["ultimo_corte"] = slug, name
+    config.save_state(EST)
+
+
 @app.get("/api/state")
 def api_state():
     active = None
-    if CFG.get("active_project") and CFG.get("active_cut"):
+    if EST.get("ultimo_projeto") and EST.get("ultimo_corte"):
         try:
-            p = P.load_project(CFG["active_project"])
-            c = P.load_cut(CFG["active_project"], CFG["active_cut"])
+            p = P.load_project(EST["ultimo_projeto"])
+            c = P.load_cut(EST["ultimo_projeto"], EST["ultimo_corte"])
             active = {"project": p, "cut": c}
         except P.ProjectError:
-            CFG["active_project"] = CFG["active_cut"] = None
+            EST["ultimo_projeto"] = EST["ultimo_corte"] = None
+            config.save_state(EST)
     return {"active": active,
             "projects_dir": CFG["projects_dir"],
             "scripts_dir": CFG["scripts_dir"],
@@ -145,8 +170,7 @@ class StateIn(BaseModel):
 @app.post("/api/state")
 def api_state_set(body: StateIn):
     _guard(P.load_cut, body.project, body.cut)
-    CFG["active_project"], CFG["active_cut"] = body.project, body.cut
-    config.save(CFG)
+    _lembrar(body.project, body.cut)
     return {"ok": True}
 
 
@@ -409,8 +433,9 @@ def api_project_delete(slug: str):
     trash.mkdir(exist_ok=True)
     dest = trash / f"{slug}-{datetime.now():%Y%m%d-%H%M%S}"
     shutil.move(str(d), str(dest))
-    if CFG.get("active_project") == slug:
-        CFG["active_project"] = CFG["active_cut"] = None
+    if EST.get("ultimo_projeto") == slug:
+        EST["ultimo_projeto"] = EST["ultimo_corte"] = None
+        config.save_state(EST)
         config.save(CFG)
     return {"ok": True, "moved_to": str(dest)}
 
@@ -747,8 +772,10 @@ def api_cut_delete(slug: str, name: str):
     trash.mkdir(exist_ok=True)
     dest = trash / f"{slug}-{name}-{datetime.now():%Y%m%d-%H%M%S}"
     shutil.move(str(d), str(dest))
-    if CFG.get("active_project") == slug and CFG.get("active_cut") == name:
-        CFG["active_cut"] = None
+    if (EST.get("ultimo_projeto") == slug
+            and EST.get("ultimo_corte") == name):
+        EST["ultimo_corte"] = None
+        config.save_state(EST)
         config.save(CFG)
     return {"ok": True, "moved_to": str(dest)}
 
@@ -1555,17 +1582,15 @@ def _alvo(projeto=None, corte=None):
     `page_turns` precisava gravar o global antes de servir o HTML pra ganhar
     a corrida com o primeiro /api/config.
 
-    O fallback no CFG existe so' durante a transicao - sai no passo 3.
     """
-    slug = projeto or CFG.get("active_project")
-    name = corte or CFG.get("active_cut")
+    slug, name = projeto, corte
     if not slug or not name:
         fail(409, "nenhum corte na URL - abra o editor pela etapa 2 (Cortes)")
     return _guard(P.load_project, slug), _guard(P.load_cut, slug, name)
 
 
 def _editor_prefs():
-    return CFG.setdefault("editor_prefs", {
+    return EST.setdefault("editor_prefs", {
         "time_base": "relative", "display_zero": None,
         "speaker_colors": {}, "speaker_order": None,
         "manual_only_names": [P.MANUAL_TRACK_NAME],
@@ -1765,7 +1790,7 @@ def api_config_set(patch: ConfigPatch, clear: str = "",
     p, cut = _alvo(projeto, corte)
     prefs = _editor_prefs()
     data = patch.model_dump(exclude_none=True)
-    touched_cut = False
+    touched_cut = touched_cfg = False
     for k, v in data.items():
         if k in _CUT_KEYS:
             cut[_CUT_KEYS[k]] = v
@@ -1774,6 +1799,7 @@ def api_config_set(patch: ConfigPatch, clear: str = "",
             prefs[k] = v
         elif k == "min_span_frames":
             CFG["min_span_frames"] = int(v)
+            touched_cfg = True
     # `clear` existe porque exclude_none nao distingue "nao mandei" de "quero
     # None" - e' assim que o botao "usar o primeiro turno" zera o display_zero
     for k in filter(None, clear.split(",")):
@@ -1783,7 +1809,12 @@ def api_config_set(patch: ConfigPatch, clear: str = "",
         if "fps" in data:
             cut["origin_frame"] = tc.seconds_to_frame(cut["start"], cut["fps"])
         P.save_cut(p["slug"], cut)
-    config.save(CFG)
+    # min_span_frames e' configuracao da maquina; o resto e' preferencia de
+    # tela. Cada um no seu arquivo - era a mistura dos dois que fazia o
+    # config.json ser reescrito a cada clique.
+    if touched_cfg:
+        config.save(CFG)
+    config.save_state(EST)
     return {"ok": True, "config": editor_config(p, cut)}
 
 

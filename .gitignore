@@ -12,3 +12,7 @@ projects/
 # linhas de ruido contra 277 de trabalho, medido em 23/09/2026).
 giautosubs/_gi*.log
 giautosubs/_gi*.txt
+
+# Estado de sessao: onde voce parou e como a tela estava. Muda a cada
+# clique -- o oposto do config.json, que e a configuracao da maquina.
+estado.json
