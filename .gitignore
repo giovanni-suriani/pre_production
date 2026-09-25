@@ -16,3 +16,7 @@ giautosubs/_gi*.txt
 # Estado de sessao: onde voce parou e como a tela estava. Muda a cada
 # clique -- o oposto do config.json, que e a configuracao da maquina.
 estado.json
+
+# Liga/desliga do hook Stop que roda a suite rapida (tests/hook_stop.sh).
+# E preferencia pessoal de quem clona, nao do projeto.
+.testes-auto
