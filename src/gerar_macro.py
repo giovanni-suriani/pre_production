@@ -92,6 +92,18 @@ import sys
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAIDA = os.path.join(_RAIZ, "giautosubs", "GiAutoSubs Caption.setting")
+
+# A VARIANTE `Fixo`: a caixa e' um RETANGULO de verdade, e nao a borda do Text+.
+#
+# Variante e nao opcao do macro unico, apesar de a fusao do macro 30 ter sido pelo
+# caminho oposto - e as duas decisoes estao certas. O que o 30 juntou eram
+# superconjuntos de CONTROLE, com custo zero pra quem nao usava. Esta muda o GRAFO
+# (nove tools a mais) e cobra render por frame: um Background solido + mascara +
+# Merge, tres vezes, em todo frame do clipe. Constante - nao cresce com palavra nem
+# com legenda -, mas nao e' zero, e quem nao quer caixa fixa nao tem por que pagar.
+#
+# `gerar_macro.py --fixo` -> `GiAutoSubs Fixo.setting`.
+COM_FIXO = False
 VENDOR = os.path.join(_RAIZ, "giautosubs", "vendor", "autosubs-macro.setting")
 
 # Mapa de elementos do Text+ (1 desenha na frente, 8 ao fundo).
@@ -121,35 +133,24 @@ GRUPO_BOLHA, GRUPO_CAIXA, GRUPO_SOMBRA, GRUPO_PALAVRA = 24, 25, 26, 27
 # mesmo grupo viram um widget so'.
 GRUPO_CAMADA3 = 28
 
-# A terceira cor da caixa e' uma VARIANTE, nao parte do macro padrao.
+# A terceira cor da caixa e o spin fazem parte do macro, SEMPRE.
 #
-# O `GiAutoSubs Caption` continua sendo o macro de sempre: quem nao usa caixa de
-# tres cores nao ganha um grupo a mais no Inspector, e um macro que ja mora
-# dentro de centenas de clipes nao muda de forma sem necessidade. A variante sai
-# com `--camada3`, num Title proprio (`GiAutoSubs 3color.setting`).
+# Foram variante (`--camada3` / `--spin`, cada uma num Title proprio) entre
+# 05/09 e 27/09 de 2026. Medido na hora de desfazer: as quatro variantes eram
+# uma cadeia de superconjuntos ESTRITOS - nenhuma tirava nada da anterior -, o
+# `TikTokNovo` tinha os mesmos 99 InstanceInput do Caption (diferia em 40
+# linhas, todas VALOR de Input: era um preset assado num Title), e
+# `BoxSpinSpeed = 0` ja' da' a caixa parada, porque `deslocar()` cai em `pin()`.
 #
-# Ligado, isto acrescenta: os controles do grupo `Box Layer 3`, a rotina
-# `camada3` do ApplyGiStyle, e a entrada [8] do LIGA no GiRebuildHighlight.
-COM_CAMADA3 = False
-
-# O spin e' uma variante DA variante: sai com `--spin` (que implica `--camada3`),
-# num Title proprio (`GiAutoSubs 3color_spinning.setting`). Acrescenta um
-# controle so' - `BoxSpinSpeed` - porque raio e fase da orbita ja' estao no
-# offset que o usuario ajustou. Em 0 o macro se comporta como o 3color.
-COM_SPIN = False
-
-_NOMES_SPIN = ("BoxSpinSpeed",)
-
-# Os nomes que a variante publica. Tem que sair das QUATRO listas juntas
-# (UserControls, InstanceInputs, LAYOUT, rodapes) - o validador recusa um
-# controle que exista numa e falte na outra, e e' assim que se descobre que
-# faltou tirar de alguma.
-_NOMES_CAMADA3 = (
-    "BoxLayer3Label", "BoxLayer3Enabled",
-    "BoxLayer3ColorRed", "BoxLayer3ColorGreen", "BoxLayer3ColorBlue",
-    "BoxLayer3CenterX", "BoxLayer3CenterY", "BoxLayer3Alpha",
-    "ApplyStyleBoxLayer3",
-)
+# Custo de existir desligado: ZERO por frame. O elemento 8 esta' fora do fade,
+# nao ha callback por controle desde o macro 11, e o custo medido deste projeto
+# e' o array de estilo por caractere - nenhum numero jamais foi atribuido a
+# controle publicado. O preco real e' uma linha no Inspector.
+#
+# O que a separacao cobrava: cinco recortes por marcador (a familia do
+# `str.replace` silencioso que custou o macro 16), quatro instalacoes e
+# validacoes por versao, e UM carimbo de versao para QUATRO variantes - escolher
+# o Title errado era silencioso. Nada disso existe mais.
 
 
 # --------------------------------------------------------------- utilidades
@@ -274,6 +275,31 @@ LOG_MAXIMO = 2 * 1024 * 1024
 # voce ajustou no Inspector vira a configuracao da proxima rodada sem passar
 # pelo estilos.json.
 PRESETS_DIR = os.path.join(_RAIZ, "giautosubs", "presets")
+
+# A PONTE pro Python, hardcoded como o LOG_MACRO e o PRESETS_DIR acima: um
+# caminho de maquina nao tem de onde ser descoberto dentro do Fusion, e um macro
+# que carrega o caminho errado avisa no log em vez de falhar calado.
+#
+# O `.venv` e nao o python do sistema: e' o interpretador do fluxo de trabalho do
+# projeto (ver o CLAUDE.md do giautosubs), e o do sistema nao tem as dependencias.
+PYTHON_EXE = os.path.join(_RAIZ, ".venv", "Scripts", "python.exe")
+GIAUTOSUBS_PY = os.path.join(_RAIZ, "src", "giautosubs.py")
+ESTILOS_JSON = os.path.join(_RAIZ, "estilos.json")
+
+# O recado do botao pro GiAutoSubs.lua: `chave<TAB>valor`, o mesmo formato do
+# `_giescolhas.txt` e dos presets.
+#
+# Por que um ARQUIVO e nao um argumento: quem recria os clipes e' o
+# `GiAutoSubs.lua`, e a unica forma de chama-lo de dentro do macro e' `dofile` -
+# que nao passa argumento nenhum. O arquivo e' lido UMA vez e apagado, senao a
+# proxima rodada manual herdaria as respostas de um clique antigo.
+PEDIDO = os.path.join(_RAIZ, "giautosubs", "_gipedido.txt")
+
+# Onde a saida do giautosubs.py e' despejada pro botao poder mostra-la no log.
+#
+# Arquivo em vez de pipe (`io.popen`): ler pipe na thread da interface do Resolve
+# e' um dos dois suspeitos do crash do macro 28, e o redirecionamento faz o mesmo.
+RELATO = os.path.join(_RAIZ, "giautosubs", "_girebuild.txt")
 
 # ATENCAO: nada de `[[ ]]` aqui dentro. Este trecho e' colado DENTRO de um
 # chunk que ja mora num `[[ ]]` do .setting - um `]]` no meio fecha a string do
@@ -551,7 +577,7 @@ end
 # por aqui, entao um checkbox que "nao surte efeito" deixa de ser possivel:
 # nao ha um segundo caminho onde ele pudesse se perder.
 _APPLY_GI = """
-return function(comp, tool, origem, spline)
+return function(comp, tool, origem, spline, soCaixa)
 	local template = comp:FindTool("Template") or tool
 	if not template then return end
 	origem = origem or "script"
@@ -654,7 +680,6 @@ __LOG_LUA__
 	-- nasce em 3, que e' so o CONTORNO do retangulo - nao serve pra bolha.
 	local BORDA = 2
 
-__SPIN_DEF__
 	-- O SPIN: as duas cores extras ORBITANDO o texto em vez de paradas.
 	--
 	-- Gira o DESLOCAMENTO, nao a geometria. Rotacionar o retangulo deixaria a
@@ -664,7 +689,7 @@ __SPIN_DEF__
 	-- e' o efeito parado de hoje, animado.
 	--
 	-- Raio e fase saem do offset que o usuario JA ajustou no Inspector - o par
-	-- (x,y) e' um vetor, tem os dois dentro. Por isso a variante acrescenta UM
+	-- (x,y) e' um vetor, tem os dois dentro. Por isso isto acrescenta UM
 	-- controle so', e `BoxSpinSpeed = 0` da' exatamente a caixa parada de hoje.
 	--
 	-- Os 180 graus entre a segunda e a terceira cor vem de graca: os dois
@@ -712,9 +737,283 @@ __SPIN_DEF__
 			end
 		end
 	end
-__FIM_SPIN_DEF__
+
+	-- CAIXA FIXA: a largura deixa de depender do texto.
+	--
+	-- O Text+ nao tem largura fixa - toda caixa em forma de BORDA acompanha a
+	-- extensao do texto no `Level` escolhido, e nao existe input pra desligar
+	-- isso. Entao largura fixa aqui e' COMPENSACAO: a caixa desenha sempre o
+	-- que uma linha CHEIA desenharia, e o que falta pra chegar la' entra nos
+	-- dois lados do `Extend Horizontal`. O tamanho na tela continua sendo dado
+	-- por `Size` + `Extend Horizontal` + `Extend Vertical`, como sem a opcao -
+	-- o que sai da conta e' o comprimento do texto.
+	--
+	-- "Linha cheia" e' o `Characters per Box` da aba Meta, o MESMO numero que
+	-- reparte as legendas (`quebra.max_chars` do giautosubs.py). Por isso a
+	-- caixa fixa e a aba Meta sao um trabalho so': mudar os caracteres por caixa
+	-- muda a largura da caixa junto, sem um segundo numero pra manter em dia.
+	--
+	-- `MetaCharWidth` e' quanto UM caractere vale na unidade do Extend. Ele e'
+	-- um controle calibravel, e nao uma constante no codigo, porque a unidade do
+	-- Extend e' relativa ao tamanho da fonte e nao ha como medi-la de fora do
+	-- Resolve (licenca nao-Studio): um numero errado escondido no gerador seria
+	-- um numero que ninguem consegue corrigir sem reinstalar o macro.
+	local function utf8_len(s)
+		-- Lua 5.1 nao tem `utf8.len` e `#s` conta BYTE: com acento a linha
+		-- pareceria mais larga do que e' e a caixa encolheria sozinha. Contar
+		-- os bytes que NAO sao continuacao (10xxxxxx) da' o numero de
+		-- caracteres - a mesma regua que o `max_chars` usa no Python.
+		local _, n = tostring(s):gsub("[^\\128-\\191]", "")
+		return n
+	end
+
+	-- A linha mais larga, nao o texto todo: a caixa envolve a LINHA (Level 1),
+	-- e com duas linhas o comprimento somado nao diz nada sobre a largura.
+	--
+	-- `GiTextOriginal` primeiro porque e' o texto antes do `Case`, que e' o que
+	-- o `GiApplyText` mantem em dia; ele tem o mesmo comprimento do que esta na
+	-- tela. Os dois inputs sao reserva pro clipe arrastado da aba Effects, que
+	-- nunca passou pelo script e nao tem esse dado.
+	local function linha_mais_larga()
+		local texto = template:GetData("GiTextOriginal")
+		if texto == nil then
+			pcall(function() texto = template:GetInput("StyledText") end)
+		end
+		if texto == nil then
+			pcall(function() texto = template:GetInput("Text") end)
+		end
+		local maior = 0
+		for linha in tostring(texto or ""):gmatch("[^\\r\\n]+") do
+			local n = utf8_len(linha)
+			if n > maior then maior = n end
+		end
+		return maior
+	end
+
+	-- Quantos PIXELS vale uma unidade de Extend.
+	--
+	-- Uma unidade de Extend e' a altura da fonte, e o `Size` do Text+ e' fracao da
+	-- ALTURA do frame - entao a conversao precisa da resolucao do comp. Num efeito
+	-- de Edit page o comp herda a resolucao da timeline.
+	--
+	-- Devolve nil quando nao da' pra saber: e' o que faz a caixa fixa cair no alvo
+	-- por caracteres em vez de inventar uma escala.
+	local function px_por_unidade()
+		-- O CONTROLE vence a estimativa.
+		--
+		-- `Px per Unit` (aba Meta) existe porque o fator abaixo e' palpite: a FORMA
+		-- da conta e' certa (uma unidade de Extend e' a altura da fonte, e `Size` e'
+		-- fracao da altura do frame), mas so' quem ve a tela sabe se o numero
+		-- bate - este projeto nao tem licenca Studio pra medir de fora.
+		--
+		-- Errar num controle se corrige em dois segundos; errar no gerador custa
+		-- reinstalar o macro, reiniciar o Resolve e trocar o Title do Media Pool.
+		local manual = tonumber(ctl("MetaPxPorUnidade", 0)) or 0
+		if manual > 0 then return manual end
+
+		local size, altura
+		pcall(function() size = template:GetInput("Size") end)
+		pcall(function() altura = comp:GetPrefs("Comp.FrameFormat.Height") end)
+		size = tonumber(size)
+		altura = tonumber(altura)
+		if not size or not altura or size <= 0 or altura <= 0 then return nil end
+		-- 0.578 e' MEDIDO, nao deduzido: em 27/09/2026 o usuario pediu uma caixa de
+		-- 346px de altura e saiu 200px com a escala `Size` x altura. A altura de uma
+		-- unidade de Extend nao e' o `Size` cheio - e' a altura do OLHO da fonte,
+		-- que e' uma fracao dele, e essa fracao depende da fonte.
+		--
+		-- Por isso o `Px per Unit` continua vencendo: outra fonte, outro numero.
+		return size * altura * 0.578
+	end
+
+	-- A largura do texto desta legenda, em EM.
+	--
+	-- `GiTextEm` e' MEDIDO na fonte de verdade pelo giautosubs.py (Pillow) e
+	-- carimbado no clipe. E' ele que faz a caixa fixa sair do MESMO tamanho em toda
+	-- legenda: a folga e' o que falta pro alvo, e com a largura certa a soma fecha
+	-- sempre no alvo. O palpite errava por muito - `19 x 0.5 = 9.5 em` contra
+	-- `10.61 em` medidos numa legenda de 19 caracteres.
+	--
+	-- Sem o carimbo (clipe arrastado da aba Effects, ou criado antes do macro 34)
+	-- cai no palpite `caracteres x Char Width`, avisando UMA vez: e' ele que faz as
+	-- caixas sairem de tamanhos diferentes, e o usuario precisa poder ligar o
+	-- sintoma a' causa.
+	local function largura_do_texto(em_por_char, chars)
+		local medido
+		pcall(function() medido = tonumber(template:GetData("GiTextEm")) end)
+		if medido and medido > 0 then return medido, true end
+		if not _G.GI_SEM_MEDIDA_AVISADO then
+			_G.GI_SEM_MEDIDA_AVISADO = true
+			diga("[GiAutoSubs] Fixed Box: this clip has no measured text width "
+				.. "(GiTextEm), so the box falls back to guessing "
+				.. "characters x Char Width - captions with different text will "
+				.. "come out with DIFFERENT widths. Recreate the captions with the "
+				.. "script to get the measured value.")
+		end
+		return chars * em_por_char, false
+	end
+
+	local function extend_h(prefixo)
+		local base = ctl(prefixo .. "ExtendHorizontal", 0)
+		-- So' a caixa do TEXTO. A bolha abraca a palavra falada - e' a graca
+		-- dela - e a sombra e a camada 3 COPIAM a geometria da caixa base
+		-- (invariante do macro 23), entao elas ficam fixas junto, sem controle
+		-- proprio e sem chance de desalinhar.
+		if prefixo ~= "TextBox" or ctl("TextBoxFixed", 0) ~= 1 then return base end
+		local em = ctl("MetaCharWidth", 0)
+		local maior = linha_mais_larga()
+
+		-- WIDTH EM PIXELS, quando voce deu um. E' o alvo mais direto que existe: o
+		-- tamanho na tela, sem passar por contagem de caractere.
+		--
+		-- Zero quer dizer "nao pedi largura": ai vale o alvo por CARACTERES (uma
+		-- linha cheia de `Characters per Box`), que e' o que o macro 25 fazia. Os
+		-- dois convivem de proposito - quem nao quer pensar em pixel nao precisa.
+		-- DAQUI PRA BAIXO o `base` (o valor do Extend) nao aparece mais: com a caixa
+		-- fixa, o controle `Extend Horizontal` esta' DESLIGADO, e usa-lo em qualquer
+		-- ramo faria o tamanho da caixa mudar conforme um slider que o rotulo diz
+		-- que nao vale. O unico `return base` que sobra e' o de la' de cima, quando
+		-- a caixa NAO e' fixa.
+		local largura_px = tonumber(ctl(prefixo .. "Width", 0)) or 0
+		if largura_px > 0 and maior > 0 then
+			local escala = px_por_unidade()
+			if escala then
+				local alvo_unidades = largura_px / escala
+				local texto_unidades = largura_do_texto(em, maior)
+				local falta = alvo_unidades - texto_unidades
+				-- Legenda MAIS larga que o alvo: sem folga (zero), e nao a folga do
+				-- Extend. Ela nao encolhe - caixa menor que o proprio texto seria
+				-- pior que caixa que vaza - mas tambem nao volta a obedecer o
+				-- controle desligado.
+				if falta <= 0 then return 0 end
+				return falta / 2
+			end
+			diga("[GiAutoSubs] Fixed Box: Width is in pixels, but the font Size or "
+				.. "the comp resolution could not be read - falling back to the "
+				.. "Characters per Box target")
+		end
+
+		-- Sem `Width`, o alvo e' uma linha CHEIA de `Characters per Box`. Aqui o
+		-- palpite e' inevitavel dos dois lados (o alvo tambem e' em caracteres),
+		-- entao ele e' coerente: a mesma regua mede o alvo e o texto.
+		local alvo = ctl("MetaCharsPerBox", 0)
+		if alvo <= 0 or em <= 0 or maior <= 0 then
+			diga("[GiAutoSubs] Fixed Box is on but there is nothing to measure "
+				.. "against (Width 0, Characters per Box " .. tostring(alvo)
+				.. ", Char Width " .. tostring(em) .. ", widest line "
+				.. tostring(maior) .. ") - the box gets NO padding. Set Width (px) "
+				.. "or Characters per Box.")
+			return 0
+		end
+		-- Legenda MAIS larga que o alvo nao encolhe. Caixa que vaza da tela e' o
+		-- sintoma de `max_chars` alto demais, e a unica coisa pior que o sintoma
+		-- seria esconde-lo: encolhendo aqui, a legenda larga ficaria com a caixa
+		-- menor que o proprio texto.
+		local falta = alvo - maior
+		if falta <= 0 then return 0 end
+		-- Sem o `base`: a largura da caixa fixa e' o alvo, e so'. Somar o Extend
+		-- aqui era o que fazia a caixa "fixa" mudar de tamanho junto com um slider
+		-- desligado.
+		return falta * em / 2
+	end
+
+	-- A ALTURA da caixa fixa, em pixels. Mesma conta da largura, com uma diferenca:
+	-- a altura do texto nao depende do texto - uma linha e' UMA unidade de Extend.
+	-- Por isso ela nao precisa medir nada, e por isso a caixa nunca "pula" de
+	-- altura de legenda pra legenda.
+	--
+	-- Com duas linhas (`Lines` = 2) a altura do texto sao duas unidades; o numero
+	-- vem da aba Meta, que e' quem sabe com quantas linhas as legendas foram
+	-- repartidas.
+	local function extend_v(prefixo)
+		local base = ctl(prefixo .. "ExtendVertical", 0)
+		-- Caixa livre: manda o Extend, como sempre.
+		if prefixo ~= "TextBox" or ctl("TextBoxFixed", 0) ~= 1 then return base end
+
+		-- Caixa FIXA: o Extend Vertical esta' desligado. Sem `Height` nao ha alvo, e
+		-- a resposta e' ZERO (a caixa abraca o texto) e nao o valor do controle -
+		-- senao "desligado" seria mentira, e a altura mudaria com um slider que o
+		-- rotulo diz que nao vale. O log pede o numero que falta.
+		local altura_px = tonumber(ctl(prefixo .. "Height", 0)) or 0
+		if altura_px <= 0 then
+			diga("[GiAutoSubs] Fixed Box is on and Height (px) is 0 - the box gets "
+				.. "no vertical padding (Extend Vertical does not apply to a fixed "
+				.. "box). Set Height (px).")
+			return 0
+		end
+		local escala = px_por_unidade()
+		if not escala then
+			diga("[GiAutoSubs] Fixed Box: Height is in pixels, but the font Size or "
+				.. "the comp resolution could not be read - no vertical padding")
+			return 0
+		end
+		local linhas = math.max(1, math.floor(tonumber(ctl("MetaLines", 1)) or 1))
+		local falta = (altura_px / escala) - linhas
+		if falta <= 0 then return 0 end
+		return falta / 2
+	end
+
+	-- DESABILITAR o Extend na interface quando a caixa e' fixa.
+	--
+	-- Os macros de FABRICA nao fazem isso declarativamente (nenhum `IC_Visible` nem
+	-- `INP_Disabled` nos 417 `.setting` do Templates.drfx; os que tem UI reativa
+	-- usam `INPS_ExecuteOnChange`, 44 vezes). Entao o caminho e' `SetAttrs` em
+	-- tempo de execucao, daqui - que e' chamado tambem pelo callback do preview, e
+	-- portanto no instante em que voce marca o checkbox.
+	--
+	-- No MACRO e no Text+: o Inspector do clipe mostra os `InstanceInput` do
+	-- MacroOperator, mas o UserControl vive no Text+ - e qual dos dois manda no
+	-- atributo nao esta' documentado. Escrever nos dois custa duas chamadas.
+	--
+	-- LE DE VOLTA e diz no log, uma vez por sessao: isto nao da' pra testar fora do
+	-- Resolve, e um "desabilita" que nao desabilita e' pior que nao tentar - o
+	-- usuario precisa saber qual dos dois aconteceu.
+	local function ui_extend(fixa)
+		local alvos = {}
+		if macro then alvos[#alvos + 1] = macro end
+		if template and template ~= macro then alvos[#alvos + 1] = template end
+		local colou = nil
+		for _, alvo in ipairs(alvos) do
+			for _, chave in ipairs({ "TextBoxExtendHorizontal",
+				"TextBoxExtendVertical" }) do
+				pcall(function()
+					alvo[chave]:SetAttrs({ INP_Disabled = fixa, IC_Visible = not fixa })
+				end)
+				pcall(function()
+					local at = alvo[chave]:GetAttrs()
+					if at ~= nil then
+						colou = (at.INP_Disabled == fixa) or (at.IC_Visible == (not fixa))
+					end
+				end)
+			end
+		end
+		if colou ~= nil and not _G.GI_UI_AVISADO then
+			_G.GI_UI_AVISADO = true
+			if colou then
+				diga("[GiAutoSubs] Extend Horizontal/Vertical greyed out in the "
+					.. "Inspector while Fixed Box is on (SetAttrs works here).")
+			else
+				diga("[GiAutoSubs] NOTE: this Fusion build ignores SetAttrs on a "
+					.. "macro input, so Extend Horizontal/Vertical stay clickable "
+					.. "while Fixed Box is on. They have NO effect - the label says "
+					.. "'(free box)' for that reason.")
+			end
+		end
+	end
 
 	local function caixa(n, prefixo, ligada)
+		-- MODO SO'-A-CAIXA: e' o preview do slider (`Width`/`Height`/`Fixed Box`).
+		-- Escreve os dois Extend e mais nada - nem Enabled, nem cor, nem forma.
+		-- Custa 12 escritas no pior caso e ZERO por frame, o que e' o que permite
+		-- ele rodar a cada valor intermediario de um arrasto.
+		if soCaixa then
+			if not ligada then return end
+			if not (n == __EL_BOLHA__ and ctl("BubblePopEnabled", 0) == 1) then
+				pin(n, "ExtendHorizontal", extend_h(prefixo))
+				pin(n, "ExtendVertical", extend_v(prefixo))
+			end
+			return
+		end
 		pin(n, "Enabled", ligada and 1 or 0)
 		if not ligada then return end
 		-- ElementShape ANTES da geometria: Level/Extend/Round so existem pra
@@ -729,8 +1028,8 @@ __FIM_SPIN_DEF__
 		-- de keyframes (o `GiRebuildHighlight` monta), e escrever um numero num
 		-- input conectado e' aceito e ignorado - ou pior, derruba a conexao.
 		if not (n == __EL_BOLHA__ and ctl("BubblePopEnabled", 0) == 1) then
-			pin(n, "ExtendHorizontal", ctl(prefixo .. "ExtendHorizontal", 0))
-			pin(n, "ExtendVertical", ctl(prefixo .. "ExtendVertical", 0))
+			pin(n, "ExtendHorizontal", extend_h(prefixo))
+			pin(n, "ExtendVertical", extend_v(prefixo))
 		end
 		pin(n, "Round", ctl(prefixo .. "Round", 0.2))
 	end
@@ -739,6 +1038,12 @@ __FIM_SPIN_DEF__
 	-- deslocamento. Sombra de tamanho diferente entrega que sao dois
 	-- elementos empilhados em vez de uma caixa com sombra.
 	local function sombra(n, prefixo, ligada)
+		if soCaixa then
+			if not ligada then return end
+			pin(n, "ExtendHorizontal", extend_h(prefixo))
+			pin(n, "ExtendVertical", extend_v(prefixo))
+			return
+		end
 		pin(n, "Enabled", ligada and 1 or 0)
 		if not ligada then return end
 		pin(n, "ElementShape", BORDA)
@@ -748,16 +1053,11 @@ __FIM_SPIN_DEF__
 		pin(n, "Opacity", ctl("BoxShadowOpacity", 0.55))
 		pin(n, "Softness", ctl("BoxShadowSoftness", 2))
 		pin(n, "Level", ctl(prefixo .. "Level", 2))
-		pin(n, "ExtendHorizontal", ctl(prefixo .. "ExtendHorizontal", 0))
-		pin(n, "ExtendVertical", ctl(prefixo .. "ExtendVertical", 0))
+		pin(n, "ExtendHorizontal", extend_h(prefixo))
+		pin(n, "ExtendVertical", extend_v(prefixo))
 		pin(n, "Round", ctl(prefixo .. "Round", 0.2))
 		-- Offset, nao Position: Position e' coordenada ABSOLUTA e joga o
 		-- elemento pro canto da tela.
-__SEM_SPIN_SOMBRA__
-		pin(n, "Offset", { ctl("BoxShadowCenterX", 0.005),
-			ctl("BoxShadowCenterY", -0.007) })
-__FIM_SEM_SPIN_SOMBRA__
-__SPIN_SOMBRA__
 		-- So' a caixa do TEXTO orbita. O elemento __EL_BOLHA_SOMBRA__ e' a
 		-- sombra da BOLHA, que acompanha a palavra falada e vive um instante -
 		-- girar junto seria ruido, nao efeito.
@@ -768,10 +1068,8 @@ __SPIN_SOMBRA__
 			pin(n, "Offset", { ctl("BoxShadowCenterX", 0.005),
 				ctl("BoxShadowCenterY", -0.007) })
 		end
-__FIM_SPIN_SOMBRA__
 	end
 
-__CAMADA3_DEF__
 	-- A TERCEIRA cor da caixa (elemento 8). Mesma forma da `sombra` acima, e de
 	-- proposito: as tres camadas so' podem diferir em COR e em OFFSET. Se o
 	-- Level, os dois Extend ou o Round divergirem, o deslocamento deixa de ser
@@ -783,6 +1081,12 @@ __CAMADA3_DEF__
 	-- os elementos 5..8 nao estao nele. Escrever `Opacity8` aqui nao ligaria a
 	-- camada no fade - so' gastaria o input que sobraria pra isso um dia.
 	local function camada3(n, prefixo, ligada)
+		if soCaixa then
+			if not ligada then return end
+			pin(n, "ExtendHorizontal", extend_h(prefixo))
+			pin(n, "ExtendVertical", extend_v(prefixo))
+			return
+		end
 		pin(n, "Enabled", ligada and 1 or 0)
 		if not ligada then return end
 		-- Os elementos 5..8 nascem em forma de TEXTO. Sem esta linha o Text+
@@ -793,24 +1097,145 @@ __CAMADA3_DEF__
 		pin(n, "Blue", ctl("BoxLayer3ColorBlue", 0.65))
 		pin(n, "Alpha", ctl("BoxLayer3Alpha", 1))
 		pin(n, "Level", ctl(prefixo .. "Level", 2))
-		pin(n, "ExtendHorizontal", ctl(prefixo .. "ExtendHorizontal", 0))
-		pin(n, "ExtendVertical", ctl(prefixo .. "ExtendVertical", 0))
+		pin(n, "ExtendHorizontal", extend_h(prefixo))
+		pin(n, "ExtendVertical", extend_v(prefixo))
 		pin(n, "Round", ctl(prefixo .. "Round", 0.2))
-__SEM_SPIN_CAMADA3__
-		pin(n, "Offset", { ctl("BoxLayer3CenterX", -0.005),
-			ctl("BoxLayer3CenterY", 0.007) })
-__FIM_SEM_SPIN_CAMADA3__
-__SPIN_CAMADA3__
 		deslocar(n, ctl("BoxLayer3CenterX", -0.005),
 			ctl("BoxLayer3CenterY", 0.007))
-__FIM_SPIN_CAMADA3__
 	end
-__FIM_CAMADA3_DEF__
+
+	-- A CAIXA COMO RETANGULO (macro `Fixo`).
+	--
+	-- Existe quando o comp tem `GiBoxMask1`. E' a caixa que NAO olha o texto: o
+	-- tamanho vem de `Width (px)`/`Height (px)` e mais nada - sem `Char Width`, sem
+	-- `Px per Unit`, sem medir fonte. Era o pedido: "nao usa tamanho do texto para
+	-- nada para renderizar a text-box".
+	--
+	-- As tres camadas empilhadas sao as mesmas cores do macro normal: 1 = TextBox,
+	-- 2 = BoxShadow (que no 3color e' cor, nao sombra), 3 = BoxLayer3. Os offsets
+	-- X/Y de cada uma continuam sendo os controles que ja existiam.
+	--
+	-- RESSALVA que nao da' pra verificar daqui (licenca nao-Studio): o `Height` de
+	-- um RectangleMask pode ser relativo a' LARGURA do frame em vez da altura,
+	-- conforme a versao. Se for, a altura sai errada pelo fator de aspecto (1,78 num
+	-- 1080x1920) - o log diz o que foi escrito, e o conserto e' uma linha.
+	-- O SPIN na caixa-retangulo: o mesmo giro do `expressao_spin` (o offset do
+	-- Inspector da' raio e fase, `Template.BoxSpinSpeed` da' a velocidade, `time`
+	-- da timeline da' a fase de cada legenda), aplicado ao CENTRO da mascara. Sem
+	-- isto o `Fixo` desligava os elementos 7/8 do Text+ - onde o giro morava - e
+	-- a caixa fixa saia parada mesmo com Spin Speed ligado (queixa de 28/09).
+	--
+	-- Em PIXELS, nao na coordenada normalizada: Center e' fracao da largura em x
+	-- e da altura em y, entao um circulo em normalizado vira elipse 1,78x mais
+	-- larga num 16:9. O offset e' convertido pra px, gira, e volta dividido por
+	-- lw/lh. Com giro 0 a posicao inicial e' a mesma da caixa parada.
+	--
+	-- CUSTO: por frame, uma expressao trivial por camada (cos/sin), CONSTANTE -
+	-- nada no array por caractere. Ver feedback-custo-playback.
+	local girando = 0
+	local function centro_da_camada(mask, cx, cy, ox, oy, lw, lh)
+		local velocidade = tonumber(ctl("BoxSpinSpeed", 0)) or 0
+		local dx, dy = ox * lw, oy * lh
+		local raio = math.sqrt(dx * dx + dy * dy)
+		-- A expressao sai ANTES, sempre: numero escrito em input com expressao
+		-- e' aceito e ignorado (a armadilha do `deslocar`).
+		pcall(function() mask.Center:SetExpression(nil) end)
+		if velocidade == 0 or raio < 1e-6 then
+			um(mask, "Center", { cx + ox, cy + oy })
+			return
+		end
+		local fase = math.deg(math.atan2(dy, dx))
+		local expr = string.format(
+			"Point(%.6f + %.4f*cos((Template.BoxSpinSpeed*time+%.4f)*pi/180)/%d,"
+			.. " %.6f + %.4f*sin((Template.BoxSpinSpeed*time+%.4f)*pi/180)/%d)",
+			cx, raio, fase, lw, cy, raio, fase, lh)
+		pcall(function() mask.Center:SetExpression(expr) end)
+		escritos = escritos + 1
+		girando = girando + 1
+	end
+
+	local function retangulo()
+		local mask1 = comp:FindTool("GiBoxMask1")
+		if not mask1 then return false end
+		girando = 0
+
+		local lw, lh
+		pcall(function() lw = comp:GetPrefs("Comp.FrameFormat.Width") end)
+		pcall(function() lh = comp:GetPrefs("Comp.FrameFormat.Height") end)
+		lw, lh = tonumber(lw) or 1920, tonumber(lh) or 1080
+
+		local largura_px = tonumber(ctl("TextBoxWidth", 0)) or 0
+		local altura_px = tonumber(ctl("TextBoxHeight", 0)) or 0
+		-- Zero nao e' tamanho: sem numero, a caixa ficaria invisivel e pareceria
+		-- que o macro nao funciona. Um quarto da tela e' palpite declarado, e o
+		-- log pede o numero.
+		if largura_px <= 0 or altura_px <= 0 then
+			diga("[GiAutoSubs] fixed box: Width (px) and Height (px) are 0 - "
+				.. "nothing to draw. Set them in the Text Box group (this macro "
+				.. "draws a real rectangle, so the size is yours to give).")
+			largura_px = largura_px > 0 and largura_px or lw * 0.25
+			altura_px = altura_px > 0 and altura_px or lh * 0.06
+		end
+
+		local centro = ctl("TextPosition", { 0.5, 0.22 })
+		local cx = (type(centro) == "table" and centro[1]) or 0.5
+		local cy = (type(centro) == "table" and centro[2]) or 0.22
+
+		local ligada = ctl("TextBoxEnabled", 0) == 1
+		local camadas = {
+			{ mask = "GiBoxMask1", bg = "GiBoxBG1", pref = "TextBox",
+			  liga = ligada, ox = 0, oy = 0,
+			  alpha = ctl("TextBoxOpacity", 1) },
+			{ mask = "GiBoxMask2", bg = "GiBoxBG2", pref = "BoxShadow",
+			  liga = ligada and ctl("BoxShadowOnNormal", 0) == 1,
+			  ox = ctl("BoxShadowCenterX", 0), oy = ctl("BoxShadowCenterY", 0),
+			  alpha = ctl("BoxShadowOpacity", 1) },
+			{ mask = "GiBoxMask3", bg = "GiBoxBG3", pref = "BoxLayer3",
+			  liga = ligada and ctl("BoxLayer3Enabled", 0) == 1,
+			  ox = ctl("BoxLayer3CenterX", 0), oy = ctl("BoxLayer3CenterY", 0),
+			  alpha = ctl("BoxLayer3Alpha", 1) },
+		}
+
+		for _, c in ipairs(camadas) do
+			local mask, bg = comp:FindTool(c.mask), comp:FindTool(c.bg)
+			if mask and bg then
+				-- Camada desligada = alpha ZERO. Nao existe `Enabled` num
+				-- Background, e apagar o tool tiraria ele do grafo (e da' pra
+				-- religar depois) - alpha zero custa o mesmo render e volta.
+				local a = c.liga and (tonumber(c.alpha) or 1) or 0
+				um(bg, "TopLeftRed", ctl(c.pref .. "ColorRed", 0))
+				um(bg, "TopLeftGreen", ctl(c.pref .. "ColorGreen", 0))
+				um(bg, "TopLeftBlue", ctl(c.pref .. "ColorBlue", 0))
+				um(bg, "TopLeftAlpha", a)
+				um(mask, "MaskWidth", lw)
+				um(mask, "MaskHeight", lh)
+				um(mask, "Width", largura_px / lw)
+				um(mask, "Height", altura_px / lh)
+				um(mask, "CornerRadius", ctl("TextBoxRound", 0))
+				centro_da_camada(mask, cx, cy, tonumber(c.ox) or 0,
+					tonumber(c.oy) or 0, lw, lh)
+			end
+		end
+		if girando > 0 then
+			diga(string.format("[GiAutoSubs] fixed box: %d colour layer(s) orbiting "
+				.. "at Spin Speed %s deg/frame", girando, tostring(ctl("BoxSpinSpeed", 0))))
+		end
+
+		diga(string.format("[GiAutoSubs] fixed box (rectangle): %dx%dpx at "
+			.. "%.3f,%.3f on a %dx%d frame - the caption text does not affect it",
+			math.floor(largura_px + 0.5), math.floor(altura_px + 0.5), cx, cy,
+			lw, lh))
+		return true
+	end
 
 	-- Um Lock so' pra escrita: sem ele o Fusion re-avalia a arvore a cada
 	-- SetInput, e sao dezenas por disparo. O Unlock tem que acontecer mesmo se
 	-- algo levantar no meio, senao a composicao fica travada na cara do
 	-- usuario - dai o pcall em volta.
+	-- Antes do Lock: mexer em atributo de interface nao e' render, e o Lock existe
+	-- pra agrupar as escritas de INPUT.
+	ui_extend(ctl("TextBoxFixed", 0) == 1)
+
 	local travou = pcall(function() comp:Lock() end)
 	local ok, erro = pcall(function()
 		local bolha = ctl("BubbleEnabled", 0) == 1
@@ -818,18 +1243,36 @@ __FIM_CAMADA3_DEF__
 		sombra(__EL_BOLHA_SOMBRA__, "Bubble", bolha and ctl("BoxShadowOnHighlight", 0) == 1)
 
 		local cx = ctl("TextBoxEnabled", 0) == 1
+
+		-- No macro `Fixo` quem desenha a caixa e' o RETANGULO, e os elementos
+		-- 6/7/8 do Text+ ficam desligados: dois lugares desenhando a mesma caixa
+		-- seria o problema de duas verdades, com a diferenca de que uma delas
+		-- acompanha o texto - justamente o que esta variante veio tirar.
+		local por_retangulo = retangulo()
+		if por_retangulo then cx = false end
+
 		caixa(__EL_CAIXA__, "TextBox", cx)
 		sombra(__EL_CAIXA_SOMBRA__, "TextBox", cx and ctl("BoxShadowOnNormal", 0) == 1)
-__CAMADA3_CALL__
 		-- Depende da caixa: terceira cor de caixa que nao existe nao e' nada.
-		camada3(__EL_CAMADA3__, "TextBox", cx and ctl("BoxLayer3Enabled", 0) == 1)
-__FIM_CAMADA3_CALL__
+		camada3(__EL_CAMADA3__, "TextBox",
+			cx and ctl("BoxLayer3Enabled", 0) == 1)
 	end)
 	if travou then pcall(function() comp:Unlock() end) end
 	if not ok then
 		diga("[GiAutoSubs] " .. origem .. " -> ApplyGiStyle FAILED: " .. tostring(erro))
 		return
 	end
+
+	-- O PREVIEW PARA AQUI.
+	--
+	-- Sem spline e sem GiBubblePop: sao as duas metades caras (o array de estilo
+	-- por caractere e' quadratico nas palavras), e sao justamente as que o preview
+	-- nao precisa - arrastar `Width` nao muda cor de palavra nenhuma. E' isto que
+	-- faz o custo por FRAME deste recurso ser zero.
+	--
+	-- E sem log: ~40 disparos por arrasto encheriam o `_gimacro.log` de linhas
+	-- iguais, que foi metade do motivo de os callbacks terem morrido no macro 11.
+	if soCaixa then return end
 
 	-- E por ultimo o spline. Num elemento ANIMADO a cor mora no array de
 	-- keyframe, que vence os inputs do Text+ e do Follower1 - entao mexer no
@@ -988,13 +1431,11 @@ __LOG_LUA__
 		[5] = { "BubbleEnabled", "BoxShadowOnHighlight" },
 		[6] = { "TextBoxEnabled" },
 		[7] = { "TextBoxEnabled", "BoxShadowOnNormal" },
-__CAMADA3_LIGA__
 		-- Hoje nenhum estilo anima a terceira cor (ela e' estatica, como a
 		-- caixa). A entrada existe pra que, no dia em que um animar, o checkbox
 		-- valha - sem ela o array devolveria `Enabled8 = 1` por cima do input,
 		-- que e' exatamente o bug que a bolha teve.
 		[8] = { "TextBoxEnabled", "BoxLayer3Enabled" },
-__FIM_CAMADA3_LIGA__
 	}
 	-- Resolvido UMA vez por camada, nao por palavra: o laco abaixo e' N x N x
 	-- camadas, e uma leitura de input ali dentro se multiplica por tudo isso.
@@ -1095,6 +1536,11 @@ __LOG_LUA__
 		return padrao
 	end
 
+	-- <<CASE_FUNCS
+	-- (o validador extrai daqui ate' o fecho e roda em cima de exemplos - o
+	-- marcador fica SOZINHO na linha, senao o resto do comentario entra no
+	-- trecho extraido sem o `--` e o chunk nao compila)
+	--
 	-- 0xC3 e' o primeiro byte de todo acentuado latino em UTF-8; o segundo diz
 	-- qual letra e' e se e' maiuscula (0x80..0x9E) ou minuscula (0xA0..0xBE).
 	-- 0x97 e 0xB7 sao 'x' e '/' de multiplicacao e divisao - nao sao letras.
@@ -1118,11 +1564,50 @@ __LOG_LUA__
 		return (s:lower())
 	end
 
+	-- CAMEL CASE: primeira letra de cada palavra em maiuscula, o resto minusculo.
+	--
+	-- "eu adoro torresmo, uhuu" -> "Eu Adoro Torresmo, Uhuu", e tambem
+	-- "ELES SO SAO MEIO TIMIDOS" -> "Eles So Sao Meio Timidos": comeca
+	-- MINUSCULANDO tudo, senao um texto que ja esta em caixa alta (o padrao deste
+	-- projeto) sairia igual ao que entrou.
+	--
+	-- Anda de CARACTERE, nao de byte: acentuado latino ocupa dois bytes em UTF-8,
+	-- e pular de um em um poria maiuscula no meio da letra - o mesmo motivo do
+	-- `utf8_len` do Fixed Box.
+	--
+	-- Hifen e apostrofo NAO comecam palavra nova ("Bem-vindo", "D'agua"), e
+	-- digito faz parte da palavra ("3d" nao vira "3D"). Quem comeca palavra e'
+	-- pontuacao e espaco - foi o que o exemplo pedido mostrou: a virgula de
+	-- "torresmo, uhuu" reinicia.
+	local function camel(s)
+		s = minuscula(s)
+		local saida, comeco, i = {}, true, 1
+		while i <= #s do
+			local b = s:byte(i)
+			local n = (b == 195) and 2 or 1
+			local pedaco = s:sub(i, i + n - 1)
+			local dentro = (n == 2) or pedaco:match("[%w'%-]") ~= nil
+			if dentro and comeco and (n == 2 or pedaco:match("%a")) then
+				pedaco = maiuscula(pedaco)
+				comeco = false
+			elseif dentro then
+				comeco = false
+			else
+				comeco = true
+			end
+			saida[#saida + 1] = pedaco
+			i = i + n
+		end
+		return table.concat(saida)
+	end
+
 	local function transformar(s, modo)
 		if modo == 1 then return minuscula(s) end
 		if modo == 2 then return maiuscula(s) end
+		if modo == 3 then return camel(s) end
 		return s
 	end
+	-- CASE_FUNCS>>
 
 	local modo = math.floor(ctl("TextCase", 0))
 	local atual
@@ -1334,6 +1819,266 @@ end
 """
 
 
+# A PONTE: muda os caracteres por caixa e refaz as legendas.
+#
+# Um corpo so', DOIS chamadores - o botao "Rebuild Captions" da aba Meta e o
+# "Apply Style to This Track" quando o numero de caracteres por caixa mudou.
+# Dois corpos seriam duas copias da mesma sequencia destrutiva pra divergir.
+#
+# Por que o Apply Style nao basta: mudar os caracteres por caixa muda o NUMERO de
+# legendas - repartir o segmento que nao cabe e' o que o `repartir()` do
+# giautosubs.py faz. Restilizar 156 clipes nao produz os 191 que o limite novo
+# pede; e' preciso gerar o arquivo de novo e recriar os clipes.
+#
+# A sequencia, e por que nesta ordem:
+#
+#   1. roda o giautosubs.py com o `--max-chars` novo, gravando um `.lua` de NOME
+#      NOVO (`legendas_c25.lua`). Nome novo e nao sobrescrita: o arquivo anterior
+#      fica no disco pra voltar atras, e o campo `Captions File` da Meta passa a
+#      dizer qual esta valendo - com sobrescrita ele nunca mudaria de valor e o
+#      campo nao informaria nada.
+#   2. so' se o arquivo apareceu, relinka o clipe e carimba `GiCharsBuilt`.
+#   3. grava o PEDIDO e para. Quem recria os clipes e' a rodada do menu.
+#
+# Nada e' destruido antes de o arquivo novo existir: na ordem trocada, um erro no
+# Python deixaria a track vazia e sem arquivo pra recriar dela.
+#
+# POR QUE O BOTAO NAO RECRIA (macro 29, custou um crash do Resolve):
+#
+# O botao roda DENTRO da comp do clipe clicado. Chamar o GiAutoSubs.lua daqui
+# (era um `dofile`) faz o modo `substituir` rodar `DeleteClips` em todas as
+# legendas - INCLUSIVE a deste clipe. O codigo apagava a comp que estava
+# executando ele: o Resolve cai, sem mensagem nenhuma.
+#
+# Nao ha como contornar mantendo o mesmo clique: o REPLACE tem que apagar a
+# legenda de onde o clique saiu. Entao o botao prepara tudo e a rodada acontece
+# no menu - com o `_gipedido.txt` respondendo as quatro perguntas, e' um clique
+# em Workspace > Scripts > GiAutoSubs e mais nada.
+_RECONSTRUIR = r"""
+return function(comp, tool, rotulo)
+__LOG_LUA__
+	local ROTULO = rotulo or "Rebuild with Selected"
+	local template = comp:FindTool("Template") or tool
+	local macro = gi_macro(comp, tool)
+	if not macro then
+		diga("[GiAutoSubs] " .. ROTULO .. ": this clip has no InputKeys - it "
+			.. "carries an old copy of the macro, so there is no Meta tab to read")
+		return false
+	end
+
+	-- Le na ordem macro -> tool -> Text+, igual ao `ctl` das outras rotinas: o
+	-- Inspector do clipe grava no MacroOperator. Campo de texto VAZIO conta como
+	-- ausente - caminho em branco nao e' resposta, e' falta de resposta.
+	local function meta(nome, padrao)
+		local v
+		for _, alvo in ipairs({ macro, tool, template }) do
+			if alvo then
+				pcall(function() v = alvo:GetInput(nome) end)
+				if v ~= nil and v ~= "" then return v end
+			end
+		end
+		return padrao
+	end
+
+	local lua_atual = tostring(meta("MetaCaptionsFile", ""))
+	local corte = tostring(meta("MetaCutFolder", ""))
+	local estilo = tostring(meta("MetaStyle", ""))
+	local transcricao = tostring(meta("MetaTranscript", ""))
+	local title = tostring(meta("MetaTitle", ""))
+	local preset = tostring(meta("MetaConfig", ""))
+	local chars = math.floor(tonumber(meta("MetaCharsPerBox", 0)) or 0)
+	local linhas = math.floor(tonumber(meta("MetaLines", 1)) or 1)
+
+	-- AS OPCOES SAO AS CAIXAS MARCADAS, e nao o botao que foi clicado.
+	--
+	-- Antes eram tres botoes (um por opcao), e eles nao combinavam: "largura fixa
+	-- E sem buracos" pedia duas rodadas inteiras. Com checkbox + submit a rodada
+	-- acontece uma vez, com o que esta marcado - e o que esta marcado continua
+	-- visivel depois, em vez de sumir no clique.
+	--
+	-- `Fixed Width` na Meta e' o MESMO controle da caixa fixa no grupo Text Box
+	-- (`TextBoxFixed`), exposto duas vezes. Um controle proprio aqui seria uma
+	-- segunda verdade sobre a mesma coisa.
+	local fixa = (tonumber(meta("TextBoxFixed", 0)) or 0) == 1
+	local semBuracos = (tonumber(meta("MetaNoGaps", 0)) or 0) == 1
+
+	diga("[GiAutoSubs] ===== " .. ROTULO .. " =====")
+	diga("[GiAutoSubs] linked captions : " .. (lua_atual ~= "" and lua_atual or "(none)"))
+	diga("[GiAutoSubs] cut folder      : " .. (corte ~= "" and corte or "(none)"))
+	diga("[GiAutoSubs] style / title   : " .. estilo .. " / " .. title)
+	diga("[GiAutoSubs] config (preset) : " .. (preset ~= "" and preset or "(none)"))
+	diga(string.format("[GiAutoSubs] wrapping        : %d char(s) per box, %d line(s)",
+		chars, linhas))
+	diga("[GiAutoSubs] fixed width     : " .. (fixa and "yes - every caption "
+		.. "gets the width of a full line" or "no - the box follows the text"))
+	diga("[GiAutoSubs] gaps            : " .. (semBuracos and "filled - each "
+		.. "caption lasts until the next one starts" or "kept as the speech is"))
+
+	-- A pasta do corte e' o unico campo sem substituto: e' o argumento do
+	-- giautosubs.py. Sem ela o clipe nasceu antes da aba Meta (ou foi arrastado
+	-- da aba Effects) e nao ha' o que reconstruir.
+	if corte == "" or chars <= 0 then
+		diga("[GiAutoSubs] " .. ROTULO .. ": the Meta tab does not say which cut "
+			.. "folder this caption came from (or Characters per Box is 0). "
+			.. "Recreate the captions with the script once and it fills itself.")
+		return false
+	end
+
+	-- O nome novo. O `_c%d+` sai antes de entrar: senao um segundo clique
+	-- produziria `legendas_c25_c19.lua`.
+	local dir, arq = lua_atual:match("^(.*)[\\/]([^\\/]+)$")
+	if not dir then
+		dir = corte .. "\\legendas"
+		arq = "legendas.lua"
+	end
+	local base = (arq:gsub("%.lua$", ""))
+	base = (base:gsub("_c%d+$", ""))
+	local novo_json = dir .. "\\" .. base .. "_c" .. chars .. ".json"
+	local novo_lua = dir .. "\\" .. base .. "_c" .. chars .. ".lua"
+
+	-- Aspas em volta do comando INTEIRO, alem das de cada caminho: com o
+	-- `cmd /c` do Windows, um primeiro token entre aspas faz o resto da linha ser
+	-- lido errado. Este embrulho e' o conserto conhecido disso.
+	local cmd = string.format('""%s" "%s" "%s" --max-chars %d --max-lines %d --out "%s"',
+		"__PYTHON__", "__GIAUTOSUBS__", corte, chars, linhas, novo_json)
+	if estilo ~= "" then cmd = cmd .. ' --estilo "' .. estilo .. '"' end
+	-- A LARGURA FIXA da rodada inteira.
+	--
+	-- O checkbox `Fixed Box` vale por clipe e o Apply Style o levaria pros
+	-- outros, mas mudar os caracteres por caixa recria os clipes de qualquer
+	-- jeito - entao o lugar honesto de pedir "todas fixas" e' aqui, na geracao.
+	-- Assim as legendas NASCEM com a caixa do mesmo tamanho, e a borda colorida
+	-- orbita um retangulo parado enquanto o texto troca dentro dele.
+	-- Os DOIS sentidos, sempre explicitos: sem o `--free-box`, uma rodada que
+	-- quer a caixa livre cairia no que o estilos.json disser - e o que manda aqui
+	-- e' o clipe que esta na tela, nao o estilo no disco.
+	cmd = cmd .. (fixa and " --fixed-box" or " --free-box")
+	if semBuracos then cmd = cmd .. " --no-gaps" end
+	if transcricao ~= "" then cmd = cmd .. ' --transcript "' .. transcricao .. '"' end
+
+	-- `os.execute` com a saida redirecionada pra arquivo, e nao `io.popen`: ler
+	-- um pipe na thread da interface do Resolve e' o segundo suspeito do crash, e
+	-- nao faz nada que isto nao faca. Trava a interface pelos segundos que o
+	-- Python leva - e' sincrono, e e' o preco de nao ter onde rodar em paralelo.
+	--
+	-- O redirecionamento vai DENTRO da aspa externa. O `cmd /c` tira a primeira e
+	-- a ULTIMA aspa da linha; com o `> "relato"` depois do embrulho, a ultima era a
+	-- do relato, e o `--transcript` engolia o redirecionamento: o Python morria em
+	-- `Invalid argument: '...turnsWhisper.json" > ...'` e todo Rebuild com
+	-- transcricao falhava calado (28/09 - o "No Gaps nao funciona").
+	local relato = "__RELATO__"
+	diga("[GiAutoSubs] running (Resolve freezes for a few seconds): " .. cmd .. '"')
+	-- O relato velho sai antes: senao, com o Python morto, as linhas da rodada
+	-- ANTERIOR apareceriam aqui como se fossem desta.
+	pcall(function() os.remove(relato) end)
+	pcall(function() os.execute(cmd .. ' > "' .. relato .. '" 2>&1"') end)
+	local saida = {}
+	pcall(function()
+		local fh = io.open(relato, "r")
+		if not fh then return end
+		for linha in fh:lines() do saida[#saida + 1] = linha end
+		fh:close()
+	end)
+	-- So' as ultimas linhas: o resumo do giautosubs.py e' o que interessa, e o
+	-- log do macro nao e' lugar pra despejo (a mesma regra do `erro_curto`).
+	for i = math.max(1, #saida - 12), #saida do
+		diga("[GiAutoSubs]   | " .. tostring(saida[i]))
+	end
+
+	-- Sucesso = o Python DISSE que escreveu este arquivo. So' conferir que o .lua
+	-- existe nao prova nada: o nome e' o mesmo da rodada anterior, entao com o
+	-- Python morto o arquivo VELHO passava por novo e o botao dizia "ready".
+	local existe = false
+	for _, linha in ipairs(saida) do
+		if linha:find(novo_lua, 1, true) and linha:find("GiAutoSubs.lua reads", 1, true) then
+			existe = true
+		end
+	end
+	if not existe then
+		diga("[GiAutoSubs] " .. ROTULO .. ": " .. novo_lua .. " was NOT written - "
+			.. "nothing was changed on the timeline. Check the lines above "
+			.. "(python path, cut folder, transcript).")
+		return false
+	end
+
+	-- Relinka ANTES de recriar: se o passo seguinte falhar, o clipe pelo menos
+	-- diz qual arquivo esta valendo agora.
+	pcall(function() macro:SetInput("MetaCaptionsFile", novo_lua) end)
+	pcall(function() macro:SetData("GiCharsBuilt", chars) end)
+	diga("[GiAutoSubs] linked now: " .. novo_lua)
+
+	-- O recado pro GiAutoSubs.lua. `substituir` = REPLACE: o pedido veio de quem
+	-- estava olhando as legendas antigas e pediu outras no lugar delas, entao
+	-- perguntar o conflito de novo seria perguntar o que acabou de ser respondido.
+	local pedido = "__PEDIDO__"
+	local escrito = false
+	pcall(function()
+		local f = io.open(pedido, "w")
+		if not f then return end
+		f:write("arquivo\t", novo_lua, "\n")
+		f:write("conflito\tsubstituir\n")
+		if title ~= "" then f:write("estilo\t", title, "\n") end
+		if preset ~= "" then f:write("preset\t", preset, "\n") end
+		f:close()
+		escrito = true
+	end)
+	if not escrito then
+		diga("[GiAutoSubs] " .. ROTULO .. ": could not write " .. pedido
+			.. " - the captions file was generated but the clips were NOT "
+			.. "recreated. Run Workspace > Scripts > GiAutoSubs and pick "
+			.. novo_lua)
+		return false
+	end
+
+	-- E PARA AQUI. Recriar daqui apagaria a legenda deste clipe - a comp que
+	-- esta' rodando este codigo - e o Resolve cai sem mensagem (ver o topo).
+	diga("[GiAutoSubs] ===== ready =====")
+	diga("[GiAutoSubs] now run:  Workspace > Scripts > GiAutoSubs")
+	diga("[GiAutoSubs] it will NOT ask anything - the file, the title, the config "
+		.. "and the REPLACE were all answered by this click.")
+	diga("[GiAutoSubs] (the button cannot recreate the clips itself: it runs "
+		.. "inside this caption's own composition, and REPLACE deletes this "
+		.. "caption - Resolve crashes when the code that is running gets "
+		.. "deleted under it.)")
+	return true
+end
+"""
+
+
+def _reconstruir():
+    """O `_RECONSTRUIR` com os quatro caminhos de maquina dentro.
+
+    Barras DOBRADAS: o trecho vira string Lua com aspas, dentro de um `[[ ]]` do
+    .setting - `\\` solto viraria escape na hora de carregar. Mesma razao do
+    `_DESTINO_PRESET`.
+    """
+    def esc(p):
+        return p.replace("\\", "\\\\")
+    return (_com_log(_RECONSTRUIR)
+            .replace("__PYTHON__", esc(PYTHON_EXE))
+            .replace("__GIAUTOSUBS__", esc(GIAUTOSUBS_PY))
+            .replace("__PEDIDO__", esc(PEDIDO))
+            .replace("__RELATO__", esc(RELATO)))
+
+
+# O submit da aba Meta. UM botao, e as opcoes sao as caixas marcadas acima dele.
+#
+# Corpo de uma chamada so': quem faz o trabalho e' o chunk `GiRebuild`, que e' o
+# mesmo codigo que o "Apply Style to This Track" chama quando percebe que os
+# caracteres por caixa mudaram.
+_BOTAO_RECONSTRUIR = """
+__LOG_LUA__
+local f = gi_chunk(comp, tool, "GiRebuild")
+if f then
+	loadstring(f)()(comp, tool, "Rebuild with Selected")
+else
+	print("[GiAutoSubs] Rebuild with Selected: no tool in this comp owns "
+		.. "GiRebuild - the clip carries an old copy of the macro "
+		.. "(see MACRO_VERSAO)")
+end
+"""
+
+
 def _com_log(texto):
     """Injeta o `diga()` no lugar do marcador `__LOG_LUA__`.
 
@@ -1352,44 +2097,11 @@ def _update_all():
     return _com_log(_UPDATE_ALL)
 
 
-def _recortar(texto, abre, fecha, manter=None):
-    """Mantem ou remove um trecho marcado.
-
-    `manter=None` = conforme `COM_CAMADA3`. Marcador em linha propria nos dois
-    lados. Fora da variante o bloco inteiro sai; dentro dela sai so' o marcador.
-    Isso e' o que faz o `GiAutoSubs Caption` voltar a ser exatamente o macro de
-    antes da camada 3, em vez de carregar uma rotina inerte que ninguem chama.
-
-    Os pares invertidos (`__SEM_SPIN_*__` / `__SPIN_*__`) existem pelo mesmo
-    motivo: com o spin, dois pontos do ApplyGiStyle passam a chamar `deslocar`
-    em vez de `pin`. Trocar o corpo em vez de embrulhar deixa o Caption e o
-    3color byte a byte como estao - um macro que ja' mora dentro de centenas de
-    clipes nao muda de forma por conveniencia de quem gera.
-    """
-    padrao = re.compile(
-        r"^[ \t]*" + re.escape(abre) + r"[ \t]*\n(.*?)"
-        r"^[ \t]*" + re.escape(fecha) + r"[ \t]*\n",
-        re.S | re.M)
-    if not padrao.search(texto):
-        raise SystemExit(f"marcador {abre} nao encontrado - o macro mudou de forma")
-    fica = COM_CAMADA3 if manter is None else manter
-    return padrao.sub((lambda m: m.group(1)) if fica else "", texto)
-
-
 def _apply_gi():
-    # ORDEM: os recortes do spin ANTES dos da camada 3. O par
-    # `__SEM_SPIN_CAMADA3__` mora DENTRO do bloco `__CAMADA3_DEF__`, entao tirar
-    # a camada 3 primeiro leva os marcadores junto - e o `_recortar` levanta
-    # "marcador nao encontrado" na geracao do proprio Caption. Marcador aninhado
-    # se resolve de dentro pra fora.
-    corpo = _recortar(_APPLY_GI, "__SPIN_DEF__", "__FIM_SPIN_DEF__", COM_SPIN)
-    for sufixo in ("SOMBRA", "CAMADA3"):
-        corpo = _recortar(corpo, f"__SEM_SPIN_{sufixo}__",
-                          f"__FIM_SEM_SPIN_{sufixo}__", not COM_SPIN)
-        corpo = _recortar(corpo, f"__SPIN_{sufixo}__",
-                          f"__FIM_SPIN_{sufixo}__", COM_SPIN)
-    corpo = _recortar(corpo, "__CAMADA3_DEF__", "__FIM_CAMADA3_DEF__")
-    corpo = _recortar(corpo, "__CAMADA3_CALL__", "__FIM_CAMADA3_CALL__")
+    # Nada de recortar: o ApplyGiStyle sai inteiro, com a rotina `camada3` e com
+    # o `deslocar` dos elementos 7 e 8. `deslocar` cai em `pin` quando
+    # `BoxSpinSpeed` e' 0, entao o ramo sem spin nao tinha o que fazer aqui.
+    corpo = _APPLY_GI
     return _com_log(corpo
             .replace("__EL_BOLHA__", str(EL_BOLHA))
             .replace("__EL_BOLHA_SOMBRA__", str(EL_BOLHA_SOMBRA))
@@ -1504,6 +2216,28 @@ def _combo(nome, texto, opcoes, padrao):
     return "\n".join(linhas)
 
 
+def _texto(nome, rotulo, linhas=1):
+    """Campo de TEXTO no Inspector.
+
+    O primeiro controle do projeto que nao e' `Number`. Um caminho de arquivo
+    nao cabe em numero, e a alternativa (guardar so' no `SetData` do clipe) seria
+    um dado que existe e nao aparece - justamente o contrario do que a aba Meta
+    veio resolver.
+
+    Editavel de proposito: trocar o `.lua` linkado na mao e' a saida quando a
+    ponte pro Python nao esta disponivel (outra maquina, outro caminho).
+    """
+    return _uc(nome, [
+        ("LINKS_Name", f'"{rotulo}"'),
+        ("LINKID_DataType", '"Text"'),
+        ("INPID_InputControl", '"TextEditControl"'),
+        ("TEC_Lines", str(linhas)),
+        ("TEC_ReadOnly", "false"),
+        ("INP_External", "false"),
+        ("INP_Passive", "false"),
+    ])
+
+
 def _cor(prefixo, rotulo, grupo, padrao=(0, 0, 0)):
     """Seletor de cor de verdade.
 
@@ -1615,6 +2349,41 @@ if not macro then
 	diga("[GiAutoSubs] " .. ROTULO .. ":this clip has no InputKeys - it carries an "
 		.. "old copy of the macro, so there is no style to copy FROM")
 	return
+end
+
+-- CARACTERES POR CAIXA MUDOU? Entao isto nao e' trabalho de estilo.
+--
+-- Mudar o `Characters per Box` da aba Meta muda como as frases sao REPARTIDAS,
+-- e com isso o numero de legendas (156 a 19 caracteres, 191 a 25). Restilizar os
+-- clipes que existem nao produz os que faltam: e' preciso gerar o `legendas.lua`
+-- de novo e recriar. E' o `GiRebuild` que faz isso, e este botao so' reconhece
+-- que e' ele que foi pedido.
+--
+-- `GiCharsBuilt` e' o carimbo do que o arquivo LINKADO usou - `SetData` e nao
+-- controle, porque e' registro do passado e nao escolha: um controle a mais no
+-- Inspector convidaria a mexer justamente no numero que nao se mexe.
+--
+-- So' no "This Track": o outro botao alcanca a timeline inteira, onde
+-- convivem cortes de legendas diferentes, e reconstruir a partir de um clipe
+-- levaria a procedencia dele pra cima de todos.
+if SO_ESTA_TRACK then
+	local pedidos, feitos = 0, 0
+	pcall(function() pedidos = math.floor(tonumber(macro:GetInput("MetaCharsPerBox")) or 0) end)
+	pcall(function() feitos = math.floor(tonumber(macro:GetData("GiCharsBuilt")) or 0) end)
+	if pedidos > 0 and feitos > 0 and pedidos ~= feitos then
+		diga(string.format("[GiAutoSubs] %s: Characters per Box went from %d to "
+			.. "%d - that changes how many captions there ARE, so restyling them "
+			.. "cannot do it. Preparing the rebuild instead.", ROTULO, feitos,
+			pedidos))
+		local f = gi_chunk(comp, tool, "GiRebuild")
+		if f then
+			loadstring(f)()(comp, tool, ROTULO)
+		else
+			diga("[GiAutoSubs] " .. ROTULO .. ": no tool in this comp owns "
+				.. "GiRebuild - the clip carries an old copy of the macro")
+		end
+		return
+	end
 end
 
 -- O estilo sai pelo mesmo contrato que o script usa. Nada de montar a tabela a
@@ -1812,15 +2581,42 @@ for _, chave in ipairs(EXTRAS) do
 end
 pcall(function() extras.TextPosition = template:GetInput("Center") end)
 
--- O nome. O AskUser do Fusion nao e' confiavel a partir da pagina Edit (ver
--- SpeakerSwitch.py) - ele existe como atributo e vem nil. Entao ele e' TENTADO,
--- e cada destino decide o que fazer quando nao vem nada (ver logo abaixo).
-local nome
+-- O NOME, por dialogo NATIVO do sistema.
+--
+-- Era um `comp:AskUser` - e o AskUser nao tem parametro de posicao: quem coloca a
+-- janela e' o Fusion, e ela sai fora do lugar (relatado pelo usuario). Nao ha' API
+-- pra centraliza-la.
+--
+-- O `fusion:RequestFile` e' a caixa de arquivo do sistema: centralizada, lembra a
+-- pasta, e e' o mesmo dialogo que o GiAutoSubs.lua usa nas quatro perguntas dele -
+-- pela regra que o proprio projeto escreveu, o AskUser "existe como atributo e vem
+-- nil" fora da pagina Fusion, que e' o caso normal aqui.
+--
+-- O nome e' o NOME DO ARQUIVO escolhido, sem a extensao. Para o Export Config o
+-- caminho escolhido e' o proprio destino, entao da' pra salvar em outra pasta ou
+-- sobrescrever um preset existente vendo a lista - o que um campo de texto nao
+-- oferece. Cancelar continua caindo no carimbo de hora (ver o destino abaixo).
+--
+-- `FReqB_Saving` pede a caixa de SALVAR. Se esta versao do Fusion nao conhecer o
+-- atributo, ela abre como caixa de abrir - e ai escolher um preset existente
+-- ainda funciona, e cancelar cai no carimbo de hora. Degradado, nao quebrado.
+local nome, escolhido
 pcall(function()
-	local ui = comp and comp.AskUser and comp:AskUser("__ROTULO__", {
-		{ "Nome", Name = "__CAMPO__", "Text", Default = "" },
+	if not (fusion and fusion.RequestFile) then return end
+	local caminho = fusion:RequestFile("__PASTA__", "__SUGESTAO__", {
+		FReqB_SeqGather = false,
+		FReqB_Saving = true,
+		FReqS_Title = "__ROTULO__ - __CAMPO__",
+		FReqS_Filter = "GiAutoSubs config (*.txt)|*.txt",
 	})
-	if ui then nome = ui.Nome end
+	if caminho and caminho ~= "" then
+		escolhido = caminho
+		-- Quatro barras: este trecho atravessa o parser do Python (a string do
+		-- gerador) e depois o do Lua. Duas chegariam ao Lua como `\/`, que e um
+		-- escape invalido - o macro inteiro para de compilar (armadilha do macro 25).
+		nome = caminho:match("([^\\\\/]+)$")
+		if nome then nome = (nome:gsub("%.[^.]*$", "")) end
+	end
 end)
 if nome then
 	nome = nome:gsub("^%s+", ""):gsub("%s+$", "")
@@ -1891,10 +2687,23 @@ __FECHO__
 # recusada custa o ajuste inteiro de novo. `bmd.createdir` porque `io.open`
 # numa pasta que nao existe falha calado.
 _DESTINO_PRESET = """
-if not nome then nome = "preset-" .. os.date("%Y%m%d-%H%M%S") end
-local seguro = nome:gsub("[^%w%-_ ]", "_")
-pcall(function() bmd.createdir("__PRESETS__") end)
-local destino = "__PRESETS__" .. "\\\\" .. seguro .. ".txt"
+-- O caminho que voce escolheu na caixa E' o destino: foi voce quem apontou a
+-- pasta e o nome, e reconstruir o caminho a partir do nome jogaria a sua escolha
+-- fora (salvar num pendrive, por exemplo).
+--
+-- Sem escolha (cancelou, ou o dialogo nao existe nesta forma de rodar) o preset
+-- sai carimbado com a hora, na pasta que a rodada le. Um arquivo com nome feio
+-- da' pra renomear; uma exportacao recusada custa o ajuste inteiro de novo.
+-- `bmd.createdir` porque `io.open` numa pasta que nao existe falha calado.
+local destino
+if escolhido then
+	destino = escolhido
+	if not destino:lower():match("%.txt$") then destino = destino .. ".txt" end
+else
+	nome = "preset-" .. os.date("%Y%m%d-%H%M%S")
+	pcall(function() bmd.createdir("__PRESETS__") end)
+	destino = "__PRESETS__" .. "\\\\" .. nome .. ".txt"
+end
 """
 
 _FECHO_PRESET = """
@@ -1927,27 +2736,100 @@ diga("[GiAutoSubs] that writes the style into estilos.json and builds a Title "
 """
 
 
-def _exportar(rotulo, campo, destino, fecho):
-    """Monta o corpo de um dos dois botoes de exportar."""
+def _exportar(rotulo, campo, destino, fecho, pasta, sugestao):
+    """Monta o corpo de um dos dois botoes de exportar.
+
+    `pasta` e `sugestao` sao onde a caixa de arquivo abre e com que nome ela abre -
+    o dialogo nativo substituiu o AskUser (que nao da' pra posicionar na tela).
+    """
     return (_com_log(_EXPORTAR)
             .replace("__DESTINO__", destino.strip("\n"))
             .replace("__FECHO__", fecho.strip("\n"))
             .replace("__ROTULO__", rotulo)
-            .replace("__CAMPO__", campo))
+            .replace("__CAMPO__", campo)
+            .replace("__PASTA__", pasta.replace("\\", "\\\\"))
+            .replace("__SUGESTAO__", sugestao))
 
 
 def _exportar_config():
     return _exportar("Export Config", "Config name",
                      _DESTINO_PRESET.replace("__PRESETS__",
                                              PRESETS_DIR.replace("\\", "\\\\")),
-                     _FECHO_PRESET)
+                     _FECHO_PRESET,
+                     PRESETS_DIR + "\\", "meu-preset.txt")
 
 
 def _exportar_estilo():
+    # A caixa abre na pasta dos presets tambem, mas aqui ela serve so' pra COLHER
+    # O NOME: o dump vai pro arquivo fixo que o `--importar-estilo` le. Salvar o
+    # dump onde o usuario aponta seria um segundo lugar pra ele procurar depois.
     return _exportar("Generate Caption Style", "Style name",
                      _DESTINO_ESTILO.replace(
                          "__ESTILO__", ESTILO_EXPORTADO.replace("\\", "\\\\")),
-                     _FECHO_ESTILO)
+                     _FECHO_ESTILO,
+                     PRESETS_DIR + "\\", "meu-estilo.txt")
+
+
+# O callback do PREVIEW. Um so', em tres controles.
+#
+# Ele existe contra a regra da casa ("nenhum controle reage sozinho", macro 11) e o
+# validador cobra que sejam exatamente estes tres - a excecao e' nomeada pra nao
+# virar porta aberta. O que a justifica: o macro 11 matou callbacks que disparavam
+# ~40 vezes por arrasto CADA UM fazendo o trabalho inteiro (incluindo reconstruir o
+# array por caractere) e enchendo o log. Este passa `spline = false` e o modo
+# "so' a caixa": doze escritas de geometria, zero por frame, zero linha de log.
+#
+# `gi_chunk` e nao `tool:GetData`: o `tool` que o Fusion entrega ao callback e' o
+# Text+ interno, e o codigo mora no MacroOperator (a mesma razao do botao).
+_PREVIEW_CAIXA = """
+__LOG_LUA__
+local f = gi_chunk(comp, tool, "ApplyGiStyle")
+if f then
+	loadstring(f)()(comp, tool, "preview", false, true)
+elseif not _G.GI_PREVIEW_AVISADO then
+	-- UMA vez por sessao: um arrasto de slider num clipe velho imprimiria isto
+	-- quarenta vezes, e log repetido e' log que ninguem le.
+	_G.GI_PREVIEW_AVISADO = true
+	diga("[GiAutoSubs] live preview: no tool in this comp owns ApplyGiStyle - "
+		.. "this clip carries an old copy of the macro, so the box only updates "
+		.. "when you click Apply Style")
+end
+"""
+
+# Os controles que reagem sozinhos - a lista COMPLETA, e ela e' o contrato com o
+# validador. Os tres sao os que mudam o TAMANHO da caixa fixa, que e' o que nao da'
+# pra acertar sem ver na tela.
+CALLBACK_PREVIEW = ("TextBoxFixed", "TextBoxWidth", "TextBoxHeight")
+
+
+def _injetar_preview(texto, contador):
+    """Poe o `INPS_ExecuteOnChange` nos tres controles do preview.
+
+    DEPOIS do `_desautomatizar`, de proposito: ele varre o macro e tira TODO
+    callback (inclusive os do AutoSubs), e um callback inserido antes seria levado
+    junto - calado, porque a remocao e' um regex que nao sabe o que era nosso.
+    """
+    corpo = _ind(_com_log(_PREVIEW_CAIXA), 7)
+    n = 0
+    for nome in CALLBACK_PREVIEW:
+        bloco = _bloco(nome).search(texto)
+        if not bloco:
+            contador.append(f"WARNING: {nome} does not exist - the live preview "
+                            f"callback was NOT installed on it")
+            continue
+        alvo = bloco.group(0)
+        if "INPS_ExecuteOnChange" in alvo:
+            continue
+        ind = re.match(r"(\t+)", alvo).group(1)
+        novo = alvo.rstrip()[:-len("},")].rstrip() + "\n"
+        novo += f"{ind}\tINPS_ExecuteOnChange = [[\n{corpo}\n{ind}\t]],\n{ind}}},"
+        texto = texto[:bloco.start()] + novo + texto[bloco.end():]
+        n += 1
+    contador.append(f"{n} live-preview callback(s) installed "
+                    f"({', '.join(CALLBACK_PREVIEW)}) - the fixed box follows the "
+                    f"slider without Apply Style; they write geometry only, so the "
+                    f"cost per FRAME is zero")
+    return texto
 
 
 def _botao(nome, texto, corpo):
@@ -2020,16 +2902,35 @@ def controles():
         _slider("BubblePopAmount", "Pop Amount", 0.15, 0, 0.5),
         _slider("BubblePopFrames", "Pop Frames", 3, 1, 15, inteiro=True),
 
-        _rotulo("TextBoxLabel", "Text Box", 9),
+        _rotulo("TextBoxLabel", "Text Box", 12),
         _checkbox("TextBoxEnabled", "Enabled"),
+        # Logo abaixo do Enabled porque ele muda o SIGNIFICADO dos dois Extend
+        # que vem depois: ligado, eles deixam de ser folga em volta do texto e
+        # passam a ser o tamanho da caixa (ver `extend_h` no ApplyGiStyle).
+        # O rotulo diz o que o controle FAZ porque um Inspector de macro nao tem
+        # condicional: nao da' pra esconder nem cinzar o Extend conforme este
+        # checkbox (dependia dos callbacks por controle, que sairam no macro 11).
+        _checkbox("TextBoxFixed", "Fixed Box (Width/Height below)"),
+        # ZERO = "nao pedi": ai a largura alvo volta a ser uma linha cheia de
+        # `Characters per Box` (aba Meta). O teto de 4000 cobre 4K com folga; o
+        # `INP_MaxAllowed` do `_slider` ja e' maior que qualquer tela.
+        _slider("TextBoxWidth", "Width (px)", 0, 0, 4000, inteiro=True),
+        _slider("TextBoxHeight", "Height (px)", 0, 0, 4000, inteiro=True),
         _cor("TextBox", "Text Box Color", GRUPO_CAIXA, (0, 0, 0)),
         _slider("TextBoxOpacity", "Opacity", 0.45, 0, 1),
         # 1 = Line. A caixa do texto envolve a LINHA; a bolha (elemento 4)
         # envolve a palavra falada, dai o 2 dela. Era 3 aqui, que na lista real
         # e' Character - uma caixa por letra.
         _combo("TextBoxLevel", "Level", _NIVEIS, 1),
-        _slider("TextBoxExtendHorizontal", "Extend Horizontal", 0.2, -0.5, 2),
-        _slider("TextBoxExtendVertical", "Extend Vertical", 0.12, -0.5, 2),
+        # "(free box)" no rotulo porque o Inspector nao consegue cinzar um controle
+        # conforme outro (dependia dos callbacks que sairam no macro 11). Com o
+        # `Fixed Box` ligado estes dois valem ZERO - quem decide o tamanho e'
+        # Width/Height, e o rotulo e' o unico lugar onde isso da' pra avisar antes
+        # do clique.
+        _slider("TextBoxExtendHorizontal", "Extend Horizontal (free box)",
+                0.2, -0.5, 2),
+        _slider("TextBoxExtendVertical", "Extend Vertical (free box)",
+                0.12, -0.5, 2),
         _slider("TextBoxRound", "Round", 0.25, 0, 1),
 
         _rotulo("BoxShadowLabel", "Box Shadow", 9),
@@ -2041,35 +2942,40 @@ def controles():
         _slider("BoxShadowOpacity", "Opacity", 0.55, 0, 1),
         _slider("BoxShadowSoftness", "Softness", 2, 0, 10),
     ]
-    if COM_CAMADA3:
-        # A terceira cor da caixa. Fica logo depois do Text Box porque e' a
-        # mesma caixa: ela copia Level/Extend/Round de la' e so' escolhe a cor e
-        # pra onde se desloca. Os dois Offset default vao pro lado OPOSTO ao da
-        # Box Shadow (+0.005 / -0.007), que e' o que faz uma cor sair em cima e
-        # a outra embaixo em vez de as duas empilharem no mesmo canto.
-        #
-        # A ORDEM aqui nao decide onde ele aparece: quem decide e' o LAYOUT.
-        i = partes.index(_rotulo("BoxShadowLabel", "Box Shadow", 9))
-        partes[i:i] = [
-            _rotulo("BoxLayer3Label", "Box Layer 3", 7),
-            _checkbox("BoxLayer3Enabled", "Enabled"),
-            _cor("BoxLayer3", "Layer 3 Color", GRUPO_CAMADA3, (1, 0.3, 0.65)),
-            _slider("BoxLayer3CenterX", "Offset X", -0.005, -0.05, 0.05),
-            _slider("BoxLayer3CenterY", "Offset Y", 0.007, -0.05, 0.05),
-            # Alpha e nao Opacity: `Opacity8` fica livre porque e' por onde o
-            # fade entraria (ver `camada3` no ApplyGiStyle).
-            _slider("BoxLayer3Alpha", "Alpha", 1, 0, 1),
-        ]
-        if COM_SPIN:
-            # GRAUS POR FRAME. A 30fps, 2 da' uma volta a cada 6 segundos - lento
-            # o bastante pra ler como movimento intencional. A legenda fica 1 a 3
-            # segundos na tela, entao cada uma mostra meia volta ou menos e o olho
-            # le deriva suave em vez de rodopio. Acima de ~6 vira estroboscopio e
-            # o texto cansa de ler no volume que este projeto produz - dai o teto
-            # em 10 em vez de 360.
-            i = partes.index(_slider("BoxLayer3Alpha", "Alpha", 1, 0, 1))
-            partes.insert(i + 1,
-                          _slider("BoxSpinSpeed", "Spin Speed", 2, 0, 10))
+    # A terceira cor da caixa. Fica logo depois do Text Box porque e' a
+    # mesma caixa: ela copia Level/Extend/Round de la' e so' escolhe a cor e
+    # pra onde se desloca. Os dois Offset default vao pro lado OPOSTO ao da
+    # Box Shadow (+0.005 / -0.007), que e' o que faz uma cor sair em cima e
+    # a outra embaixo em vez de as duas empilharem no mesmo canto.
+    #
+    # A ORDEM aqui nao decide onde ele aparece: quem decide e' o LAYOUT.
+    i = partes.index(_rotulo("BoxShadowLabel", "Box Shadow", 9))
+    partes[i:i] = [
+        _rotulo("BoxLayer3Label", "Box Layer 3", 7),
+        _checkbox("BoxLayer3Enabled", "Enabled"),
+        _cor("BoxLayer3", "Layer 3 Color", GRUPO_CAMADA3, (1, 0.3, 0.65)),
+        _slider("BoxLayer3CenterX", "Offset X", -0.005, -0.05, 0.05),
+        _slider("BoxLayer3CenterY", "Offset Y", 0.007, -0.05, 0.05),
+        # Alpha e nao Opacity: `Opacity8` fica livre porque e' por onde o
+        # fade entraria (ver `camada3` no ApplyGiStyle).
+        _slider("BoxLayer3Alpha", "Alpha", 1, 0, 1),
+    ]
+    # GRAUS POR FRAME, e o default e' ZERO: enquanto o spin era um Title
+    # proprio, escolher aquele Title JA' era pedir o giro, e o default 2 fazia
+    # sentido. No macro universal todo mundo nasce com este controle, e uma
+    # legenda que comeca girando sem ninguem pedir seria o macro decidindo
+    # estilo no lugar do usuario. Em 0, `deslocar` cai em `pin` e nenhuma
+    # expressao e' escrita - e' a caixa parada, byte a byte.
+    #
+    # 2 continua sendo o valor bom pra experimentar: a 30fps da' uma volta a
+    # cada 6 segundos, lento o bastante pra ler como movimento intencional. A
+    # legenda fica 1 a 3 segundos na tela, entao cada uma mostra meia volta ou
+    # menos e o olho le deriva suave em vez de rodopio. Acima de ~6 vira
+    # estroboscopio e o texto cansa de ler no volume que este projeto produz -
+    # dai o teto em 10 em vez de 360.
+    i = partes.index(_slider("BoxLayer3Alpha", "Alpha", 1, 0, 1))
+    partes.insert(i + 1,
+                  _slider("BoxSpinSpeed", "Spin Speed", 0, 0, 10))
     return "\n".join(partes)
 
 
@@ -2082,7 +2988,11 @@ def controles_texto():
     typed") diz por escrito que nao mexe em nada - dois checkboxes desmarcados
     dizem isso por ausencia.
     """
-    return _combo("TextCase", "Case", ("As typed", "lowercase", "UPPERCASE"), 0)
+    # "Camel Case" e' o nome que o USUARIO da' a isso (tecnicamente e' title
+    # case; camelCase de programador nao tem espaco). Fica o nome dele: e' o que
+    # ele vai procurar no Inspector.
+    return _combo("TextCase", "Case",
+                  ("As typed", "lowercase", "UPPERCASE", "Camel Case"), 0)
 
 
 def controles_fim():
@@ -2099,6 +3009,57 @@ def controles_fim():
     return "\n".join([
         _rotulo("ConfigLabel", "Config", 1),
         _botao("ExportConfig", "Export Config", _exportar_config()),
+    ])
+
+
+def controles_meta():
+    """A aba "Meta": a PONTE entre o clipe e o giautosubs.py.
+
+    As outras duas abas descrevem como a legenda e' desenhada. Esta descreve de
+    onde ela VEIO - qual `legendas.lua` esta linkado, de qual corte, com qual
+    estilo, qual Title, qual preset, e com quantos caracteres por caixa ela foi
+    repartida. Antes isso nao morava em lugar nenhum: o clipe na timeline nao
+    sabia de que arquivo tinha nascido, e a unica forma de descobrir era abrir os
+    candidatos e comparar o texto.
+
+    Os campos sao EDITAVEIS de proposito. `Characters per Box` e' o unico que faz
+    algo ao mudar (ver `GiRebuild`); os caminhos sao editaveis porque relinkar na
+    mao e' a saida quando a ponte nao esta disponivel - outra maquina, outro
+    caminho, o Python fora do lugar.
+
+    `Char Width` fica aqui e nao no grupo Text Box, embora seja a caixa fixa que
+    o use: ele e' a mesma regua dos caracteres por caixa, em unidade de Extend.
+    Os dois juntos sao o que traduz "19 caracteres" em largura de caixa.
+    """
+    return "\n".join([
+        _rotulo("MetaLabel", "Meta", 14),
+        _texto("MetaCaptionsFile", "Captions File"),
+        _texto("MetaCutFolder", "Cut Folder"),
+        _texto("MetaTranscript", "Transcript"),
+        _texto("MetaStyle", "Style"),
+        _texto("MetaStylesFile", "Styles File"),
+        _texto("MetaTitle", "Title"),
+        _texto("MetaConfig", "Config"),
+        _slider("MetaCharsPerBox", "Characters per Box", 19, 5, 60, inteiro=True),
+        _slider("MetaLines", "Lines", 1, 1, 3, inteiro=True),
+        _slider("MetaCharWidth", "Char Width", 0.5, 0, 2),
+        # A outra regua: quantos PIXELS vale uma unidade de Extend. 0 = estimar
+        # (`Size` x altura do frame). Fica aqui e nao no Text Box porque e' da
+        # mesma familia do `Char Width`: as duas traduzem o que voce pede pro que
+        # o Text+ entende, e as duas se corrigem olhando a tela.
+        _slider("MetaPxPorUnidade", "Px per Unit (0 = auto)", 0, 0, 500),
+        # As OPCOES da reconstrucao, e o submit abaixo delas.
+        #
+        # Sem buracos: cada legenda dura ate' a proxima entrar. E' o par da
+        # largura fixa - a caixa parada de que serve se ela PISCA entre duas
+        # legendas? Controle proprio porque nao existe equivalente no estilo: uma
+        # estica o espaco, a outra o tempo.
+        #
+        # A largura fixa NAO ganha controle aqui: ela e' o `TextBoxFixed` do grupo
+        # Text Box, exposto de novo nesta aba (ver `META_INSTANCIAS`).
+        _checkbox("MetaNoGaps", "No Gaps"),
+        _botao("MetaRebuild", "Rebuild with Selected",
+               _com_log(_BOTAO_RECONSTRUIR)),
     ])
 
 
@@ -2173,6 +3134,42 @@ RODAPES = [
     ("ApplyStyleShadow", "ShadowLabel"),
 ]
 
+# Os controles da aba Meta. Lista propria porque eles sao a unica parte do
+# Inspector que NAO e' estilo: nenhum deles viaja no preset (ver
+# `_FORA_DO_PRESET`), e quem os escreve e' o `GiAutoSubs.lua` a cada rodada, do
+# `dados.meta` do legendas.lua - nao o `SetInputValues`.
+#
+# Se eles entrassem no `InputKeys`, o "Apply Style to All Captions" carimbaria o
+# caminho do clipe de origem em cima de todos os outros, e o "Export Config"
+# gravaria caminhos de maquina dentro de um preset de estilo.
+NOVOS_META = [
+    ("MetaLabel", None, None),
+    ("MetaCaptionsFile", None, None),
+    ("MetaCutFolder", None, None),
+    ("MetaTranscript", None, None),
+    ("MetaStyle", None, None),
+    ("MetaStylesFile", None, None),
+    ("MetaTitle", None, None),
+    ("MetaConfig", None, None),
+    ("MetaCharsPerBox", None, None),
+    ("MetaLines", None, None),
+    ("MetaCharWidth", None, None),
+    ("MetaPxPorUnidade", None, None),
+    ("MetaNoGaps", "No Gaps", None),
+    ("MetaRebuild", None, None),
+]
+
+# A largura fixa aparece DUAS vezes no Inspector: no grupo Text Box (onde ela e'
+# geometria) e na aba Meta (onde ela e' opcao da reconstrucao). Um `InstanceInput`
+# pode apontar pro UserControl que quiser, e e' assim que os nove `Apply Style` de
+# rodape sao o mesmo botao - um controle proprio aqui seria uma segunda verdade
+# sobre a mesma coisa, livre pra discordar.
+#
+# (nome da instancia, UserControl de origem, rotulo)
+META_INSTANCIAS = [
+    ("MetaFixedWidth", "TextBoxFixed", "Fixed Width"),
+]
+
 # Ordem identica a de `controles()` - InstanceInput fora de ordem quebra o
 # agrupamento dos LabelControl no Inspector do clipe.
 NOVOS = [
@@ -2198,6 +3195,9 @@ NOVOS = [
 
     ("TextBoxLabel", None, None),
     ("TextBoxEnabled", "Enabled", None),
+    ("TextBoxFixed", "Fixed Box", None),
+    ("TextBoxWidth", None, None),
+    ("TextBoxHeight", None, None),
     ("TextBoxColorRed", "Text Box Color", GRUPO_CAIXA + 100),
     ("TextBoxColorGreen", None, GRUPO_CAIXA + 100),
     ("TextBoxColorBlue", None, GRUPO_CAIXA + 100),
@@ -2273,7 +3273,8 @@ LAYOUT = [
         "ConfigLabel", "ExportConfig",
     ]),
     ("Extras", [
-        "TextBoxLabel", "TextBoxEnabled",
+        "TextBoxLabel", "TextBoxEnabled", "TextBoxFixed",
+        "TextBoxWidth", "TextBoxHeight",
         "TextBoxColorRed", "TextBoxColorGreen", "TextBoxColorBlue",
         "TextBoxOpacity", "TextBoxLevel", "TextBoxExtendHorizontal",
         "TextBoxExtendVertical", "TextBoxRound", "ApplyStyleTextBox",
@@ -2304,6 +3305,17 @@ LAYOUT = [
         "ShadowColorRed", "ShadowColorGreen", "ShadowColorBlue",
         "ApplyStyleShadow",
     ]),
+    # A terceira aba: de onde a legenda veio, e a ponte de volta pro
+    # giautosubs.py. Por ultimo porque nao se mexe nela pra desenhar uma
+    # legenda - se mexe nela pra REFAZER as legendas.
+    ("Meta", [
+        "MetaLabel",
+        "MetaCaptionsFile", "MetaCutFolder", "MetaTranscript",
+        "MetaStyle", "MetaStylesFile", "MetaTitle", "MetaConfig",
+        "MetaCharsPerBox", "MetaLines", "MetaCharWidth", "MetaPxPorUnidade",
+        # as opcoes, e o submit por ultimo
+        "MetaFixedWidth", "MetaNoGaps", "MetaRebuild",
+    ]),
 ]
 
 # Controles do AutoSubs que deixam de aparecer no Inspector. Nao sao apagados
@@ -2330,6 +3342,254 @@ ESCONDER = ["HighlightLabel", "HighlightEnabled", "UpdateHighlight",
 # regex passava por cima desse fecha e ia parar no `]],` do proximo controle -
 # levando junto os controles do meio. Foi assim que o `FillEnabled` sumiu.
 _CALLBACK = re.compile(r"(?ms)^\t+INPS_ExecuteOnChange = \[\[\n.*?^\t+\]\],?\n")
+
+
+# ------------------------------------------------- a caixa como RETANGULO (--fixo)
+#
+# Tres pares Background+RectangleMask e tres Merge, empilhados de tras pra frente:
+#
+#   3 (mais atras)  a terceira cor - o `BoxLayer3*`
+#   2               a segunda cor  - o `BoxShadow*` (que no 3color e' cor, nao sombra)
+#   1               a caixa base   - o `TextBox*`
+#   e o Text+ por cima de todos
+#
+# O idioma (MaskWidth/MaskHeight = resolucao, Center/Width/Height em fracao,
+# CornerRadius) saiu dos 89 templates de fabrica que usam RectangleMask+Background -
+# nao foi inventado aqui.
+#
+# `UseFrameFormatSettings = 1` no Background: sem isso o solido nasce no tamanho
+# gravado no arquivo e nao no da timeline, e a caixa apareceria com a resolucao
+# errada em qualquer projeto que nao fosse 1920x1080.
+#
+# E NENHUM `GlobalIn`/`GlobalOut` nos nove tools, de proposito. O Text+ do AutoSubs
+# declara `GlobalOut = 149`; se um input do Merge vale ate o frame 1000 e o outro
+# ate o 149, no frame 200 um dos dois nao tem imagem - e um Merge sem um dos inputs
+# nao devolve nada. O comp termina em "no frame available for MediaOut1", que foi
+# exatamente o sintoma. Sem declarar faixa, cada tool vale pela comp inteira.
+_TOOLS_RETANGULO = """
+				GiBoxMask3 = RectangleMask {
+					Inputs = {
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1, }, },
+						ClippingMode = Input { Value = FuID { "None", }, },
+						Center = Input { Value = { 0.5, 0.22, }, },
+						Width = Input { Value = 0.5, },
+						Height = Input { Value = 0.12, },
+						CornerRadius = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { -220, -170, }, },
+				},
+				GiBoxBG3 = Background {
+					Inputs = {
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						TopLeftRed = Input { Value = 1, },
+						TopLeftGreen = Input { Value = 0.3, },
+						TopLeftBlue = Input { Value = 0.65, },
+						TopLeftAlpha = Input { Value = 1, },
+						EffectMask = Input {
+							SourceOp = "GiBoxMask3",
+							Source = "Mask",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { -220, -115, }, },
+				},
+				GiBoxMask2 = RectangleMask {
+					Inputs = {
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1, }, },
+						ClippingMode = Input { Value = FuID { "None", }, },
+						Center = Input { Value = { 0.5, 0.22, }, },
+						Width = Input { Value = 0.5, },
+						Height = Input { Value = 0.12, },
+						CornerRadius = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { -110, -170, }, },
+				},
+				GiBoxBG2 = Background {
+					Inputs = {
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						TopLeftRed = Input { Value = 0, },
+						TopLeftGreen = Input { Value = 0.9, },
+						TopLeftBlue = Input { Value = 1, },
+						TopLeftAlpha = Input { Value = 1, },
+						EffectMask = Input {
+							SourceOp = "GiBoxMask2",
+							Source = "Mask",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { -110, -115, }, },
+				},
+				GiBoxMask1 = RectangleMask {
+					Inputs = {
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1, }, },
+						ClippingMode = Input { Value = FuID { "None", }, },
+						Center = Input { Value = { 0.5, 0.22, }, },
+						Width = Input { Value = 0.5, },
+						Height = Input { Value = 0.12, },
+						CornerRadius = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 0, -170, }, },
+				},
+				GiBoxBG1 = Background {
+					Inputs = {
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						TopLeftRed = Input { Value = 0, },
+						TopLeftGreen = Input { Value = 0, },
+						TopLeftBlue = Input { Value = 0, },
+						TopLeftAlpha = Input { Value = 1, },
+						EffectMask = Input {
+							SourceOp = "GiBoxMask1",
+							Source = "Mask",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 0, -115, }, },
+				},
+				GiBoxMerge32 = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "GiBoxBG3",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "GiBoxBG2",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { -110, -60, }, },
+				},
+				GiBoxMerge21 = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "GiBoxMerge32",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "GiBoxBG1",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 0, -60, }, },
+				},
+				GiBoxMerge = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "GiBoxMerge21",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Template",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 110, -60, }, },
+				},
+"""
+
+
+def _inserir_retangulos(texto, contador):
+    """Poe os nove tools da caixa no `Tools` do MACRO, e re-aponta a saida.
+
+    O bloco `Tools` do MacroOperator termina onde comeca o `UserControls` dele -
+    ancorar ali e' o unico jeito estavel: o ultimo tool muda de nome conforme a
+    versao do macro do AutoSubs.
+
+    A saida do macro (`MainOutput1`) vem do `Template`; passa a vir do `GiBoxMerge`.
+    Sem isto os tools existem, renderizam e nao aparecem - o pior dos dois mundos.
+    """
+    # O fim do bloco `Tools` do MACRO, por CONTAGEM DE CHAVES.
+    #
+    # A versao anterior procurava "fecha-chaves seguido de UserControls" por regex -
+    # e o Text+ tambem tem `UserControls`, entao o primeiro match podia ser o dele.
+    # Os nove tools cairam FORA do bloco, o `MainOutput1` passou a apontar pra um
+    # tool que nao existia, e o Resolve respondeu com Media Offline. Contar chaves
+    # a partir do `Tools` certo nao depende de quem vem depois.
+    inicio_macro = texto.find("= MacroOperator {")
+    if inicio_macro < 0:
+        raise SystemExit("nao achei o MacroOperator - o macro mudou de forma")
+    m_tools = re.compile(r"Tools = ordered\(\) \{").search(texto, inicio_macro)
+    if not m_tools:
+        raise SystemExit("nao achei o bloco Tools do macro")
+
+    profundidade, fim = 0, None
+    for pos in range(m_tools.end() - 1, len(texto)):
+        if texto[pos] == "{":
+            profundidade += 1
+        elif texto[pos] == "}":
+            profundidade -= 1
+            if profundidade == 0:
+                fim = pos
+                break
+    if fim is None:
+        raise SystemExit("o bloco Tools do macro nao fecha - arquivo truncado?")
+
+    # O ultimo tool fecha SEM virgula (o Fusion aceita); com mais tools depois, ela
+    # passa a ser obrigatoria.
+    antes = texto[:fim].rstrip()
+    if not antes.endswith(","):
+        antes += ","
+    texto = (antes + "\n" + _TOOLS_RETANGULO.strip("\n") + "\n"
+             + texto[texto.rfind("\n", 0, fim) + 1:])
+
+    novo, n = re.subn(
+        r'(MainOutput1 = InstanceOutput \{\n\t+SourceOp = ")Template(",)',
+        r"\g<1>GiBoxMerge\g<2>", texto, count=1)
+    if not n:
+        raise SystemExit("nao achei o MainOutput1 pra re-apontar")
+    # Conferencia na hora: os nove tools tem que estar DENTRO do bloco `Tools` do
+    # macro. Foi o erro que deu Media Offline, e ele e' invisivel em tudo o mais -
+    # o arquivo compila, valida, instala, e nao aparece.
+    m2 = re.compile(r"Tools = ordered\(\) \{").search(
+        novo, novo.find("= MacroOperator {"))
+    prof, fim2 = 0, None
+    for pos in range(m2.end() - 1, len(novo)):
+        if novo[pos] == "{":
+            prof += 1
+        elif novo[pos] == "}":
+            prof -= 1
+            if prof == 0:
+                fim2 = pos
+                break
+    pos_merge = novo.find("GiBoxMerge = Merge {")
+    if not (m2.end() < pos_merge < (fim2 or 0)):
+        raise SystemExit("os tools do retangulo ficaram FORA do bloco Tools do "
+                         "macro - seria Media Offline na timeline")
+
+    contador.append("the box is now a RECTANGLE: 3 Background + 3 RectangleMask + "
+                    "3 Merge inside the macro, and MainOutput1 comes from "
+                    "GiBoxMerge (the text on top). It does not read the text at "
+                    "all - which costs a constant render per frame, unlike "
+                    "everything else in this macro")
+    return novo
+
+def _sem_fim_de_validade(texto, contador):
+    """Tira o `GlobalOut` dos tools do macro.
+
+    O AutoSubs salvou o Text+ numa comp de 150 frames, e o `GlobalOut = 149` veio
+    junto: o tool deixa de ter imagem depois desse frame. Com o Text+ como saida do
+    macro isso apenas fazia a legenda longa sumir no fim (defeito latente); com a
+    variante `Fixo`, onde a saida e' um Merge, um input sem imagem faz o comp inteiro
+    responder `no frame available for MediaOut1`.
+
+    Legenda de 5 segundos a 30fps ja passa de 149, e desde o `--no-gaps` ha legendas
+    de 21 segundos. Um Title de legenda nao tem prazo de validade.
+    """
+    texto, n = re.subn(r"(?m)^\t+GlobalOut = Input \{ Value = \d+, \},\n", "",
+                       texto)
+    contador.append(f"{n} GlobalOut removed (a tool with GlobalOut has no image "
+                    f"after that frame - it made long captions vanish, and it is "
+                    f"what made the Fixo variant answer 'no frame available for "
+                    f"MediaOut1')")
+    return texto
 
 
 def _desautomatizar(texto, contador):
@@ -2368,8 +3628,17 @@ _INPUT_KEYS_BASE = (
 # copiar o carimbo de um clipe velho pra um novo apagaria justamente o aviso que
 # ele existe pra dar - e `ApplyStyle` e' uma ACAO: nao tem valor pra guardar nem
 # pra restaurar.
+#
+# A aba META inteira fica fora pelo mesmo motivo, com uma consequencia a mais:
+# `MetaCaptionsFile` e companhia sao de onde ESTE clipe veio. No preset, o
+# "Apply Style to All Captions" carimbaria a procedencia do clipe de origem em
+# cima de todos os outros, e o "Export Config" gravaria caminhos de maquina
+# dentro de um estilo. Quem escreve a Meta e' o `GiAutoSubs.lua`, por clipe, a
+# partir do `dados.meta`.
 _FORA_DO_PRESET = {"GiAutoSubsVersao", "ApplyStyle", "ExportConfig",
-                   "ApplyStyleTrack", "ApplyStyleAll", "GenerateStyle"}
+                   "ApplyStyleTrack", "ApplyStyleAll", "GenerateStyle",
+                   "MetaRebuild", "MetaNoGaps", "MetaFixedWidth",
+                   "MetaPxPorUnidade"}
 
 
 def input_keys():
@@ -2379,45 +3648,11 @@ def input_keys():
     Inspector e nao no `InputKeys` funciona ate' voce rodar o script, e ai volta
     calado pro que era. O validador recusa o macro antes disso.
     """
+    # `NOVOS_META` de fora: eles nao sao estilo (ver `_FORA_DO_PRESET`), e um
+    # deles carrega TEXTO - o par Get/SetInputValues compara e escreve numero.
     novos = [nome for nome, _, _ in NOVOS + NOVOS_TEXTO
              if not nome.endswith("Label") and nome not in _FORA_DO_PRESET]
     return list(_INPUT_KEYS_BASE) + novos
-
-
-# As listas COMPLETAS, congeladas na importacao. E' delas que cada rodada deriva
-# o que publica - nunca do que a rodada anterior deixou.
-_NOVOS_COM3 = tuple(NOVOS)
-_RODAPES_COM3 = tuple(RODAPES)
-_LAYOUT_COM3 = tuple((pagina, tuple(nomes)) for pagina, nomes in LAYOUT)
-
-
-def _publicar_controles(com_camada3, com_spin=False):
-    """Recompoe as tres listas que publicam controles, nos DOIS sentidos.
-
-    Sao tres e elas tem que concordar: `NOVOS` vira InstanceInput e InputKeys,
-    `RODAPES` vira o Apply Style do grupo, e `LAYOUT` decide aba e ordem. Um
-    controle que sobrasse numa delas viraria "existe e nao faz nada" - por isso
-    a decisao mora num lugar so.
-
-    DERIVA das listas congeladas em vez de filtrar as atuais, e e' o ponto: a
-    versao anterior removia por efeito colateral, sem volta. Dois `main()` no
-    mesmo processo - um script que gerasse as duas variantes num laco, que e' o
-    proximo passo natural - fariam o Caption esvaziar as listas e o `3color`
-    seguinte nascer SEM os controles que sao a razao dele existir. Com o estilo
-    `caixa_tres_cores` o validador ainda pegaria ("nowhere to store it"); com
-    `--camada3 --estilo capcut_bolha` nao ha quem reclame, e sai um `3color` que
-    e' o Caption com outro nome.
-    """
-    global NOVOS, RODAPES, LAYOUT
-    fora = set()
-    if not com_camada3:
-        fora.update(_NOMES_CAMADA3)
-    if not com_spin:
-        fora.update(_NOMES_SPIN)
-    NOVOS = [t for t in _NOVOS_COM3 if t[0] not in fora]
-    RODAPES = [t for t in _RODAPES_COM3 if t[0] not in fora]
-    LAYOUT = [(pagina, [n for n in nomes if n not in fora])
-              for pagina, nomes in _LAYOUT_COM3]
 
 
 def _trocar_input_keys(texto, contador):
@@ -2545,6 +3780,20 @@ def instance_inputs_rodape():
                            fonte="ApplyStyle")
 
 
+def instance_inputs_meta():
+    """A largura fixa exposta TAMBEM na aba Meta, apontando pro mesmo controle.
+
+    Mesma mecanica dos rodapes (`instance_inputs_rodape`): o nome da instancia e'
+    outro, o `Source` e' o mesmo. E' o que faz marcar na Meta e marcar no Text Box
+    serem o MESMO ato - dois controles separados acabariam discordando, e o
+    usuario veria "Fixed Width" marcado numa aba e "Fixed Box" desmarcado na
+    outra.
+    """
+    return "\n".join(
+        instance_inputs([(nome, rotulo, None)], fonte=fonte)
+        for nome, fonte, rotulo in META_INSTANCIAS)
+
+
 def _reordenar_inputs(texto, contador):
     """Poe o bloco `Inputs` do macro na ordem do LAYOUT e carimba a aba de cada um.
 
@@ -2599,6 +3848,30 @@ def _reordenar_inputs(texto, contador):
     corpo = "\n".join(saida) + "\n"
     return (texto[:m.start()] + ind + "Inputs = ordered() {\n" + corpo
             + ind + "}," + texto[m.end():])
+
+
+def _criar_aba(texto, contador, nome, depois_de, descricao):
+    """Declara a `ControlPage` de uma aba, logo depois de outra.
+
+    Mesma camada do `_criar_aba_extras` (que continua sendo o dono do caso
+    Extras, por ser ele quem conhece a aba "Text"): a ORDEM das declaracoes e' a
+    ordem das abas, entao ancorar na aba anterior e' o que decide onde a nova
+    aparece. Um `Page = "Meta"` sem esta declaracao nao cria aba nenhuma - o
+    controle cai calado na primeira pagina visivel.
+    """
+    if re.search(r"(?m)^\t+" + nome + r" = ControlPage \{", texto):
+        return texto
+    m = re.search(r"(?ms)^(\t+)" + depois_de + r" = ControlPage \{\n.*?^\1\},$",
+                  texto)
+    if not m:
+        contador.append(f'WARNING: the "{depois_de}" ControlPage was not found - '
+                        f'the {nome} tab was NOT created and its controls would '
+                        f'fall back into the first visible tab')
+        return texto
+    ind = m.group(1)
+    aba = f'{ind}{nome} = ControlPage {{\n{ind}\tCT_Visible = true,\n{ind}}},'
+    contador.append(f'the "{nome}" tab created ({descricao})')
+    return texto[:m.end()] + "\n" + aba + texto[m.end():]
 
 
 def _criar_aba_extras(texto, contador):
@@ -2893,6 +4166,9 @@ def aplicar(texto, defaults=None, inputs=None):
     if n:
         texto, _ = novo, mudancas.append(f"default font style -> {FONTE_ESTILO}")
 
+    # 1a2) fora o fim de validade dos tools (o `GlobalOut = 149` do Text+)
+    texto = _sem_fim_de_validade(texto, mudancas)
+
     # 1b) os keyframes de exemplo do spline - a causa do outline azul
     texto = _limpar_keyframes_de_exemplo(texto, mudancas)
 
@@ -2936,10 +4212,13 @@ def aplicar(texto, defaults=None, inputs=None):
     tabs = len(m.group(1))
     novas = ""
     for nome, corpo in (("ApplyGiStyle", _apply_gi()),
-                        ("GiRebuildHighlight", _com_log(_recortar(
-                            _REBUILD, "__CAMADA3_LIGA__", "__FIM_CAMADA3_LIGA__"))),
+                        ("GiRebuildHighlight", _com_log(_REBUILD)),
                         ("GiBubblePop", _pop()),
-                        ("GiApplyText", _com_log(_CASE))):
+                        ("GiApplyText", _com_log(_CASE)),
+                        # A ponte. Chunk e nao corpo de botao: o
+                        # "Apply Style to This Track" chama o MESMO codigo
+                        # quando ve que os caracteres por caixa mudaram.
+                        ("GiRebuild", _reconstruir())):
         novas += (m.group(1) + nome + " = [[\n" + _ind(corpo, tabs + 1)
                   + "\n" + m.group(1) + "]],\n")
     texto = texto[:m.end()] + "\n" + novas.rstrip("\n") + texto[m.end():]
@@ -2954,9 +4233,10 @@ def aplicar(texto, defaults=None, inputs=None):
     #    LabelControl aqui dentro - dai o botao vir junto com o resto.
     texto = _inserir_apos(texto, _bloco("ShadowColorBlue"),
                           _ind(controles() + "\n" + controles_fim() + "\n"
-                               + controles_topo() + "\n" + controles_texto(), 6),
+                               + controles_topo() + "\n" + controles_texto()
+                               + "\n" + controles_meta(), 6),
                           mudancas, "the new controls")
-    mudancas.append(f"{len(NOVOS) + len(NOVOS_TOPO) + len(NOVOS_TEXTO)} new "
+    mudancas.append(f"{len(NOVOS) + len(NOVOS_TOPO) + len(NOVOS_TEXTO) + len(NOVOS_META)} new "
                     f"controls (Case, Spoken Word, Bubble, Text Box, "
                     f"Box Shadow, Apply Style)")
 
@@ -3024,6 +4304,11 @@ def aplicar(texto, defaults=None, inputs=None):
     # 7) nenhum controle reage sozinho - quem aplica e' o botao Apply Style
     texto = _desautomatizar(texto, mudancas)
 
+    # 7b) ...com TRES excecoes nomeadas: o tamanho da caixa fixa segue o slider.
+    #     Depois do passo 7 porque ele tira todo callback do macro, inclusive um
+    #     que tivesse sido posto antes.
+    texto = _injetar_preview(texto, mudancas)
+
     # ...e ai os botoes "Update ..." saem, junto com o destaque desarmado
     escondidos = 0
     for nome in ESCONDER:
@@ -3045,12 +4330,24 @@ def aplicar(texto, defaults=None, inputs=None):
     texto = _anexar_instance_inputs(
         texto, _ind(instance_inputs() + "\n" + instance_inputs(NOVOS_TOPO)
                     + "\n" + instance_inputs(NOVOS_TEXTO)
+                    + "\n" + instance_inputs(NOVOS_META)
+                    + "\n" + instance_inputs_meta()
                     + "\n" + instance_inputs_rodape(), 4), mudancas)
     mudancas.append(f"InstanceInputs (the new controls showing up on the clip, "
                     f"including {len(RODAPES)} Apply Style footers)")
 
-    # 8b) a aba Extras, que precisa existir ANTES de alguem morar nela
+    # 8a2) a caixa como retangulo, na variante `--fixo`. Antes das abas porque ela
+    #      mexe em `Tools` e em `Outputs`, e nao em controle nenhum.
+    if COM_FIXO:
+        texto = _inserir_retangulos(texto, mudancas)
+
+    # 8b) as abas, que precisam existir ANTES de alguem morar nelas. A ORDEM
+    #     das declaracoes E' a ordem das abas, e cada uma se ancora na
+    #     anterior - entao a Meta so' pode nascer depois da Extras.
     texto = _criar_aba_extras(texto, mudancas)
+    texto = _criar_aba(texto, mudancas, "Meta", "Extras",
+                       "Captions File, Cut Folder, Transcript, Style, "
+                       "Title, Config, Characters per Box, Rebuild")
 
     # 8c) ordem e aba de todo mundo, de uma vez, a partir do LAYOUT
     texto = _reordenar_inputs(texto, mudancas)
@@ -3076,7 +4373,7 @@ def _verificar(texto, defaults=None, crus=None):
                          f"{texto.count(']]')}")
     if 'Page = "Style"' in texto:
         problemas.append('there are still controls on the "Style" tab')
-    for nome, _, _ in NOVOS + NOVOS_TOPO + NOVOS_TEXTO:
+    for nome, _, _ in NOVOS + NOVOS_TOPO + NOVOS_TEXTO + NOVOS_META:
         if f"{nome} = InstanceInput" not in texto:
             problemas.append(f"{nome} did not become an InstanceInput")
         if re.search(r"(?m)^\t+" + nome + r" = \{$", texto) is None:
@@ -3087,13 +4384,21 @@ def _verificar(texto, defaults=None, crus=None):
     # As duas abas. Um `Page = "Extras"` sem o `ControlPage` correspondente e' o
     # pior dos dois mundos: o controle some da aba que deveria existir e vai
     # parar na primeira pagina visivel, calado.
-    if not re.search(r"(?m)^\t+Extras = ControlPage \{", texto):
-        problemas.append('the "Extras" ControlPage does not exist - its controls '
-                         'would fall back into the "Text" tab')
+    for aba in ("Extras", "Meta"):
+        if not re.search(r"(?m)^\t+" + aba + r" = ControlPage \{", texto):
+            problemas.append(f'the "{aba}" ControlPage does not exist - its '
+                             f'controls would fall back into the "Text" tab')
     paginas = set(re.findall(r'(?m)^\t+Page = "([^"]*)",$', texto))
-    if paginas - {"Text", "Extras"}:
+    _ABAS = {"Text", "Extras", "Meta"}
+    if paginas - _ABAS:
         problemas.append(f"controls on unexpected tabs: "
-                         f"{sorted(paginas - {'Text', 'Extras'})}")
+                         f"{sorted(paginas - _ABAS)}")
+    # A ponte tem que estar la' dentro: sem o chunk, o botao Rebuild aparece,
+    # clica, e imprime "no tool owns GiRebuild" - que e' o sintoma de macro
+    # velho aplicado a um macro novo.
+    if "GiRebuild = [[" not in texto:
+        problemas.append("GiRebuild was not inserted - the Meta tab would have "
+                         "a Rebuild button with nothing behind it")
 
     # E um rodape por grupo de atributos. Sem o InstanceInput o botao existe e
     # nao aparece - que e' o mesmo que nao existir.
@@ -3307,6 +4612,13 @@ def main(argv=None):
     ap.add_argument("--estilo", default=None,
                     help="style baked into the macro as its default "
                          "(default: the 'padrao' key of estilos.json)")
+    ap.add_argument("--fixo", action="store_true",
+                    help="build the FIXED-BOX variant: the text box becomes a real "
+                         "rectangle (Background + RectangleMask) instead of a "
+                         "border around the text, so its size never depends on the "
+                         "caption. Goes to 'GiAutoSubs Fixo.setting'. Costs a "
+                         "constant render per frame, which the normal macro does "
+                         "not")
     ap.add_argument("--sem-validar", action="store_true",
                     help="skip running valida_macro.lua through fuscript at the end")
     ap.add_argument("--instalar", action="store_true",
@@ -3323,30 +4635,12 @@ def main(argv=None):
                     help="name for the imported style; it also names the Title "
                          "file ('GiAutoSubs <name>.setting'). Required when the "
                          "dump carries no name of its own")
-    ap.add_argument("--camada3", action="store_true",
-                    help="build the three-colour-box variant: adds the "
-                         "'Box Layer 3' group (element 8) to the Inspector. "
-                         "Goes to its own Title ('GiAutoSubs 3color.setting') "
-                         "so the default Caption macro stays as it was")
-    ap.add_argument("--spin", action="store_true",
-                    help="build the spinning variant: the two extra box "
-                         "colours orbit the text ('Spin Speed', in degrees per "
-                         "frame; 0 = the still 3color). Implies --camada3 and "
-                         "goes to 'GiAutoSubs 3color_spinning.setting'")
     args = ap.parse_args(argv)
 
-    # Antes de tudo: a variante muda o que os controles(), o LAYOUT e o
-    # ApplyGiStyle produzem, e todos sao lidos mais abaixo.
-    global COM_CAMADA3, COM_SPIN
-    COM_SPIN = args.spin
-    # Girar UMA cor so' nao e' o efeito: o que se ve e' a segunda e a terceira
-    # trocando de lado. Sem a camada 3 o spin nao teria o que orbitar.
-    COM_CAMADA3 = args.camada3 or COM_SPIN
-    _publicar_controles(COM_CAMADA3, COM_SPIN)
-    if COM_CAMADA3 and args.out == SAIDA and not args.nome and not args.importar_estilo:
-        # Um Title proprio: o padrao continua sendo o macro de sempre.
-        args.nome = "3color_spinning" if COM_SPIN else "3color"
-        args.estilo = args.estilo or "caixa_tres_cores"
+    # Antes de tudo: o `aplicar()` le esta global pra decidir se insere os tools da
+    # caixa-retangulo.
+    global COM_FIXO
+    COM_FIXO = args.fixo
 
     # --importar-estilo roda ANTES de tudo: ele decide qual estilo sera' assado
     # e como o Title vai se chamar. Sem isto, um --out passado a mao venceria o
@@ -3363,6 +4657,8 @@ def main(argv=None):
         if args.out == SAIDA:
             args.out = os.path.join(os.path.dirname(SAIDA),
                                     f"GiAutoSubs {nome}.setting")
+    elif args.fixo and args.out == SAIDA:
+        args.out = os.path.join(os.path.dirname(SAIDA), "GiAutoSubs Fixo.setting")
     elif args.nome and args.out == SAIDA:
         # --nome sem importar: gera um Title proprio a partir de um estilo que
         # ja esta no estilos.json.

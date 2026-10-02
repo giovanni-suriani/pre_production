@@ -498,6 +498,27 @@ para as nossas foi o que impediu o contrato de compilar, rodar e não fazer nada
 Seis lugares. Pular qualquer um deles produz um controle que existe e não faz
 nada — que é pior que não ter controle.
 
+### Passo 0 — dizer se custa PLAYBACK
+
+**Antes de escrever uma linha, responda em duas linhas, e leve a resposta para
+quem pediu.** É por esse número que se decide se a feature vale — e é o único
+custo que se paga em cada scrub, o vídeo inteiro.
+
+- **por frame (playback):** o atributo entra no **array de estilo por caractere**,
+  em spline, ou numa expressão avaliada por frame? Aí custa. Esse array é
+  **quadrático nas palavras** (§4): uma legenda de 17 palavras já chegou a 136
+  entradas por frame, e foi o que travou o playback em 31/08/2026. Input estático,
+  elemento desligado e controle que ninguém liga custam **zero** — a camada 3 e o
+  spin existem em todo clipe desde o macro 30 justamente por isso.
+- **por ação:** quantas escritas por clique, ou por arrasto de slider quando há
+  callback (o callback por controle dispara ~40 vezes num arrasto — medido neste
+  projeto, macro 11). Diga o número, mas diga também que é o barato.
+
+Exemplo de resposta boa, do macro 32 (preview da caixa fixa):
+*"Por frame: zero — nada entra no array; o callback passa `spline = false` e não
+chama o GiBubblePop. Por arrasto: ~1.200 chamadas de API, todas em input de
+geometria."*
+
 ### Passo 1 — UserControl (a definição)
 
 Dentro de `Template.UserControls`, **no fim da lista**:
@@ -721,6 +742,59 @@ parou de funcionar. E `0 keys` no `SetInputValues` é o normal quando vem do
 botão: os valores já estão nos controles, o que ele faz é propagar.
 
 ---
+
+## 6b. A ponte pro Python (`GiRebuild`, macro 25)
+
+A aba **Meta** guarda de onde o clipe veio, e o `GiRebuild` é o caminho de volta:
+ele roda o `giautosubs.py` (`io.popen`, com o comando embrulhado em aspas por
+causa do `cmd /c` do Windows), grava um `legendas.lua` de nome novo, relinka o
+clipe e chama o `GiAutoSubs.lua` por `dofile` pra recriar as legendas.
+
+Três coisas que não são detalhe:
+
+- **é chunk, não corpo de botão.** Dois chamadores — o botão `Rebuild Captions` e
+  o `Apply Style to This Track` quando os caracteres por caixa mudaram. Dois
+  corpos seriam duas cópias da mesma sequência destrutiva pra divergir.
+- **a ordem é gerar → relinkar → recriar.** Nada é destruído antes de o arquivo
+  novo existir no disco.
+- **o `dofile` não passa argumento**, então as respostas vão por arquivo
+  (`_gipedido.txt`) e preenchem os escapes que já existem (`ARQUIVO`,
+  `ESTILO_FIXO`, `PRESET_FIXO`, `CONFLITO_FIXO`).
+
+E a aba Meta **não entra no `InputKeys`** (§4b): ela não é estilo. No schema, o
+`Apply Style to All Captions` levaria a procedência de um clipe pra todos os
+outros, e o `Export Config` gravaria caminhos de máquina dentro de um estilo.
+Quem a escreve é o `escrever_meta` do `GiAutoSubs.lua`, direto no macro e no
+Text+.
+
+## 6d. Um botão não mexe na timeline (e o crash que provou isso)
+
+Um botão do Inspector roda **dentro da composição do clipe clicado**. Chamar de
+lá o `GiAutoSubs.lua` (por `dofile`) faz o modo `substituir` rodar `DeleteClips`
+em todas as legendas — inclusive a desse clipe: o código apaga a comp que está
+executando ele, e o Resolve cai sem mensagem. Relatado pelo usuário em
+27/09/2026, corrigido no macro 29.
+
+Vale para qualquer mutação de timeline a partir de um botão, e `io.popen` entra na
+mesma lista (pipe lido na thread da interface). O que um botão pode fazer com
+segurança: ler o clipe, escrever inputs dele, gravar arquivo no disco, e rodar
+processo externo com `os.execute` redirecionando pra arquivo. O `valida_macro.lua`
+recusa o macro se o chunk `GiRebuild` citar qualquer um dos quatro.
+
+## 6c. O corpo de um botão roda num escopo NU
+
+O Fusion entrega `comp` e `tool` ao `BTNCS_Execute` e mais nada. `diga`,
+`gi_chunk` e `gi_macro` só existem no corpo porque o gerador as injeta no
+marcador `__LOG_LUA__` (`_com_log`). Corpo escrito **sem** o marcador compila,
+aparece no Inspector, aceita o clique e morre em `attempt to call global
+'gi_chunk' (a nil value)` — e o `_com_log` não avisa que não teve onde
+substituir. Foi assim que os três botões de Rebuild do macro 27 nasceram
+quebrados.
+
+Hoje o `valida_macro.lua` recusa: todo `ButtonControl` que chama uma ajudante tem
+que definir a ajudante no próprio corpo (busca com parêntese, senão `function
+gi_chunk` casa dentro de `function gi_chunk_outra_coisa`), e todo corpo passa por
+`loadstring`.
 
 ## 7. Lista de armadilhas
 

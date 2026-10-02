@@ -93,20 +93,42 @@ local NOVOS = {
 	"BubbleColorBlue", "BubbleOpacity", "BubbleLevel",
 	"BubbleExtendHorizontal", "BubbleExtendVertical", "BubbleRound",
 	"BubblePopEnabled", "BubblePopAmount", "BubblePopFrames",
-	"TextBoxLabel", "TextBoxEnabled", "TextBoxColorRed", "TextBoxColorGreen",
+	"TextBoxLabel", "TextBoxEnabled", "TextBoxFixed",
+	"TextBoxWidth", "TextBoxHeight",
+	"TextBoxColorRed", "TextBoxColorGreen",
 	"TextBoxColorBlue", "TextBoxOpacity", "TextBoxLevel",
 	"TextBoxExtendHorizontal", "TextBoxExtendVertical", "TextBoxRound",
+	-- a terceira cor da caixa e o giro: eram variante ate' o macro 30 e
+	-- por isso nao eram conferidos por ninguem. Agora existem sempre.
+	"BoxLayer3Label", "BoxLayer3Enabled",
+	"BoxLayer3ColorRed", "BoxLayer3ColorGreen", "BoxLayer3ColorBlue",
+	"BoxLayer3CenterX", "BoxLayer3CenterY", "BoxLayer3Alpha",
+	"BoxSpinSpeed",
 	"BoxShadowLabel", "BoxShadowOnHighlight", "BoxShadowOnNormal",
 	"BoxShadowColorRed", "BoxShadowColorGreen", "BoxShadowColorBlue",
 	"BoxShadowCenterX", "BoxShadowCenterY", "BoxShadowOpacity",
 	"BoxShadowSoftness",
 	"ApplyStyleLabel", "ApplyStyle",
 	"ConfigLabel", "ExportConfig",
+	-- a aba Meta: de onde a legenda veio, e a ponte de volta pro giautosubs.py
+	"MetaLabel", "MetaCaptionsFile", "MetaCutFolder", "MetaTranscript",
+	"MetaStyle", "MetaStylesFile", "MetaTitle", "MetaConfig",
+	"MetaCharsPerBox", "MetaLines", "MetaCharWidth", "MetaPxPorUnidade",
+	"MetaNoGaps", "MetaRebuild",
 }
 
 -- Controles que existem no Inspector mas NAO no preset. `ApplyStyle` e' uma
 -- acao: nao tem valor pra guardar nem pra restaurar.
-local FORA_DO_PRESET = { ApplyStyle = true, ExportConfig = true }
+--
+-- A aba META tambem, e com uma razao a mais: os campos dela dizem de onde ESTE
+-- clipe veio. No preset, o "Apply Style to All Captions" carimbaria a
+-- procedencia do clipe de origem em cima de todos os outros.
+local FORA_DO_PRESET = { ApplyStyle = true, ExportConfig = true,
+	MetaCaptionsFile = true, MetaCutFolder = true, MetaTranscript = true,
+	MetaStyle = true, MetaStylesFile = true, MetaTitle = true,
+	MetaConfig = true, MetaCharsPerBox = true, MetaLines = true,
+	MetaCharWidth = true, MetaRebuild = true, MetaNoGaps = true,
+	MetaFixedWidth = true, MetaPxPorUnidade = true }
 
 -- `Tools` do topo tem MAIS de uma ferramenta: alem do macro esta o
 -- Follower1DelaybyCharacterPosition (um BezierSpline solto). A versao
@@ -147,7 +169,12 @@ for _, par in ipairs({
 	{ "FillLabel", 5 },
 	{ "OutlineLabel", 6 },
 	{ "ConfigLabel", 1 },       -- ferramenta, nao estilo: sem rodape
-	{ "TextBoxLabel", 10 }, { "BubbleLabel", 13 },
+	{ "TextBoxLabel", 13 },     -- +3: Fixed Box (25), Width e Height (31)
+	{ "BoxLayer3Label", 9 },    -- Enabled, cor, X, Y, Alpha, Spin + rodape
+	{ "BubbleLabel", 13 },
+	-- a aba Meta: sete campos de texto, tres numeros e o Rebuild. Ferramenta,
+	-- nao estilo - por isso nao ganha rodape de Apply Style.
+	{ "MetaLabel", 14 },
 	{ "WordFillLabel", 5 }, { "BoxShadowLabel", 10 },
 	{ "ShadowLabel", 5 },
 }) do
@@ -241,6 +268,218 @@ do
 		.. "to the AutoSubs routines")
 	checa(type(cd.GetInputValues) == "string",
 		"GetInputValues is missing - there is no way to read a style back")
+	checa(type(cd.GiRebuild) == "string",
+		"GiRebuild is missing - the Meta tab would have a Rebuild button with "
+		.. "nothing behind it")
+	-- A ponte. Chunk e nao corpo de botao porque o "Apply Style to This Track"
+	-- chama o MESMO codigo quando ve que os caracteres por caixa mudaram - sem
+	-- ele, o botao Rebuild da aba Meta clica e imprime "no tool owns GiRebuild".
+	local b = uc.MetaRebuild
+	checa(b and tostring(b.BTNCS_Execute or ""):find("GiRebuild", 1, true),
+		"MetaRebuild does not go through the GiRebuild chunk - a second body "
+		.. "would be a second place for the rebuild to diverge")
+
+	-- NADA DE MEXER NA TIMELINE DE DENTRO DO MACRO.
+	--
+	-- Custou um crash do Resolve (macro 28 -> 29): o `GiRebuild` chamava o
+	-- GiAutoSubs.lua por `dofile`, e o modo `substituir` faz `DeleteClips` em
+	-- todas as legendas - inclusive a do clipe cujo botao estava no meio da
+	-- execucao. O codigo apagava a comp que o estava rodando, e o Resolve cai sem
+	-- mensagem nenhuma.
+	--
+	-- `io.popen` entra na mesma lista: ler pipe na thread da interface e' o outro
+	-- suspeito, e `os.execute` com redirecionamento faz o mesmo trabalho.
+	-- Sem as linhas de COMENTARIO: o comentario que explica por que o `io.popen`
+	-- saiu cita o `io.popen`, e uma checagem que acusa a propria explicacao
+	-- ensina a apagar a explicacao.
+	local codigo = {}
+	for linha in (tostring(cd.GiRebuild or "") .. "\n"):gmatch("(.-)\n") do
+		if not linha:match("^%s*%-%-") then codigo[#codigo + 1] = linha end
+	end
+	codigo = table.concat(codigo, "\n")
+
+	for _, proibido in ipairs({ "dofile", "DeleteClips", "io.popen",
+		"AppendToTimeline" }) do
+		checa(codigo:find(proibido, 1, true) == nil,
+			"GiRebuild calls " .. proibido .. "() - a macro button runs INSIDE "
+			.. "its clip's composition, and touching the timeline (or piping) "
+			.. "from there crashes Resolve. It must only prepare the files.")
+	end
+
+	-- A LARGURA FIXA E' UM CONTROLE SO', exposto duas vezes.
+	--
+	-- `Fixed Width` na aba Meta tem que apontar pro `TextBoxFixed` do grupo Text
+	-- Box. Como controle proprio, os dois nasceriam iguais e divergiriam no
+	-- primeiro clique: o usuario veria "Fixed Width" marcado numa aba e
+	-- "Fixed Box" desmarcado na outra, e nenhum dos dois estaria errado.
+	do
+		local inst = instancias and instancias.MetaFixedWidth
+		checa(inst ~= nil,
+			"MetaFixedWidth does not exist as an InstanceInput - the rebuild "
+			.. "options would be missing the fixed width")
+		checa(inst == nil or inst.Source == "TextBoxFixed",
+			"MetaFixedWidth points at '" .. tostring(inst and inst.Source)
+			.. "' instead of TextBoxFixed - two controls for the same thing "
+			.. "will disagree")
+		checa(uc.MetaFixedWidth == nil,
+			"MetaFixedWidth exists as its own UserControl - it has to be an "
+			.. "instance of TextBoxFixed, not a second checkbox")
+	end
+end
+
+------------------------------------------- 3d. o corpo de TODO botao se sustenta
+--
+-- Um botao roda num escopo NU: o Fusion entrega `comp` e `tool` e mais nada. As
+-- ajudantes da casa (`diga`, `gi_chunk`, `gi_macro`) vem de um trecho que o
+-- gerador injeta no marcador `__LOG_LUA__` - e um corpo escrito SEM o marcador
+-- compila, aparece, clica, e morre no primeiro uso com
+-- `attempt to call global 'gi_chunk' (a nil value)`.
+--
+-- Foi o que aconteceu com os tres botoes de Rebuild do macro 27. O clique e' a
+-- unica forma de descobrir isso, e e' justamente o que nao se pode testar sem o
+-- Resolve - por isso a checagem mora aqui: quem chama uma ajudante tem que
+-- trazer a definicao dela no proprio corpo.
+do
+	local AJUDANTES = { "gi_chunk", "gi_macro", "diga" }
+	for nome, c in pairs(uc) do
+		if type(c) == "table" and c.INPID_InputControl == "ButtonControl" then
+			local corpo = tostring(c.BTNCS_Execute or "")
+			for _, ajudante in ipairs(AJUDANTES) do
+				if corpo:find(ajudante .. "%(") then
+					-- Com o PARENTESE: sem ele, `function gi_chunk` casa dentro
+					-- de `function gi_chunk_qualquercoisa`, e a checagem passaria
+					-- num corpo que nao define a ajudante nenhuma (provado
+					-- estragando o .setting a mao).
+					checa(corpo:find("function " .. ajudante .. "(", 1, true) ~= nil,
+						"the button '" .. nome .. "' calls " .. ajudante
+						.. "() but does not define it - it would die on the "
+						.. "first click (the __LOG_LUA__ marker is missing "
+						.. "from its body)")
+				end
+			end
+			-- E o corpo tem que COMPILAR. Um botao nao e' funcao: e' uma
+			-- sequencia de instrucoes, que e' o que o loadstring aceita.
+			local _, err = loadstring(corpo)
+			checa(err == nil, "the button '" .. nome .. "' does not compile: "
+				.. tostring(err))
+		end
+	end
+end
+
+---------------------------------------- 3e. as funcoes de CAIXA, rodando
+--
+-- Compilar nao prova nada aqui. `string.upper` do Lua e' ASCII ("acao" vira
+-- "ACAO", "ação" vira "AÇãO"), e andar de byte em byte cai no MEIO de um
+-- acentuado - os dois erram calados e aparecem na tela do usuario. Entao este
+-- bloco EXTRAI as funcoes do macro (entre os marcadores `<<CASE_FUNCS` e
+-- `CASE_FUNCS>>`) e roda em exemplos.
+--
+-- Extrair em vez de reescrever: uma segunda copia da regra aqui passaria a
+-- testar a copia, nao o macro.
+do
+	local trecho = texto:match(
+		"%-%- <<CASE_FUNCS(.-)%-%- CASE_FUNCS>>")
+	checa(trecho ~= nil,
+		"the case functions are not between the <<CASE_FUNCS markers - there is "
+		.. "no way to run them from here, and accents fail silently")
+	if trecho then
+		-- O trecho declara `local function`s; o `return` devolve as tres.
+		local chunk, err = loadstring(trecho .. [[
+			return { maiuscula = maiuscula, minuscula = minuscula,
+				camel = camel, transformar = transformar }
+		]])
+		checa(chunk ~= nil, "the case functions do not compile on their own: "
+			.. tostring(err))
+		local fn = chunk and chunk()
+		if fn then
+			local casos = {
+				-- o exemplo que o usuario deu ao pedir o Camel Case
+				{ "camel", "eu adoro torresmo, uhuu", "Eu Adoro Torresmo, Uhuu" },
+				-- e o caso que importa neste projeto: o texto JA vem em caixa
+				-- alta (o `capcut_bolha` e' assim), entao o camel tem que
+				-- minusculizar antes - senao sai igual ao que entrou
+				{ "camel", "ELES SO SAO MEIO TIMIDOS.", "Eles So Sao Meio Timidos." },
+				-- acento, nos dois sentidos
+				{ "maiuscula", "ação e coração", "AÇÃO E CORAÇÃO" },
+				{ "minuscula", "AÇÃO E CORAÇÃO", "ação e coração" },
+				{ "camel", "ação e coração", "Ação E Coração" },
+				-- hifen e apostrofo nao comecam palavra nova
+				{ "camel", "bem-vindo d'agua", "Bem-vindo D'agua" },
+				-- digito faz parte da palavra
+				{ "camel", "3d e 2 coisas", "3d E 2 Coisas" },
+			}
+			for _, caso in ipairs(casos) do
+				local nome, entrada, esperado = caso[1], caso[2], caso[3]
+				local saida = fn[nome](entrada)
+				checa(saida == esperado,
+					string.format("%s(%q) should be %q, it is %q",
+						nome, entrada, esperado, tostring(saida)))
+			end
+			-- E o combo tem que oferecer a opcao: funcao sem opcao no Inspector
+			-- e' funcao que ninguem alcanca.
+			local c = uc.TextCase
+			checa(c and #c >= 4,
+				"the Case combo has " .. tostring(c and #c)
+				.. " options - Camel Case (3) has nowhere to be picked")
+			checa(fn.transformar("ola mundo", 3) == "Ola Mundo",
+				"transformar(s, 3) is not the camel case - the combo index and "
+				.. "the function disagree")
+		end
+	end
+end
+
+------------------------------- 3e2. nenhum tool tem fim de validade
+--
+-- `GlobalOut` num tool quer dizer "sem imagem depois deste frame". O macro do
+-- AutoSubs trazia `GlobalOut = 149` no Text+ (sobra da comp de 150 frames onde ele
+-- foi salvo), e isso fazia legenda de mais de ~5s a 30fps sumir no fim - calado.
+--
+-- Na variante `Fixo`, onde a saida e' um Merge, ficou fatal: Merge sem um dos inputs
+-- nao devolve nada, e o comp responde `no frame available for MediaOut1`. Custou uma
+-- rodada do usuario pra aparecer, e o sintoma nao aponta pra ca.
+checa(texto:find("GlobalOut = Input", 1, true) == nil,
+	"some tool still declares GlobalOut - it has no image after that frame, which "
+	.. "makes long captions vanish and makes a Merge (the Fixo variant) fail with "
+	.. "'no frame available for MediaOut1'")
+
+------------------------- 3f. a SAIDA do macro aponta pra um tool que existe
+--
+-- Custou um "Media Offline" (27/09/2026): os nove tools da caixa-retangulo cairam
+-- fora do bloco `Tools` por um regex frouxo, o `MainOutput1` ficou apontando pra um
+-- `GiBoxMerge` inexistente, e o macro passou a nao ter saida. O arquivo compila,
+-- valida, instala - e nao aparece na timeline.
+--
+-- Um output orfao e' invisivel em tudo o que se checa por nome de controle ou por
+-- rotina. Aqui ele deixa de ser.
+do
+	local tools = template and {} or {}
+	-- os tools do macro, pelo nome (o `template` ja e' um deles)
+	for _, ferramenta in pairs((raiz or {}).Tools or {}) do
+		if type(ferramenta) == "table" and type(ferramenta.Tools) == "table" then
+			for nome in pairs(ferramenta.Tools) do tools[nome] = true end
+		end
+	end
+
+	local saidas = nil
+	for _, ferramenta in pairs((raiz or {}).Tools or {}) do
+		if type(ferramenta) == "table" and type(ferramenta.Tools) == "table"
+			and ferramenta.Tools.Template then
+			saidas = ferramenta.Outputs
+		end
+	end
+	checa(saidas ~= nil, "the macro has no Outputs block - it would have no output "
+		.. "at all, and the Edit page shows Media Offline")
+	-- So' a `MainOutput1`: e' ela que a timeline renderiza. As outras
+	-- (`Output1..4`) apontam pra MODIFICADORES - o Follower, o KeyframeStretcher, o
+	-- BezierSpline do delay -, que nao moram no bloco `Tools` e por isso nao dao
+	-- pra conferir assim. A que derruba a tela e' esta.
+	local principal = (saidas or {}).MainOutput1
+	checa(principal ~= nil, "the macro has no MainOutput1 - nothing to render")
+	local fonte = principal and principal.SourceOp
+	checa(fonte ~= nil and tools[fonte] ~= nil,
+		"MainOutput1 comes from '" .. tostring(fonte) .. "', which is not a tool "
+		.. "inside the macro - Resolve shows Media Offline for a macro whose "
+		.. "output points at nothing")
 end
 
 ------------------------------------------------------- 4. aba Style sumiu
@@ -276,9 +515,12 @@ end
 --   ApplyStyleAll   aplica o estilo deste clipe em todas as legendas (macro 20)
 --   GenerateStyle   exporta o estilo deste clipe pro estilos.json  (macro 20)
 --   ExportConfig    exporta o estilo deste clipe como preset da rodada (21)
+--   MetaRebuild     regera o legendas.lua com os caracteres por caixa da aba
+--                   Meta e recria os clipes                            (25)
 local BOTOES_PERMITIDOS = {
 	ApplyStyle = true, ExportConfig = true,
 	ApplyStyleTrack = true, ApplyStyleAll = true, GenerateStyle = true,
+	MetaRebuild = true,
 }
 
 for nome, inst in pairs(instancias or {}) do
@@ -313,14 +555,14 @@ end
 -- camada por causa da qual a aba "Style" continuava aparecendo depois de
 -- esvaziada. Sem o ControlPage, todo mundo com `Page = "Extras"` cai calado na
 -- primeira pagina visivel, e o Inspector volta a ter uma aba so'.
-local ABAS = { Text = true, Extras = true }
-do
-	local extras = paginas and paginas.Extras
-	checa(extras ~= nil,
-		'the "Extras" ControlPage does not exist - the controls sent there would '
-		.. 'fall back into "Text"')
-	checa(extras == nil or extras.CT_Visible ~= false,
-		'the "Extras" tab exists but is hidden (CT_Visible = false)')
+local ABAS = { Text = true, Extras = true, Meta = true }
+for _, nome in ipairs({ "Extras", "Meta" }) do
+	local aba = paginas and paginas[nome]
+	checa(aba ~= nil,
+		'the "' .. nome .. '" ControlPage does not exist - the controls sent '
+		.. 'there would fall back into "Text"')
+	checa(aba == nil or aba.CT_Visible ~= false,
+		'the "' .. nome .. '" tab exists but is hidden (CT_Visible = false)')
 end
 
 -- todo InstanceInput tem que dizer em que aba esta: sem `Page` ele cai na
@@ -361,15 +603,62 @@ end
 -- mora: metade dos disparos so' sabia imprimir "nothing was applied". Hoje quem
 -- aplica e' o botao, e um callback sobrevivente seria um segundo caminho,
 -- invisivel, disparado sem ninguem pedir.
+--
+-- A REGRA NAO VIROU "alguns podem": virou uma LISTA FECHADA. Desde o macro 32, tres
+-- controles reagem sozinhos - `Fixed Box`, `Width` e `Height` -, porque o tamanho da
+-- caixa fixa e' o unico atributo que nao da' pra acertar sem ver na tela, e clicar
+-- Apply Style a cada tentativa e' o que tornava isso impraticavel.
+--
+-- Tres a menos e' preview que nao funciona. Um a mais e' a porta reaberta. E o que
+-- fazia o callback ser caro nao era existir: era fazer o trabalho INTEIRO (inclusive
+-- reconstruir o array de estilo por caractere, que e' quadratico nas palavras)
+-- quarenta vezes por arrasto de slider. Por isso o corpo destes tres e' conferido
+-- abaixo: `spline = false` e o modo "so' a caixa", que e' o que mantem o custo por
+-- FRAME em zero.
+local PREVIEW_PERMITIDO = {
+	TextBoxFixed = true, TextBoxWidth = true, TextBoxHeight = true,
+}
 do
-	local sobraram = {}
+	local sobraram, achados = {}, {}
 	for nome, c in pairs(uc) do
 		if type(c) == "table" and c.INPS_ExecuteOnChange ~= nil then
-			sobraram[#sobraram + 1] = nome
+			if PREVIEW_PERMITIDO[nome] then
+				achados[nome] = tostring(c.INPS_ExecuteOnChange)
+			else
+				sobraram[#sobraram + 1] = nome
+			end
 		end
 	end
-	checa(#sobraram == 0, #sobraram .. " control(s) still react on their own ("
-		.. table.concat(sobraram, ", ") .. ") - Apply Style is the only way in")
+	checa(#sobraram == 0, #sobraram .. " control(s) react on their own without "
+		.. "being the fixed-box preview (" .. table.concat(sobraram, ", ")
+		.. ") - Apply Style is the only other way in")
+
+	for nome in pairs(PREVIEW_PERMITIDO) do
+		local corpo = achados[nome]
+		checa(corpo ~= nil,
+			nome .. " has no INPS_ExecuteOnChange - the fixed box would stop "
+			.. "following the slider, and you would be back to clicking Apply "
+			.. "Style to see the size")
+		if corpo then
+			-- O corpo roda num escopo NU (ver 3d): quem chama `gi_chunk` tem que
+			-- trazer a definicao. Aqui isso e' checado junto com o resto.
+			checa(corpo:find("function gi_chunk(", 1, true) ~= nil,
+				nome .. "'s callback calls gi_chunk() without defining it - it "
+				.. "would die on the first drag")
+			checa(corpo:find("ApplyGiStyle", 1, true) ~= nil,
+				nome .. "'s callback does not go through ApplyGiStyle - a second "
+				.. "place computing the box size would show one size and apply "
+				.. "another")
+			-- `false, true` = spline desligado + modo so'-a-caixa. E' o par que
+			-- mantem o custo por frame em zero; sem ele o preview reconstruiria o
+			-- array de estilo por caractere a cada valor de slider.
+			checa(corpo:find('"preview", false, true', 1, true) ~= nil,
+				nome .. "'s callback does not pass (spline = false, boxOnly = "
+				.. "true) - it would rebuild the per-character array on every "
+				.. "intermediate slider value, which is what killed the callbacks "
+				.. "in macro 11")
+		end
+	end
 end
 
 ------------------------- 4b. o spline nao pode ficar SEM keyframe

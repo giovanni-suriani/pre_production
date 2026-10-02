@@ -68,7 +68,44 @@ NIVEIS = {"texto": 0, "tudo": 0, "linha": 1, "palavra": 2, "caractere": 3}
 # `fonte.caixa_das_letras` do estilo -> o combo `TextCase` do macro. A ordem e'
 # a mesma la e aqui, e a ordem E' o valor gravado - ver o `Level` invertido na
 # secao 8 do ESTADO.md pra saber o que acontece quando as duas discordam.
-CAIXA_DAS_LETRAS = {"normal": 0, "minusculas": 1, "maiusculas": 2}
+# `camel` = primeira letra de cada palavra em maiuscula ("Eu Adoro Torresmo,
+# Uhuu"). Os dois nomes existem porque e' assim que o usuario chama e assim
+# que o resto do mundo chama - e um estilo que escreve o outro cairia no 0 calado.
+# Estilo que MUDOU DE NOME.
+#
+# Existe porque o nome do estilo viaja GRAVADO: no `estilo` de todo legendas.lua
+# ja escrito, no `meta.style`, e no controle `MetaStyle` dos clipes que estao na
+# timeline - e e' de la' que o botao "Rebuild with Selected" tira o `--estilo`.
+# Sem a traducao, clicar em Rebuild num clipe antigo morre com "style does not
+# exist", e o usuario nao tem como saber que o culpado foi um rename.
+#
+# Traduzir e' o oposto de esconder: a rodada AVISA que o nome mudou. Um rename
+# silencioso seria pior que o erro - ninguem atualizaria o que esta' no disco.
+ESTILOS_RENOMEADOS = {
+    "caixa_tres_cores": "3_color",
+    "caixa_tres_cores_girando": "3_color_spinning",
+}
+
+
+def resolver_estilo(cfg, nome):
+    """O nome de hoje para um estilo pedido por um nome de ontem.
+
+    So' age quando o nome pedido NAO existe: um estilo novo que por acaso se chame
+    como um antigo continua sendo ele mesmo.
+    """
+    if not nome or nome in (cfg.get("estilos") or {}):
+        return nome
+    novo = ESTILOS_RENOMEADOS.get(nome)
+    if novo and novo in (cfg.get("estilos") or {}):
+        print(f"[i] style '{nome}' was renamed to '{novo}' - using it. The file "
+              f"(or the clip's Meta tab) still says the old name; the next run "
+              f"stamps the new one.", file=sys.stderr)
+        return novo
+    return nome
+
+
+CAIXA_DAS_LETRAS = {"normal": 0, "minusculas": 1, "maiusculas": 2,
+                    "camel": 3, "capitalizado": 3}
 
 # Nome do controle do macro que corresponde a cada caixa. Existe porque o
 # estilo agora e' escrito em DOIS lugares: nos inputs crus do Text+ (quem
@@ -275,7 +312,23 @@ FORMA_BORDA = 2
 #    "valendo" pintava so' os quatro caracteres de "vale", porque o
 #    `GiWordTiming` endereca o texto por posicao. Palavra a mais ou a menos
 #    continua sendo caso de rodar o script - agora com aviso.
-MACRO_VERSAO = 24  # 24: botao "Apply Style to This Track"
+MACRO_VERSAO = 37  # 37: o spin gira a caixa-retangulo do `Fixo`
+                   # 36: o Rebuild do macro morria no `cmd /c`
+                   # (redirecionamento fora da aspa externa)
+                   # 35: variante `Fixo` - a caixa e um RETANGULO de
+                   # verdade, que nao olha o texto (gerar_macro --fixo)
+                   # 34: a caixa fixa usa a largura MEDIDA do texto
+                   # (Pillow), entao toda caixa sai do mesmo tamanho
+                   # 33: escala px calibrada (0.578, medida) e SetAttrs
+                   # tentando desabilitar o Extend no Inspector
+                   # 32: com Fixed Box ligado, o Extend vale ZERO (era
+                   # somado a conta, o que fazia a caixa "fixa" mudar
+                   # de tamanho com um controle desligado)
+                   # 31: Width/Height em px na caixa fixa, e o nome do
+                   # preset por dialogo nativo (o AskUser saiu)
+                   # 30: macro UNICO - a camada 3 e o spin deixaram de ser
+                   # variante, entao todo clipe tem `BoxLayer3*` e
+                   # `BoxSpinSpeed` (desligados por default)
 
 # Inputs de elemento que precisam ser escritos TAMBEM no Follower1.
 #
@@ -491,14 +544,18 @@ def _camada3(inputs, controles, n, camada, nivel, geo, caixa_on):
     Transparencia vai por `Alpha`, nao por `Opacity`: o fade do AutoSubs mora em
     `Opacity1..4` do Follower1, e os elementos 5..8 nao estao ligados nele.
     """
-    # Estilo que nao declara `camada3` nao fala de terceira cor nenhuma - e nao
-    # pode escrever `BoxLayer3Enabled`, porque o macro PADRAO nao tem esse
-    # controle (ele so' existe na variante `--camada3`). Escrever assim mesmo e'
-    # o que o validador recusa com "the style asks for it, but there is nowhere
-    # to store it". O `Enabled{n}` cru continua indo: e' input do Text+, existe
-    # sempre, e e' o que garante o elemento 8 apagado.
+    # Estilo que nao declara `camada3` nao fala de terceira cor nenhuma, e
+    # agora pode dizer isso EXPLICITAMENTE: desde o macro 30 nao existe mais a
+    # variante `--camada3`, entao `BoxLayer3Enabled` existe em todo clipe e
+    # escrever 0 nele e' a afirmacao "esta desligada", nao um controle
+    # inventado. Era essa a assimetria - omitir na ida e nao ter como saber na
+    # volta - que obrigava o aviso "WRONG TITLE" do GiAutoSubs.lua.
+    #
+    # O `Enabled{n}` cru continua indo junto: e' input do Text+ e e' ele que
+    # garante o elemento 8 apagado no desenho.
     if camada is None:
         inputs[f"Enabled{n}"] = 0
+        controles["BoxLayer3Enabled"] = 0
         return False
 
     on = caixa_on and bool(camada.get("ativo"))
@@ -521,8 +578,102 @@ def _camada3(inputs, controles, n, camada, nivel, geo, caixa_on):
         "BoxLayer3ColorRed": r, "BoxLayer3ColorGreen": g,
         "BoxLayer3ColorBlue": b, "BoxLayer3Alpha": alpha,
         "BoxLayer3CenterX": direcao[0], "BoxLayer3CenterY": direcao[1],
+        # O GIRO, em graus por frame. Era variante do macro (`--spin`, num Title
+        # proprio) e desde o macro 30 e' um controle de todo clipe, desligado por
+        # default - so' que nenhum estilo tinha como liga-lo, e "quero o 3color
+        # spinning" deixou de ter resposta na rodada. Zero = a caixa parada.
+        #
+        # Quem gira e' o DESLOCAMENTO das duas cores extras, nao a geometria: raio
+        # e fase saem do proprio `direcao` acima, que e' um vetor. Ver o
+        # `expressao_spin` do gerar_macro.py.
+        "BoxSpinSpeed": camada.get("giro", 0),
     })
     return True
+
+
+# ---------------------------------------------------------------- medir texto
+#
+# A largura de uma legenda, em EM (1 em = o tamanho da fonte).
+#
+# Existe porque a caixa fixa e' COMPENSACAO: a caixa do Text+ envolve o texto, e a
+# folga de cada lado e' o que falta pro tamanho pedido. Com a largura do texto
+# chutada (era `caracteres x 0.5`), cada legenda saia de um tamanho - o que o
+# usuario cobrou com razao, porque o ponto da caixa fixa e' justamente nao depender
+# do que esta' dentro dela.
+#
+# EM e nao pixel: a medida em em nao depende do tamanho da fonte na tela nem da
+# resolucao, entao ela atravessa qualquer mudanca de `Size` sem recalibrar. E' o
+# unico numero desta familia que nao e' palpite.
+#
+# Sem Pillow ou sem achar a fonte, devolve None e quem chamou cai no palpite - com
+# aviso. Uma dependencia que falta nao pode derrubar a rodada inteira.
+_FONTES_CACHE = {}
+
+
+def _achar_fonte(familia, estilo):
+    """O arquivo da fonte instalada, por familia + estilo do nome interno.
+
+    Duas pastas: a do sistema e a do USUARIO
+    (`%LOCALAPPDATA%\\Microsoft\\Windows\\Fonts`) - fonte instalada "so pra mim"
+    vive la', e e' onde a Open Sans deste projeto esta'. Procurar so' em
+    C:\\Windows\\Fonts nao acharia a fonte que o Resolve esta' usando.
+    """
+    chave = (str(familia), str(estilo))
+    if chave in _FONTES_CACHE:
+        return _FONTES_CACHE[chave]
+
+    caminho = None
+    try:
+        from PIL import ImageFont
+        import glob
+        pastas = [os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")]
+        local = os.environ.get("LOCALAPPDATA")
+        if local:
+            pastas.append(os.path.join(local, "Microsoft", "Windows", "Fonts"))
+
+        alvo_fam = str(familia).strip().lower()
+        alvo_est = str(estilo).strip().lower() or "regular"
+        candidatos = {}
+        for pasta in pastas:
+            for p in (glob.glob(os.path.join(pasta, "*.tt*"))
+                      + glob.glob(os.path.join(pasta, "*.otf"))):
+                try:
+                    fam, est = ImageFont.truetype(p, 10).getname()
+                except Exception:
+                    continue
+                candidatos[(str(fam).lower(), str(est).lower())] = p
+        caminho = (candidatos.get((alvo_fam, alvo_est))
+                   or candidatos.get((alvo_fam, "regular"))
+                   # familia com o estilo no nome ("Open Sans Bold" + "Regular"),
+                   # que e' como varias fontes soltas se apresentam
+                   or candidatos.get((f"{alvo_fam} {alvo_est}", "regular")))
+    except Exception:
+        caminho = None
+
+    _FONTES_CACHE[chave] = caminho
+    return caminho
+
+
+def medir_largura_em(texto, familia, estilo, _tam=100):
+    """Largura do texto em EM, medida na fonte instalada. None se nao der.
+
+    Mede a LINHA MAIS LARGA: a caixa envolve a linha (Level 1), e o comprimento
+    somado de duas linhas nao diz nada sobre a largura.
+    """
+    if not texto:
+        return 0.0
+    caminho = _achar_fonte(familia, estilo)
+    if not caminho:
+        return None
+    try:
+        from PIL import ImageFont
+        fonte = ImageFont.truetype(caminho, _tam)
+        maior = 0.0
+        for linha in str(texto).split("\n"):
+            maior = max(maior, fonte.getlength(linha))
+        return maior / float(_tam)
+    except Exception:
+        return None
 
 
 def compilar_estilo(estilo):
@@ -589,6 +740,37 @@ def compilar_estilo(estilo):
         base.get("caixa") or {}, base.get("box_shadow"),
         "linha", (0.2, 0.12, 0.25), "#000000")
 
+    # A caixa FIXA e a regua que a mede.
+    #
+    # `fixa` nao produz input nenhum do Text+: nao existe largura fixa por lá -
+    # toda caixa em forma de borda acompanha o texto. Quem a realiza e' o
+    # `extend_h` do macro, por COMPENSACAO, e por isso ela e' so' um controle.
+    #
+    # `largura_caractere` e' quanto um caractere vale na unidade do `Extend`. Vive
+    # no estilo (e no Inspector, como `Char Width`) porque a unidade e' relativa
+    # ao tamanho da fonte e nao ha como medi-la fora do Resolve - o numero tem que
+    # ser corrigivel por quem consegue olhar a tela.
+    cx_cfg = base.get("caixa") or {}
+    controles["TextBoxFixed"] = 1 if cx_cfg.get("fixa") else 0
+    controles["MetaCharWidth"] = cx_cfg.get("largura_caractere", 0.5)
+    # O tamanho da caixa fixa em PIXELS. Zero = nao pedi: a largura alvo volta a
+    # ser uma linha cheia de `quebra.max_chars`, e a altura fica no Extend
+    # Vertical. So' valem com `fixa` ligado - com a caixa livre quem manda e' o
+    # texto, e um numero aqui seria um controle que nao faz nada.
+    controles["TextBoxWidth"] = cx_cfg.get("largura_px", 0)
+    controles["TextBoxHeight"] = cx_cfg.get("altura_px", 0)
+    # A regua px<->Extend. 0 = o macro estima (`Size` x altura do frame). Vive no
+    # estilo pra uma calibragem feita uma vez valer pras proximas rodadas, em vez
+    # de morar so' no clipe que voce ajustou.
+    controles["MetaPxPorUnidade"] = cx_cfg.get("px_por_unidade", 0)
+
+    # Os dois numeros da aba Meta que o ESTILO conhece. O `montar` os reescreve
+    # quando a rodada passa `--max-chars`/`--max-lines`: o que vale na Meta e' o
+    # que repartiu ESTAS legendas, nao o que o estilo pediria.
+    q_cfg = estilo.get("quebra") or {}
+    controles["MetaCharsPerBox"] = q_cfg.get("max_chars", 19)
+    controles["MetaLines"] = q_cfg.get("max_linhas", 1)
+
     # ---- terceira cor da caixa: elemento 8 --------------------------------
     # Geometria LIDA DE VOLTA dos controles que o `_caixa_e_sombra` acabou de
     # escrever, em vez de recalculada a partir do estilo. Recalcular seria uma
@@ -602,6 +784,15 @@ def compilar_estilo(estilo):
               controles.get("TextBoxExtendVertical", 0.12),
               controles.get("TextBoxRound", 0.25)),
              caixa_base_on)
+
+    # ZERO tambem e' resposta: um estilo SEM camada 3 tem que dizer que nao gira.
+    #
+    # `BoxSpinSpeed` e' controle de todo clipe desde o macro 30. Sem esta linha, um
+    # estilo sem camada 3 (o `TikTokNovo`, por exemplo) simplesmente nao fala do
+    # giro - e um clipe que estava girando continuaria, agora aplicando a expressao
+    # na SOMBRA da caixa (elemento 7), que segue existindo. O sintoma seria uma
+    # sombra orbitando num estilo que nunca pediu giro.
+    controles.setdefault("BoxSpinSpeed", 0)
 
     # ---- destaque: uma LISTA de camadas, nao um elemento so ---------------
     # Antes o destaque animava um unico elemento, entao "fill rosa" e "caixa
@@ -807,10 +998,11 @@ def estilo_de_controles(controles, extras=None):
             },
             "caixa": caixa("TextBox", on("TextBoxEnabled")),
             "box_shadow": box_shadow(on("BoxShadowOnNormal")),
-            # `camada3` so' sai quando o clipe REALMENTE tem esses controles -
-            # eles existem na variante `--camada3` do macro e nao no padrao.
-            # Escrever o bloco de qualquer jeito faria um estilo exportado de um
-            # clipe comum passar a exigir um controle que o macro dele nao tem.
+            # Desde o macro 30 todo clipe tem `BoxLayer3*`, entao este bloco
+            # sai sempre - e sai HONESTO: `ativo` vem do proprio checkbox, e um
+            # clipe comum exporta `ativo: false`, que na volta o `_camada3`
+            # desliga. A guarda por prefixo fica pra dump de clipe ANTIGO, de
+            # antes do macro unico, que nao tem esses controles.
             # Sem geometria propria de proposito: ela e' a da caixa, e guardar
             # uma copia aqui daria dois numeros pra mesma coisa, livres pra
             # divergirem no proximo ajuste.
@@ -1194,8 +1386,111 @@ def _tela_dividida(pasta):
 CUT_NAMES = {"cut"}
 
 
+def esticar_ate_a_proxima(segmentos, speakers, track_unica):
+    """Cada legenda termina onde a PROXIMA comeca - o "sem buracos".
+
+    Motivo: com a caixa de largura fixa, o buraco entre duas legendas e' a caixa
+    PISCANDO. Esticar a ponta direita de cada uma ate' a seguinte deixa a caixa
+    parada na tela e so' o texto trocando dentro dela - que e' o efeito pedido.
+
+    Por que aqui e nao dentro do Resolve: a duracao de um clipe de legenda e' o
+    `end` do segmento (e' dele que sai o frame final na criacao). A API gratuita
+    nao estica clipe existente de forma confiavel, e mesmo que esticasse, o
+    arquivo continuaria dizendo outra coisa - duas fontes pra mesma duracao.
+
+    POR TRACK, nao pela lista toda. Com uma track por falante (tela dividida) as
+    legendas de pessoas diferentes se intercalam no tempo; esticar cada uma ate'
+    a proxima da LISTA faria a legenda do Heitor terminar onde a do Pedro comeca,
+    numa track onde a do Pedro nem esta - e duas legendas da MESMA track
+    passariam a se sobrepor, que e' o unico estado impossivel numa track de
+    video. Agrupando pela track, cada uma estica ate' a proxima que de fato vai
+    empurra-la da tela.
+
+    A ULTIMA de cada track fica com o `end` dela: nao ha proxima, e inventar um
+    fim seria inventar quanto tempo a legenda sobra depois da fala.
+
+    Nunca ENCOLHE: um `end` que ja passa do inicio da proxima (legendas que se
+    sobrepoem na transcricao) fica como esta. Encurtar aqui seria consertar
+    calado um problema de outra etapa.
+    """
+    # speaker_id -> track. 1-based no `speakers`; 0 = sem falante, que o Lua joga
+    # na track 1 por fallback. Sem tela dividida e' tudo uma track so'.
+    def track_de(seg):
+        if track_unica:
+            return 1
+        sid = seg.get("speaker_id") or 0
+        if 1 <= sid <= len(speakers):
+            return (speakers[sid - 1] or {}).get("track") or 1
+        return 1
+
+    por_track = {}
+    for seg in segmentos:
+        por_track.setdefault(track_de(seg), []).append(seg)
+
+    esticadas, maior = 0, 0.0
+    for legendas in por_track.values():
+        legendas.sort(key=lambda s: s["start"])
+        for atual, proxima in zip(legendas, legendas[1:]):
+            if proxima["start"] > atual["end"]:
+                maior = max(maior, proxima["start"] - atual["end"])
+                atual["end"] = round(proxima["start"], 3)
+                esticadas += 1
+    return esticadas, maior
+
+
+# Onde vive o menu de estilos que o GiAutoSubs.lua oferece dentro do Resolve.
+#
+# Um arquivo vazio por estilo, porque o unico dialogo que funciona a partir da
+# pagina Edit e' o `fusion:RequestFile` - ele lista ARQUIVOS - e o Lua do Resolve
+# nao tem parser de JSON pra ler o estilos.json direto. Mesmo truque da pasta
+# `conflito`.
+MENU_ESTILOS = os.path.join(_RAIZ, "giautosubs", "menu_estilos")
+
+
+def escrever_menu_estilos(cfg, pasta=MENU_ESTILOS):
+    """Poe a lista de estilos no disco, em forma de arquivo.
+
+    Roda a cada rodada: a lista de estilos e' propriedade do estilos.json, e um
+    menu mantido a mao envelheceria calado - a pergunta ofereceria um estilo que
+    nao existe mais, ou esconderia um novo.
+
+    Estilo que saiu do JSON tem o arquivo APAGADO. Sem isso o dialogo continuaria
+    oferecendo o nome antigo, e escolher um estilo inexistente derrubaria a rodada
+    no `cfg["estilos"][nome]`.
+    """
+    nomes = sorted(cfg.get("estilos") or {})
+    try:
+        os.makedirs(pasta, exist_ok=True)
+        atuais = {a for a in os.listdir(pasta) if a.endswith(".txt")}
+    except OSError:
+        return 0
+
+    escritos = 0
+    for nome in nomes:
+        alvo = os.path.join(pasta, f"{nome}.txt")
+        # O conteudo e' recado pra quem abrir o arquivo; quem manda e' o NOME,
+        # que e' o que aparece no dialogo do Resolve.
+        texto = (f"{nome}\n\n"
+                 f"Pick this file in the GiAutoSubs run to use this style.\n"
+                 f"The captions file is regenerated with it.\n")
+        try:
+            with open(alvo, "w", encoding="utf-8") as fh:
+                fh.write(texto)
+            escritos += 1
+        except OSError:
+            pass
+
+    for antigo in atuais - {f"{n}.txt" for n in nomes}:
+        try:
+            os.remove(os.path.join(pasta, antigo))
+        except OSError:
+            pass
+    return escritos
+
+
 def montar(pasta, cfg, nome_estilo, usar_words=True, max_chars=None, pular=(),
-           transcricao=None, max_linhas=None, tela_dividida=None):
+           transcricao=None, max_linhas=None, tela_dividida=None,
+           caixa_fixa=None, sem_buracos=False):
     p_trans, p_turnos, corte = achar_arquivos(pasta, transcricao)
     segmentos = _ler_json(p_trans)
     turnos = _ler_json(p_turnos) if os.path.isfile(p_turnos) else []
@@ -1204,11 +1499,30 @@ def montar(pasta, cfg, nome_estilo, usar_words=True, max_chars=None, pular=(),
     segmentos, off_seg = para_relativo(segmentos, inicio)
     turnos_rel, off_tur = para_relativo(turnos, inicio)
 
+    # Nome de ontem continua funcionando (ver `resolver_estilo`). Aqui e nao so'
+    # no `main` porque este e' o caminho do app.py, que chama `montar` direto.
+    nome_estilo = resolver_estilo(cfg, nome_estilo)
     estilo = cfg["estilos"][nome_estilo]
     inputs, controles, destaque = compilar_estilo(estilo)
     quebra = estilo.get("quebra") or {}
     limite = max_chars or quebra.get("max_chars", 19)
     linhas = max_linhas or quebra.get("max_linhas", 1)
+    # O que VALEU nesta rodada vence o que o estilo pediria: a aba Meta descreve
+    # estas legendas, e e' dela que a reconstrucao parte.
+    controles["MetaCharsPerBox"] = limite
+    controles["MetaLines"] = linhas
+
+    # A CAIXA FIXA por rodada, no lugar do que o estilo diz.
+    #
+    # E' o que o botao "Rebuild with Fixed Width" pede: TODAS as legendas nascem
+    # com a caixa da largura de uma linha cheia, em vez de ligar o checkbox clipe
+    # a clipe. `None` = o estilo decide, como antes.
+    #
+    # A largura-alvo e' o `limite` acima - o mesmo numero que repartiu as frases.
+    # Sao um so' campo de propriedade: mudar os caracteres por caixa muda a caixa
+    # e a reparticao juntas, e nao ha um segundo numero pra sair de sincronia.
+    if caixa_fixa is not None:
+        controles["TextBoxFixed"] = 1 if caixa_fixa else 0
 
     # O mapa de tracks e' decisao POR CORTE (invariante do projeto: mora no
     # corte.json, nunca numa constante). A lista global do estilos.json e' do
@@ -1244,6 +1558,16 @@ def montar(pasta, cfg, nome_estilo, usar_words=True, max_chars=None, pular=(),
                      else (dados or {}).get("track"),
         })
 
+    # A caixa fixa pede a largura MEDIDA de cada legenda (ver `medir_largura_em`).
+    # Fora dela ninguem usa esse numero, e medir custaria uma dependencia a mais no
+    # caminho normal.
+    medir_caixa = bool(controles.get("TextBoxFixed"))
+    medidas, sem_medida = 0, 0
+    # A MAIOR legenda medida. E' o minimo que o `Width` pode pedir: a que nao cabe
+    # nao encolhe, e sai maior que as outras - quebrando "todas do mesmo tamanho"
+    # sem avisar. Ver o resumo no `main`.
+    maior_em, maior_texto = 0.0, ""
+
     saida, com_words, pulados = [], 0, 0
     partidas, largas, dessincronizadas = 0, 0, 0
     contagem = {}
@@ -1278,6 +1602,20 @@ def montar(pasta, cfg, nome_estilo, usar_words=True, max_chars=None, pular=(),
                 "speaker_id": ordem.get(nome, 0),
             }
 
+            # A largura REAL desta legenda, em em. So' com a caixa fixa: e' o unico
+            # caminho que a usa, e medir 700 legendas pra nada seria trabalho e uma
+            # dependencia a mais no caminho de quem nem liga a caixa.
+            if medir_caixa:
+                em = medir_largura_em(quebrado, inputs.get("Font"),
+                                      inputs.get("Style"))
+                if em is None:
+                    sem_medida += 1
+                else:
+                    item["largura_em"] = round(em, 4)
+                    medidas += 1
+                    if em > maior_em:
+                        maior_em, maior_texto = em, quebrado
+
             if words:
                 # o Lua conta CARACTERE dentro da frase; a quebra em linhas
                 # troca espaco por \n e mantem o comprimento, entao os indices
@@ -1293,6 +1631,17 @@ def montar(pasta, cfg, nome_estilo, usar_words=True, max_chars=None, pular=(),
                 com_words += 1
             saida.append(item)
 
+    # Depois do laco inteiro: o "sem buracos" precisa da lista FINAL, com as
+    # legendas ja repartidas (uma frase que virou duas tem um buraco novo entre
+    # elas) e com as puladas ja fora - esticar ate' uma legenda que nao vai ser
+    # criada deixaria a caixa parada num tempo sem texto.
+    track_unica_agora = not (_tela_dividida(pasta) if tela_dividida is None
+                             else tela_dividida)
+    esticadas, maior_vao = 0, 0.0
+    if sem_buracos:
+        esticadas, maior_vao = esticar_ate_a_proxima(saida, speakers,
+                                                     track_unica_agora)
+
     return {
         "versao": 2,
         "macro_versao": MACRO_VERSAO,
@@ -1301,16 +1650,45 @@ def montar(pasta, cfg, nome_estilo, usar_words=True, max_chars=None, pular=(),
         "controles": controles,
         "destaque": destaque,
         "speakers": speakers,
+        # De onde estas legendas vieram - a aba Meta do Inspector.
+        #
+        # Existe porque o clipe na timeline nao sabia de que arquivo tinha
+        # nascido: descobrir era abrir os candidatos e comparar o texto. E' esse
+        # dado que faz o botao Rebuild ser possivel - sem a pasta do corte nao ha
+        # como chamar este script de volta.
+        #
+        # `captions_file` sai vazio aqui de proposito: o nome do arquivo e'
+        # decidido no `main` (ele aceita `--out`), e preenche-lo aqui seria
+        # adivinhar. `title` e `config` ficam pro `GiAutoSubs.lua`: sao a escolha
+        # da RODADA dentro do Resolve, e este script nao participa dela.
+        "meta": {
+            "captions_file": "",
+            "cut_folder": os.path.abspath(pasta),
+            "transcript": os.path.abspath(p_trans),
+            "style": nome_estilo,
+            "styles_file": os.path.abspath(cfg.get("_arquivo") or ESTILOS_PADRAO),
+            "chars_per_box": limite,
+            "lines": linhas,
+            # Registro, nao escolha: diz se ESTA rodada fixou a largura. E' o que
+            # deixa o Rebuild repetir a rodada do jeito que ela foi feita.
+            "fixed_box": bool(controles.get("TextBoxFixed")),
+            # Registro da rodada, como o `fixed_box`: e' o que faz um Rebuild
+            # seguinte repetir a rodada do jeito que ela foi feita, em vez de
+            # devolver os buracos calado.
+            "no_gaps": bool(sem_buracos),
+        },
         # Tela dividida = uma track por pessoa. A caixa do corte (tela de
         # cortes) vence a do projeto; sem ela, vale o project.json. O
         # GiAutoSubs.lua segue isto; sem a chave, vale o TRACK_UNICA dele.
-        "track_unica": not (_tela_dividida(pasta) if tela_dividida is None
-                            else tela_dividida),
+        "track_unica": track_unica_agora,
         "segments": saida,
     }, {"contagem": contagem, "com_words": com_words, "pulados": pulados,
         "off_seg": off_seg, "off_tur": off_tur, "partidas": partidas,
         "largas": largas, "dessincronizadas": dessincronizadas,
-        "max_chars": limite, "max_linhas": linhas}
+        "max_chars": limite, "max_linhas": linhas,
+        "esticadas": esticadas, "maior_vao": maior_vao,
+        "medidas": medidas, "sem_medida": sem_medida,
+        "maior_em": maior_em, "maior_texto": maior_texto}
 
 
 _LUA_RESERVADAS = {
@@ -1382,6 +1760,25 @@ def main(argv=None):
     ap.add_argument("--out", default=None,
                     help="default: <folder>/legendas/legendas.json, or "
                          "legenda_por_track.json with one track per speaker")
+    # A caixa fixa: a caixa NAO cresce com o texto, ela tem sempre a largura de
+    # uma linha cheia (`--max-chars`). Quem realiza e' o macro, por compensacao no
+    # Extend Horizontal; aqui so' se decide que todas as legendas nascem assim.
+    cx = ap.add_mutually_exclusive_group()
+    cx.add_argument("--caixa-fixa", "--fixed-box", dest="caixa_fixa",
+                    action="store_const", const=True, default=None,
+                    help="every caption is born with a FIXED box: the width of a "
+                         "full line (--max-chars), no matter how short the text "
+                         "is (default: what the style says)")
+    cx.add_argument("--caixa-livre", "--free-box", dest="caixa_fixa",
+                    action="store_const", const=False,
+                    help="the box follows the text, as usual")
+
+    ap.add_argument("--sem-buracos", "--no-gaps", dest="sem_buracos",
+                    action="store_true",
+                    help="each caption lasts until the NEXT one starts (per "
+                         "track), so the box never leaves the screen - the gap "
+                         "between two captions is the box blinking")
+
     trk = ap.add_mutually_exclusive_group()
     trk.add_argument("--split-screen", dest="tela_dividida", action="store_const",
                      const=True, default=None,
@@ -1398,7 +1795,11 @@ def main(argv=None):
         return 1
 
     cfg = carregar_estilos(args.estilos)
+    # O menu que a rodada dentro do Resolve oferece. Aqui, na carga, pra ele
+    # nunca ficar atras do estilos.json.
+    escrever_menu_estilos(cfg)
     nome = args.estilo or cfg.get("padrao") or next(iter(cfg["estilos"]))
+    nome = resolver_estilo(cfg, nome)
     if nome not in cfg["estilos"]:
         print(f"style '{nome}' does not exist. available: "
               f"{', '.join(cfg['estilos'])}", file=sys.stderr)
@@ -1407,16 +1808,24 @@ def main(argv=None):
     pular = {p.strip() for p in (args.pular or "").split(",") if p.strip()}
     doc, stats = montar(args.pasta, cfg, nome, not args.sem_words,
                         args.max_chars, pular, args.transcricao,
-                        args.max_linhas, args.tela_dividida)
+                        args.max_linhas, args.tela_dividida, args.caixa_fixa,
+                        args.sem_buracos)
     # com tracks separadas o arquivo tem nome proprio, pra nao ser confundido
     # com o de track unica do mesmo corte no dialogo do GiAutoSubs
     out = args.out or os.path.join(
         args.pasta, "legendas",
         "legendas.json" if doc["track_unica"] else "legenda_por_track.json")
     os.makedirs(os.path.dirname(out), exist_ok=True)
+    out_lua = os.path.splitext(out)[0] + ".lua"
+
+    # O caminho entra na Meta ANTES de escrever: e' ele que o clipe mostra como
+    # "Captions File" e e' por ele que o botao Rebuild volta. Depois de escrever,
+    # o arquivo diria um caminho e o outro campo diria outro.
+    doc["meta"]["captions_file"] = os.path.abspath(out_lua)
+    doc["meta"]["styles_file"] = os.path.abspath(args.estilos)
+
     with open(out, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, ensure_ascii=False, indent=1)
-    out_lua = os.path.splitext(out)[0] + ".lua"
     with open(out_lua, "w", encoding="utf-8") as fh:
         fh.write("-- generated by giautosubs.py - do not edit by hand\nreturn "
                  + para_lua(doc) + "\n")
@@ -1468,6 +1877,42 @@ def main(argv=None):
               f" \"{wav}\" --words --whisper-model medium --out \"{alvo}\"")
         print(f"      python giautosubs.py \"{args.pasta}\" "
               f"--transcript turnsWhisper_words.json")
+    if stats["esticadas"]:
+        print(f"[i] no gaps: {stats['esticadas']} caption(s) now last until the "
+              f"next one starts; the longest stretch added "
+              f"{stats['maior_vao']:.1f}s to a caption (a long silence keeps the "
+              f"last words on screen - that is the trade)")
+    if stats["sem_medida"]:
+        print(f"[!] could not measure the real text width of "
+              f"{stats['sem_medida']} caption(s) - the fixed box falls back to "
+              f"guessing {len('x')} char = Char Width, and then captions with "
+              f"different text come out with DIFFERENT box widths. Install "
+              f"Pillow in the venv, or check that the font "
+              f"'{doc['inputs'].get('Font')} {doc['inputs'].get('Style')}' is "
+              f"installed for this user.")
+    elif stats["medidas"]:
+        print(f"[i] measured the real width of {stats['medidas']} caption(s) in "
+              f"{doc['inputs'].get('Font')} {doc['inputs'].get('Style')} - that is "
+              f"what makes every fixed box come out the SAME size, whatever the "
+              f"text")
+        # O minimo que o `Width` pode pedir. A escala vem do estilo quando ele a
+        # declara (`caixa.px_por_unidade`); sem ela, o numero sai em em e o macro
+        # estima a escala na hora - dizer "em" e' melhor que inventar px.
+        escala = (doc["controles"].get("MetaPxPorUnidade") or 0)
+        if escala > 0:
+            print(f"    the widest is {stats['maior_em'] * escala:.0f}px "
+                  f"({stats['maior_em']:.2f} em): "
+                  f"{stats['maior_texto'][:40]!r}")
+            print(f"    -> set Width (px) to AT LEAST that, or this caption will "
+                  f"not shrink and will come out wider than the others")
+        else:
+            print(f"    the widest is {stats['maior_em']:.2f} em: "
+                  f"{stats['maior_texto'][:40]!r} - multiply by Px per Unit "
+                  f"(Inspector > Meta) to know the minimum Width in pixels")
+    if doc["controles"].get("TextBoxFixed"):
+        print(f"[i] fixed box: every caption gets the width of a full "
+              f"{stats['max_chars']}-character line, so the box stays put while "
+              f"the text changes inside it")
     print("[i] split screen: one track per speaker" if not doc["track_unica"]
           else "[i] not split screen: all captions on a single track")
     print(f"-> {out}")

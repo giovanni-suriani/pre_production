@@ -56,6 +56,9 @@
 					"BubblePopAmount",
 					"BubblePopFrames",
 					"TextBoxEnabled",
+					"TextBoxFixed",
+					"TextBoxWidth",
+					"TextBoxHeight",
 					"TextBoxColorRed",
 					"TextBoxColorGreen",
 					"TextBoxColorBlue",
@@ -64,6 +67,14 @@
 					"TextBoxExtendHorizontal",
 					"TextBoxExtendVertical",
 					"TextBoxRound",
+					"BoxLayer3Enabled",
+					"BoxLayer3ColorRed",
+					"BoxLayer3ColorGreen",
+					"BoxLayer3ColorBlue",
+					"BoxLayer3CenterX",
+					"BoxLayer3CenterY",
+					"BoxLayer3Alpha",
+					"BoxSpinSpeed",
 					"BoxShadowOnHighlight",
 					"BoxShadowOnNormal",
 					"BoxShadowColorRed",
@@ -1072,7 +1083,7 @@
 					end
 				]],
 				ApplyGiStyle = [[
-					return function(comp, tool, origem, spline)
+					return function(comp, tool, origem, spline, soCaixa)
 						local template = comp:FindTool("Template") or tool
 						if not template then return end
 						origem = origem or "script"
@@ -1228,8 +1239,340 @@
 						-- nasce em 3, que e' so o CONTORNO do retangulo - nao serve pra bolha.
 						local BORDA = 2
 
+						-- O SPIN: as duas cores extras ORBITANDO o texto em vez de paradas.
+						--
+						-- Gira o DESLOCAMENTO, nao a geometria. Rotacionar o retangulo deixaria a
+						-- caixa base reta e as coloridas em losango por tras dela - canto em angulo
+						-- aleatorio le como defeito, nao como estilo. Com as tres caixas alinhadas e
+						-- o vetor de offset percorrendo um circulo, a borda colorida orbita o texto:
+						-- e' o efeito parado de hoje, animado.
+						--
+						-- Raio e fase saem do offset que o usuario JA ajustou no Inspector - o par
+						-- (x,y) e' um vetor, tem os dois dentro. Por isso isto acrescenta UM
+						-- controle so', e `BoxSpinSpeed = 0` da' exatamente a caixa parada de hoje.
+						--
+						-- Os 180 graus entre a segunda e a terceira cor vem de graca: os dois
+						-- offsets ja' nascem em lados OPOSTOS, entao meia volta E' as duas cores
+						-- trocando de lado.
+						--
+						-- `time` e' da COMPOSICAO, entao cada legenda comeca numa fase diferente.
+						-- E' de proposito: todas girando em unissono viraria metronomo.
+						local function expressao_spin(x, y)
+							local raio = math.sqrt(x * x + y * y)
+							-- Offset zerado nao tem direcao pra girar, e a expressao viraria um
+							-- ponto parado na origem - as tres cores empilhadas, sem efeito nenhum.
+							if raio < 1e-9 then return nil end
+							local fase = math.deg(math.atan2(y, x))
+							return string.format(
+								"Point(%.6f*cos((Template.BoxSpinSpeed*time+%.4f)*pi/180),"
+								.. "%.6f*sin((Template.BoxSpinSpeed*time+%.4f)*pi/180))",
+								raio, fase, raio, fase)
+						end
+
+						-- Escrever NUMERO num input que carrega expressao e' a mesma armadilha do
+						-- `SourceOp`: aceito e ignorado, ou pior, a conexao cai sem erro. Por isso a
+						-- expressao sai ANTES, sempre - e' o que faz desligar o spin devolver a
+						-- caixa pro lugar em vez de deixa-la girando pra sempre.
+						--
+						-- Nos DOIS tools: o Follower1 vence o Text+ nos inputs de elemento, e uma
+						-- expressao so' no Template teria o sintoma classico de "aceita e nao muda
+						-- nada na tela".
+						local function deslocar(n, x, y)
+							local chave = "Offset" .. n
+							local expr = (ctl("BoxSpinSpeed", 0) ~= 0) and expressao_spin(x, y) or nil
+							for _, alvo in ipairs({ template, follower }) do
+								if alvo then
+									pcall(function() alvo[chave]:SetExpression(nil) end)
+								end
+							end
+							if not expr then
+								pin(n, "Offset", { x, y })
+								return
+							end
+							for _, alvo in ipairs({ template, follower }) do
+								if alvo then
+									pcall(function() alvo[chave]:SetExpression(expr) end)
+									escritos = escritos + 1
+								end
+							end
+						end
+
+						-- CAIXA FIXA: a largura deixa de depender do texto.
+						--
+						-- O Text+ nao tem largura fixa - toda caixa em forma de BORDA acompanha a
+						-- extensao do texto no `Level` escolhido, e nao existe input pra desligar
+						-- isso. Entao largura fixa aqui e' COMPENSACAO: a caixa desenha sempre o
+						-- que uma linha CHEIA desenharia, e o que falta pra chegar la' entra nos
+						-- dois lados do `Extend Horizontal`. O tamanho na tela continua sendo dado
+						-- por `Size` + `Extend Horizontal` + `Extend Vertical`, como sem a opcao -
+						-- o que sai da conta e' o comprimento do texto.
+						--
+						-- "Linha cheia" e' o `Characters per Box` da aba Meta, o MESMO numero que
+						-- reparte as legendas (`quebra.max_chars` do giautosubs.py). Por isso a
+						-- caixa fixa e a aba Meta sao um trabalho so': mudar os caracteres por caixa
+						-- muda a largura da caixa junto, sem um segundo numero pra manter em dia.
+						--
+						-- `MetaCharWidth` e' quanto UM caractere vale na unidade do Extend. Ele e'
+						-- um controle calibravel, e nao uma constante no codigo, porque a unidade do
+						-- Extend e' relativa ao tamanho da fonte e nao ha como medi-la de fora do
+						-- Resolve (licenca nao-Studio): um numero errado escondido no gerador seria
+						-- um numero que ninguem consegue corrigir sem reinstalar o macro.
+						local function utf8_len(s)
+							-- Lua 5.1 nao tem `utf8.len` e `#s` conta BYTE: com acento a linha
+							-- pareceria mais larga do que e' e a caixa encolheria sozinha. Contar
+							-- os bytes que NAO sao continuacao (10xxxxxx) da' o numero de
+							-- caracteres - a mesma regua que o `max_chars` usa no Python.
+							local _, n = tostring(s):gsub("[^\128-\191]", "")
+							return n
+						end
+
+						-- A linha mais larga, nao o texto todo: a caixa envolve a LINHA (Level 1),
+						-- e com duas linhas o comprimento somado nao diz nada sobre a largura.
+						--
+						-- `GiTextOriginal` primeiro porque e' o texto antes do `Case`, que e' o que
+						-- o `GiApplyText` mantem em dia; ele tem o mesmo comprimento do que esta na
+						-- tela. Os dois inputs sao reserva pro clipe arrastado da aba Effects, que
+						-- nunca passou pelo script e nao tem esse dado.
+						local function linha_mais_larga()
+							local texto = template:GetData("GiTextOriginal")
+							if texto == nil then
+								pcall(function() texto = template:GetInput("StyledText") end)
+							end
+							if texto == nil then
+								pcall(function() texto = template:GetInput("Text") end)
+							end
+							local maior = 0
+							for linha in tostring(texto or ""):gmatch("[^\r\n]+") do
+								local n = utf8_len(linha)
+								if n > maior then maior = n end
+							end
+							return maior
+						end
+
+						-- Quantos PIXELS vale uma unidade de Extend.
+						--
+						-- Uma unidade de Extend e' a altura da fonte, e o `Size` do Text+ e' fracao da
+						-- ALTURA do frame - entao a conversao precisa da resolucao do comp. Num efeito
+						-- de Edit page o comp herda a resolucao da timeline.
+						--
+						-- Devolve nil quando nao da' pra saber: e' o que faz a caixa fixa cair no alvo
+						-- por caracteres em vez de inventar uma escala.
+						local function px_por_unidade()
+							-- O CONTROLE vence a estimativa.
+							--
+							-- `Px per Unit` (aba Meta) existe porque o fator abaixo e' palpite: a FORMA
+							-- da conta e' certa (uma unidade de Extend e' a altura da fonte, e `Size` e'
+							-- fracao da altura do frame), mas so' quem ve a tela sabe se o numero
+							-- bate - este projeto nao tem licenca Studio pra medir de fora.
+							--
+							-- Errar num controle se corrige em dois segundos; errar no gerador custa
+							-- reinstalar o macro, reiniciar o Resolve e trocar o Title do Media Pool.
+							local manual = tonumber(ctl("MetaPxPorUnidade", 0)) or 0
+							if manual > 0 then return manual end
+
+							local size, altura
+							pcall(function() size = template:GetInput("Size") end)
+							pcall(function() altura = comp:GetPrefs("Comp.FrameFormat.Height") end)
+							size = tonumber(size)
+							altura = tonumber(altura)
+							if not size or not altura or size <= 0 or altura <= 0 then return nil end
+							-- 0.578 e' MEDIDO, nao deduzido: em 27/09/2026 o usuario pediu uma caixa de
+							-- 346px de altura e saiu 200px com a escala `Size` x altura. A altura de uma
+							-- unidade de Extend nao e' o `Size` cheio - e' a altura do OLHO da fonte,
+							-- que e' uma fracao dele, e essa fracao depende da fonte.
+							--
+							-- Por isso o `Px per Unit` continua vencendo: outra fonte, outro numero.
+							return size * altura * 0.578
+						end
+
+						-- A largura do texto desta legenda, em EM.
+						--
+						-- `GiTextEm` e' MEDIDO na fonte de verdade pelo giautosubs.py (Pillow) e
+						-- carimbado no clipe. E' ele que faz a caixa fixa sair do MESMO tamanho em toda
+						-- legenda: a folga e' o que falta pro alvo, e com a largura certa a soma fecha
+						-- sempre no alvo. O palpite errava por muito - `19 x 0.5 = 9.5 em` contra
+						-- `10.61 em` medidos numa legenda de 19 caracteres.
+						--
+						-- Sem o carimbo (clipe arrastado da aba Effects, ou criado antes do macro 34)
+						-- cai no palpite `caracteres x Char Width`, avisando UMA vez: e' ele que faz as
+						-- caixas sairem de tamanhos diferentes, e o usuario precisa poder ligar o
+						-- sintoma a' causa.
+						local function largura_do_texto(em_por_char, chars)
+							local medido
+							pcall(function() medido = tonumber(template:GetData("GiTextEm")) end)
+							if medido and medido > 0 then return medido, true end
+							if not _G.GI_SEM_MEDIDA_AVISADO then
+								_G.GI_SEM_MEDIDA_AVISADO = true
+								diga("[GiAutoSubs] Fixed Box: this clip has no measured text width "
+									.. "(GiTextEm), so the box falls back to guessing "
+									.. "characters x Char Width - captions with different text will "
+									.. "come out with DIFFERENT widths. Recreate the captions with the "
+									.. "script to get the measured value.")
+							end
+							return chars * em_por_char, false
+						end
+
+						local function extend_h(prefixo)
+							local base = ctl(prefixo .. "ExtendHorizontal", 0)
+							-- So' a caixa do TEXTO. A bolha abraca a palavra falada - e' a graca
+							-- dela - e a sombra e a camada 3 COPIAM a geometria da caixa base
+							-- (invariante do macro 23), entao elas ficam fixas junto, sem controle
+							-- proprio e sem chance de desalinhar.
+							if prefixo ~= "TextBox" or ctl("TextBoxFixed", 0) ~= 1 then return base end
+							local em = ctl("MetaCharWidth", 0)
+							local maior = linha_mais_larga()
+
+							-- WIDTH EM PIXELS, quando voce deu um. E' o alvo mais direto que existe: o
+							-- tamanho na tela, sem passar por contagem de caractere.
+							--
+							-- Zero quer dizer "nao pedi largura": ai vale o alvo por CARACTERES (uma
+							-- linha cheia de `Characters per Box`), que e' o que o macro 25 fazia. Os
+							-- dois convivem de proposito - quem nao quer pensar em pixel nao precisa.
+							-- DAQUI PRA BAIXO o `base` (o valor do Extend) nao aparece mais: com a caixa
+							-- fixa, o controle `Extend Horizontal` esta' DESLIGADO, e usa-lo em qualquer
+							-- ramo faria o tamanho da caixa mudar conforme um slider que o rotulo diz
+							-- que nao vale. O unico `return base` que sobra e' o de la' de cima, quando
+							-- a caixa NAO e' fixa.
+							local largura_px = tonumber(ctl(prefixo .. "Width", 0)) or 0
+							if largura_px > 0 and maior > 0 then
+								local escala = px_por_unidade()
+								if escala then
+									local alvo_unidades = largura_px / escala
+									local texto_unidades = largura_do_texto(em, maior)
+									local falta = alvo_unidades - texto_unidades
+									-- Legenda MAIS larga que o alvo: sem folga (zero), e nao a folga do
+									-- Extend. Ela nao encolhe - caixa menor que o proprio texto seria
+									-- pior que caixa que vaza - mas tambem nao volta a obedecer o
+									-- controle desligado.
+									if falta <= 0 then return 0 end
+									return falta / 2
+								end
+								diga("[GiAutoSubs] Fixed Box: Width is in pixels, but the font Size or "
+									.. "the comp resolution could not be read - falling back to the "
+									.. "Characters per Box target")
+							end
+
+							-- Sem `Width`, o alvo e' uma linha CHEIA de `Characters per Box`. Aqui o
+							-- palpite e' inevitavel dos dois lados (o alvo tambem e' em caracteres),
+							-- entao ele e' coerente: a mesma regua mede o alvo e o texto.
+							local alvo = ctl("MetaCharsPerBox", 0)
+							if alvo <= 0 or em <= 0 or maior <= 0 then
+								diga("[GiAutoSubs] Fixed Box is on but there is nothing to measure "
+									.. "against (Width 0, Characters per Box " .. tostring(alvo)
+									.. ", Char Width " .. tostring(em) .. ", widest line "
+									.. tostring(maior) .. ") - the box gets NO padding. Set Width (px) "
+									.. "or Characters per Box.")
+								return 0
+							end
+							-- Legenda MAIS larga que o alvo nao encolhe. Caixa que vaza da tela e' o
+							-- sintoma de `max_chars` alto demais, e a unica coisa pior que o sintoma
+							-- seria esconde-lo: encolhendo aqui, a legenda larga ficaria com a caixa
+							-- menor que o proprio texto.
+							local falta = alvo - maior
+							if falta <= 0 then return 0 end
+							-- Sem o `base`: a largura da caixa fixa e' o alvo, e so'. Somar o Extend
+							-- aqui era o que fazia a caixa "fixa" mudar de tamanho junto com um slider
+							-- desligado.
+							return falta * em / 2
+						end
+
+						-- A ALTURA da caixa fixa, em pixels. Mesma conta da largura, com uma diferenca:
+						-- a altura do texto nao depende do texto - uma linha e' UMA unidade de Extend.
+						-- Por isso ela nao precisa medir nada, e por isso a caixa nunca "pula" de
+						-- altura de legenda pra legenda.
+						--
+						-- Com duas linhas (`Lines` = 2) a altura do texto sao duas unidades; o numero
+						-- vem da aba Meta, que e' quem sabe com quantas linhas as legendas foram
+						-- repartidas.
+						local function extend_v(prefixo)
+							local base = ctl(prefixo .. "ExtendVertical", 0)
+							-- Caixa livre: manda o Extend, como sempre.
+							if prefixo ~= "TextBox" or ctl("TextBoxFixed", 0) ~= 1 then return base end
+
+							-- Caixa FIXA: o Extend Vertical esta' desligado. Sem `Height` nao ha alvo, e
+							-- a resposta e' ZERO (a caixa abraca o texto) e nao o valor do controle -
+							-- senao "desligado" seria mentira, e a altura mudaria com um slider que o
+							-- rotulo diz que nao vale. O log pede o numero que falta.
+							local altura_px = tonumber(ctl(prefixo .. "Height", 0)) or 0
+							if altura_px <= 0 then
+								diga("[GiAutoSubs] Fixed Box is on and Height (px) is 0 - the box gets "
+									.. "no vertical padding (Extend Vertical does not apply to a fixed "
+									.. "box). Set Height (px).")
+								return 0
+							end
+							local escala = px_por_unidade()
+							if not escala then
+								diga("[GiAutoSubs] Fixed Box: Height is in pixels, but the font Size or "
+									.. "the comp resolution could not be read - no vertical padding")
+								return 0
+							end
+							local linhas = math.max(1, math.floor(tonumber(ctl("MetaLines", 1)) or 1))
+							local falta = (altura_px / escala) - linhas
+							if falta <= 0 then return 0 end
+							return falta / 2
+						end
+
+						-- DESABILITAR o Extend na interface quando a caixa e' fixa.
+						--
+						-- Os macros de FABRICA nao fazem isso declarativamente (nenhum `IC_Visible` nem
+						-- `INP_Disabled` nos 417 `.setting` do Templates.drfx; os que tem UI reativa
+						-- usam `INPS_ExecuteOnChange`, 44 vezes). Entao o caminho e' `SetAttrs` em
+						-- tempo de execucao, daqui - que e' chamado tambem pelo callback do preview, e
+						-- portanto no instante em que voce marca o checkbox.
+						--
+						-- No MACRO e no Text+: o Inspector do clipe mostra os `InstanceInput` do
+						-- MacroOperator, mas o UserControl vive no Text+ - e qual dos dois manda no
+						-- atributo nao esta' documentado. Escrever nos dois custa duas chamadas.
+						--
+						-- LE DE VOLTA e diz no log, uma vez por sessao: isto nao da' pra testar fora do
+						-- Resolve, e um "desabilita" que nao desabilita e' pior que nao tentar - o
+						-- usuario precisa saber qual dos dois aconteceu.
+						local function ui_extend(fixa)
+							local alvos = {}
+							if macro then alvos[#alvos + 1] = macro end
+							if template and template ~= macro then alvos[#alvos + 1] = template end
+							local colou = nil
+							for _, alvo in ipairs(alvos) do
+								for _, chave in ipairs({ "TextBoxExtendHorizontal",
+									"TextBoxExtendVertical" }) do
+									pcall(function()
+										alvo[chave]:SetAttrs({ INP_Disabled = fixa, IC_Visible = not fixa })
+									end)
+									pcall(function()
+										local at = alvo[chave]:GetAttrs()
+										if at ~= nil then
+											colou = (at.INP_Disabled == fixa) or (at.IC_Visible == (not fixa))
+										end
+									end)
+								end
+							end
+							if colou ~= nil and not _G.GI_UI_AVISADO then
+								_G.GI_UI_AVISADO = true
+								if colou then
+									diga("[GiAutoSubs] Extend Horizontal/Vertical greyed out in the "
+										.. "Inspector while Fixed Box is on (SetAttrs works here).")
+								else
+									diga("[GiAutoSubs] NOTE: this Fusion build ignores SetAttrs on a "
+										.. "macro input, so Extend Horizontal/Vertical stay clickable "
+										.. "while Fixed Box is on. They have NO effect - the label says "
+										.. "'(free box)' for that reason.")
+								end
+							end
+						end
 
 						local function caixa(n, prefixo, ligada)
+							-- MODO SO'-A-CAIXA: e' o preview do slider (`Width`/`Height`/`Fixed Box`).
+							-- Escreve os dois Extend e mais nada - nem Enabled, nem cor, nem forma.
+							-- Custa 12 escritas no pior caso e ZERO por frame, o que e' o que permite
+							-- ele rodar a cada valor intermediario de um arrasto.
+							if soCaixa then
+								if not ligada then return end
+								if not (n == 4 and ctl("BubblePopEnabled", 0) == 1) then
+									pin(n, "ExtendHorizontal", extend_h(prefixo))
+									pin(n, "ExtendVertical", extend_v(prefixo))
+								end
+								return
+							end
 							pin(n, "Enabled", ligada and 1 or 0)
 							if not ligada then return end
 							-- ElementShape ANTES da geometria: Level/Extend/Round so existem pra
@@ -1244,8 +1587,8 @@
 							-- de keyframes (o `GiRebuildHighlight` monta), e escrever um numero num
 							-- input conectado e' aceito e ignorado - ou pior, derruba a conexao.
 							if not (n == 4 and ctl("BubblePopEnabled", 0) == 1) then
-								pin(n, "ExtendHorizontal", ctl(prefixo .. "ExtendHorizontal", 0))
-								pin(n, "ExtendVertical", ctl(prefixo .. "ExtendVertical", 0))
+								pin(n, "ExtendHorizontal", extend_h(prefixo))
+								pin(n, "ExtendVertical", extend_v(prefixo))
 							end
 							pin(n, "Round", ctl(prefixo .. "Round", 0.2))
 						end
@@ -1254,6 +1597,12 @@
 						-- deslocamento. Sombra de tamanho diferente entrega que sao dois
 						-- elementos empilhados em vez de uma caixa com sombra.
 						local function sombra(n, prefixo, ligada)
+							if soCaixa then
+								if not ligada then return end
+								pin(n, "ExtendHorizontal", extend_h(prefixo))
+								pin(n, "ExtendVertical", extend_v(prefixo))
+								return
+							end
 							pin(n, "Enabled", ligada and 1 or 0)
 							if not ligada then return end
 							pin(n, "ElementShape", BORDA)
@@ -1263,20 +1612,189 @@
 							pin(n, "Opacity", ctl("BoxShadowOpacity", 0.55))
 							pin(n, "Softness", ctl("BoxShadowSoftness", 2))
 							pin(n, "Level", ctl(prefixo .. "Level", 2))
-							pin(n, "ExtendHorizontal", ctl(prefixo .. "ExtendHorizontal", 0))
-							pin(n, "ExtendVertical", ctl(prefixo .. "ExtendVertical", 0))
+							pin(n, "ExtendHorizontal", extend_h(prefixo))
+							pin(n, "ExtendVertical", extend_v(prefixo))
 							pin(n, "Round", ctl(prefixo .. "Round", 0.2))
 							-- Offset, nao Position: Position e' coordenada ABSOLUTA e joga o
 							-- elemento pro canto da tela.
-							pin(n, "Offset", { ctl("BoxShadowCenterX", 0.005),
-								ctl("BoxShadowCenterY", -0.007) })
+							-- So' a caixa do TEXTO orbita. O elemento 5 e' a
+							-- sombra da BOLHA, que acompanha a palavra falada e vive um instante -
+							-- girar junto seria ruido, nao efeito.
+							if n == 7 then
+								deslocar(n, ctl("BoxShadowCenterX", 0.005),
+									ctl("BoxShadowCenterY", -0.007))
+							else
+								pin(n, "Offset", { ctl("BoxShadowCenterX", 0.005),
+									ctl("BoxShadowCenterY", -0.007) })
+							end
 						end
 
+						-- A TERCEIRA cor da caixa (elemento 8). Mesma forma da `sombra` acima, e de
+						-- proposito: as tres camadas so' podem diferir em COR e em OFFSET. Se o
+						-- Level, os dois Extend ou o Round divergirem, o deslocamento deixa de ser
+						-- limpo e o que se ve e' um contorno torto - por isso a geometria e' COPIADA
+						-- do prefixo da caixa base em vez de ter controle proprio.
+						--
+						-- Transparencia vai por `Alpha`, nao por `Opacity`: o fade do AutoSubs mora
+						-- em `Opacity1..4` do Follower1 (conectadas ao AnimationKeyframeStretcher), e
+						-- os elementos 5..8 nao estao nele. Escrever `Opacity8` aqui nao ligaria a
+						-- camada no fade - so' gastaria o input que sobraria pra isso um dia.
+						local function camada3(n, prefixo, ligada)
+							if soCaixa then
+								if not ligada then return end
+								pin(n, "ExtendHorizontal", extend_h(prefixo))
+								pin(n, "ExtendVertical", extend_v(prefixo))
+								return
+							end
+							pin(n, "Enabled", ligada and 1 or 0)
+							if not ligada then return end
+							-- Os elementos 5..8 nascem em forma de TEXTO. Sem esta linha o Text+
+							-- aceita Level/Extend/Round e nao desenha caixa nenhuma.
+							pin(n, "ElementShape", BORDA)
+							pin(n, "Red", ctl("BoxLayer3ColorRed", 1))
+							pin(n, "Green", ctl("BoxLayer3ColorGreen", 0.3))
+							pin(n, "Blue", ctl("BoxLayer3ColorBlue", 0.65))
+							pin(n, "Alpha", ctl("BoxLayer3Alpha", 1))
+							pin(n, "Level", ctl(prefixo .. "Level", 2))
+							pin(n, "ExtendHorizontal", extend_h(prefixo))
+							pin(n, "ExtendVertical", extend_v(prefixo))
+							pin(n, "Round", ctl(prefixo .. "Round", 0.2))
+							deslocar(n, ctl("BoxLayer3CenterX", -0.005),
+								ctl("BoxLayer3CenterY", 0.007))
+						end
+
+						-- A CAIXA COMO RETANGULO (macro `Fixo`).
+						--
+						-- Existe quando o comp tem `GiBoxMask1`. E' a caixa que NAO olha o texto: o
+						-- tamanho vem de `Width (px)`/`Height (px)` e mais nada - sem `Char Width`, sem
+						-- `Px per Unit`, sem medir fonte. Era o pedido: "nao usa tamanho do texto para
+						-- nada para renderizar a text-box".
+						--
+						-- As tres camadas empilhadas sao as mesmas cores do macro normal: 1 = TextBox,
+						-- 2 = BoxShadow (que no 3color e' cor, nao sombra), 3 = BoxLayer3. Os offsets
+						-- X/Y de cada uma continuam sendo os controles que ja existiam.
+						--
+						-- RESSALVA que nao da' pra verificar daqui (licenca nao-Studio): o `Height` de
+						-- um RectangleMask pode ser relativo a' LARGURA do frame em vez da altura,
+						-- conforme a versao. Se for, a altura sai errada pelo fator de aspecto (1,78 num
+						-- 1080x1920) - o log diz o que foi escrito, e o conserto e' uma linha.
+						-- O SPIN na caixa-retangulo: o mesmo giro do `expressao_spin` (o offset do
+						-- Inspector da' raio e fase, `Template.BoxSpinSpeed` da' a velocidade, `time`
+						-- da timeline da' a fase de cada legenda), aplicado ao CENTRO da mascara. Sem
+						-- isto o `Fixo` desligava os elementos 7/8 do Text+ - onde o giro morava - e
+						-- a caixa fixa saia parada mesmo com Spin Speed ligado (queixa de 28/09).
+						--
+						-- Em PIXELS, nao na coordenada normalizada: Center e' fracao da largura em x
+						-- e da altura em y, entao um circulo em normalizado vira elipse 1,78x mais
+						-- larga num 16:9. O offset e' convertido pra px, gira, e volta dividido por
+						-- lw/lh. Com giro 0 a posicao inicial e' a mesma da caixa parada.
+						--
+						-- CUSTO: por frame, uma expressao trivial por camada (cos/sin), CONSTANTE -
+						-- nada no array por caractere. Ver feedback-custo-playback.
+						local girando = 0
+						local function centro_da_camada(mask, cx, cy, ox, oy, lw, lh)
+							local velocidade = tonumber(ctl("BoxSpinSpeed", 0)) or 0
+							local dx, dy = ox * lw, oy * lh
+							local raio = math.sqrt(dx * dx + dy * dy)
+							-- A expressao sai ANTES, sempre: numero escrito em input com expressao
+							-- e' aceito e ignorado (a armadilha do `deslocar`).
+							pcall(function() mask.Center:SetExpression(nil) end)
+							if velocidade == 0 or raio < 1e-6 then
+								um(mask, "Center", { cx + ox, cy + oy })
+								return
+							end
+							local fase = math.deg(math.atan2(dy, dx))
+							local expr = string.format(
+								"Point(%.6f + %.4f*cos((Template.BoxSpinSpeed*time+%.4f)*pi/180)/%d,"
+								.. " %.6f + %.4f*sin((Template.BoxSpinSpeed*time+%.4f)*pi/180)/%d)",
+								cx, raio, fase, lw, cy, raio, fase, lh)
+							pcall(function() mask.Center:SetExpression(expr) end)
+							escritos = escritos + 1
+							girando = girando + 1
+						end
+
+						local function retangulo()
+							local mask1 = comp:FindTool("GiBoxMask1")
+							if not mask1 then return false end
+							girando = 0
+
+							local lw, lh
+							pcall(function() lw = comp:GetPrefs("Comp.FrameFormat.Width") end)
+							pcall(function() lh = comp:GetPrefs("Comp.FrameFormat.Height") end)
+							lw, lh = tonumber(lw) or 1920, tonumber(lh) or 1080
+
+							local largura_px = tonumber(ctl("TextBoxWidth", 0)) or 0
+							local altura_px = tonumber(ctl("TextBoxHeight", 0)) or 0
+							-- Zero nao e' tamanho: sem numero, a caixa ficaria invisivel e pareceria
+							-- que o macro nao funciona. Um quarto da tela e' palpite declarado, e o
+							-- log pede o numero.
+							if largura_px <= 0 or altura_px <= 0 then
+								diga("[GiAutoSubs] fixed box: Width (px) and Height (px) are 0 - "
+									.. "nothing to draw. Set them in the Text Box group (this macro "
+									.. "draws a real rectangle, so the size is yours to give).")
+								largura_px = largura_px > 0 and largura_px or lw * 0.25
+								altura_px = altura_px > 0 and altura_px or lh * 0.06
+							end
+
+							local centro = ctl("TextPosition", { 0.5, 0.22 })
+							local cx = (type(centro) == "table" and centro[1]) or 0.5
+							local cy = (type(centro) == "table" and centro[2]) or 0.22
+
+							local ligada = ctl("TextBoxEnabled", 0) == 1
+							local camadas = {
+								{ mask = "GiBoxMask1", bg = "GiBoxBG1", pref = "TextBox",
+								  liga = ligada, ox = 0, oy = 0,
+								  alpha = ctl("TextBoxOpacity", 1) },
+								{ mask = "GiBoxMask2", bg = "GiBoxBG2", pref = "BoxShadow",
+								  liga = ligada and ctl("BoxShadowOnNormal", 0) == 1,
+								  ox = ctl("BoxShadowCenterX", 0), oy = ctl("BoxShadowCenterY", 0),
+								  alpha = ctl("BoxShadowOpacity", 1) },
+								{ mask = "GiBoxMask3", bg = "GiBoxBG3", pref = "BoxLayer3",
+								  liga = ligada and ctl("BoxLayer3Enabled", 0) == 1,
+								  ox = ctl("BoxLayer3CenterX", 0), oy = ctl("BoxLayer3CenterY", 0),
+								  alpha = ctl("BoxLayer3Alpha", 1) },
+							}
+
+							for _, c in ipairs(camadas) do
+								local mask, bg = comp:FindTool(c.mask), comp:FindTool(c.bg)
+								if mask and bg then
+									-- Camada desligada = alpha ZERO. Nao existe `Enabled` num
+									-- Background, e apagar o tool tiraria ele do grafo (e da' pra
+									-- religar depois) - alpha zero custa o mesmo render e volta.
+									local a = c.liga and (tonumber(c.alpha) or 1) or 0
+									um(bg, "TopLeftRed", ctl(c.pref .. "ColorRed", 0))
+									um(bg, "TopLeftGreen", ctl(c.pref .. "ColorGreen", 0))
+									um(bg, "TopLeftBlue", ctl(c.pref .. "ColorBlue", 0))
+									um(bg, "TopLeftAlpha", a)
+									um(mask, "MaskWidth", lw)
+									um(mask, "MaskHeight", lh)
+									um(mask, "Width", largura_px / lw)
+									um(mask, "Height", altura_px / lh)
+									um(mask, "CornerRadius", ctl("TextBoxRound", 0))
+									centro_da_camada(mask, cx, cy, tonumber(c.ox) or 0,
+										tonumber(c.oy) or 0, lw, lh)
+								end
+							end
+							if girando > 0 then
+								diga(string.format("[GiAutoSubs] fixed box: %d colour layer(s) orbiting "
+									.. "at Spin Speed %s deg/frame", girando, tostring(ctl("BoxSpinSpeed", 0))))
+							end
+
+							diga(string.format("[GiAutoSubs] fixed box (rectangle): %dx%dpx at "
+								.. "%.3f,%.3f on a %dx%d frame - the caption text does not affect it",
+								math.floor(largura_px + 0.5), math.floor(altura_px + 0.5), cx, cy,
+								lw, lh))
+							return true
+						end
 
 						-- Um Lock so' pra escrita: sem ele o Fusion re-avalia a arvore a cada
 						-- SetInput, e sao dezenas por disparo. O Unlock tem que acontecer mesmo se
 						-- algo levantar no meio, senao a composicao fica travada na cara do
 						-- usuario - dai o pcall em volta.
+						-- Antes do Lock: mexer em atributo de interface nao e' render, e o Lock existe
+						-- pra agrupar as escritas de INPUT.
+						ui_extend(ctl("TextBoxFixed", 0) == 1)
+
 						local travou = pcall(function() comp:Lock() end)
 						local ok, erro = pcall(function()
 							local bolha = ctl("BubbleEnabled", 0) == 1
@@ -1284,14 +1802,36 @@
 							sombra(5, "Bubble", bolha and ctl("BoxShadowOnHighlight", 0) == 1)
 
 							local cx = ctl("TextBoxEnabled", 0) == 1
+
+							-- No macro `Fixo` quem desenha a caixa e' o RETANGULO, e os elementos
+							-- 6/7/8 do Text+ ficam desligados: dois lugares desenhando a mesma caixa
+							-- seria o problema de duas verdades, com a diferenca de que uma delas
+							-- acompanha o texto - justamente o que esta variante veio tirar.
+							local por_retangulo = retangulo()
+							if por_retangulo then cx = false end
+
 							caixa(6, "TextBox", cx)
 							sombra(7, "TextBox", cx and ctl("BoxShadowOnNormal", 0) == 1)
+							-- Depende da caixa: terceira cor de caixa que nao existe nao e' nada.
+							camada3(8, "TextBox",
+								cx and ctl("BoxLayer3Enabled", 0) == 1)
 						end)
 						if travou then pcall(function() comp:Unlock() end) end
 						if not ok then
 							diga("[GiAutoSubs] " .. origem .. " -> ApplyGiStyle FAILED: " .. tostring(erro))
 							return
 						end
+
+						-- O PREVIEW PARA AQUI.
+						--
+						-- Sem spline e sem GiBubblePop: sao as duas metades caras (o array de estilo
+						-- por caractere e' quadratico nas palavras), e sao justamente as que o preview
+						-- nao precisa - arrastar `Width` nao muda cor de palavra nenhuma. E' isto que
+						-- faz o custo por FRAME deste recurso ser zero.
+						--
+						-- E sem log: ~40 disparos por arrasto encheriam o `_gimacro.log` de linhas
+						-- iguais, que foi metade do motivo de os callbacks terem morrido no macro 11.
+						if soCaixa then return end
 
 						-- E por ultimo o spline. Num elemento ANIMADO a cor mora no array de
 						-- keyframe, que vence os inputs do Text+ e do Follower1 - entao mexer no
@@ -1494,6 +2034,11 @@
 							[5] = { "BubbleEnabled", "BoxShadowOnHighlight" },
 							[6] = { "TextBoxEnabled" },
 							[7] = { "TextBoxEnabled", "BoxShadowOnNormal" },
+							-- Hoje nenhum estilo anima a terceira cor (ela e' estatica, como a
+							-- caixa). A entrada existe pra que, no dia em que um animar, o checkbox
+							-- valha - sem ela o array devolveria `Enabled8 = 1` por cima do input,
+							-- que e' exatamente o bug que a bolha teve.
+							[8] = { "TextBoxEnabled", "BoxLayer3Enabled" },
 						}
 						-- Resolvido UMA vez por camada, nao por palavra: o laco abaixo e' N x N x
 						-- camadas, e uma leitura de input ali dentro se multiplica por tudo isso.
@@ -1750,6 +2295,11 @@
 							return padrao
 						end
 
+						-- <<CASE_FUNCS
+						-- (o validador extrai daqui ate' o fecho e roda em cima de exemplos - o
+						-- marcador fica SOZINHO na linha, senao o resto do comentario entra no
+						-- trecho extraido sem o `--` e o chunk nao compila)
+						--
 						-- 0xC3 e' o primeiro byte de todo acentuado latino em UTF-8; o segundo diz
 						-- qual letra e' e se e' maiuscula (0x80..0x9E) ou minuscula (0xA0..0xBE).
 						-- 0x97 e 0xB7 sao 'x' e '/' de multiplicacao e divisao - nao sao letras.
@@ -1773,11 +2323,50 @@
 							return (s:lower())
 						end
 
+						-- CAMEL CASE: primeira letra de cada palavra em maiuscula, o resto minusculo.
+						--
+						-- "eu adoro torresmo, uhuu" -> "Eu Adoro Torresmo, Uhuu", e tambem
+						-- "ELES SO SAO MEIO TIMIDOS" -> "Eles So Sao Meio Timidos": comeca
+						-- MINUSCULANDO tudo, senao um texto que ja esta em caixa alta (o padrao deste
+						-- projeto) sairia igual ao que entrou.
+						--
+						-- Anda de CARACTERE, nao de byte: acentuado latino ocupa dois bytes em UTF-8,
+						-- e pular de um em um poria maiuscula no meio da letra - o mesmo motivo do
+						-- `utf8_len` do Fixed Box.
+						--
+						-- Hifen e apostrofo NAO comecam palavra nova ("Bem-vindo", "D'agua"), e
+						-- digito faz parte da palavra ("3d" nao vira "3D"). Quem comeca palavra e'
+						-- pontuacao e espaco - foi o que o exemplo pedido mostrou: a virgula de
+						-- "torresmo, uhuu" reinicia.
+						local function camel(s)
+							s = minuscula(s)
+							local saida, comeco, i = {}, true, 1
+							while i <= #s do
+								local b = s:byte(i)
+								local n = (b == 195) and 2 or 1
+								local pedaco = s:sub(i, i + n - 1)
+								local dentro = (n == 2) or pedaco:match("[%w'%-]") ~= nil
+								if dentro and comeco and (n == 2 or pedaco:match("%a")) then
+									pedaco = maiuscula(pedaco)
+									comeco = false
+								elseif dentro then
+									comeco = false
+								else
+									comeco = true
+								end
+								saida[#saida + 1] = pedaco
+								i = i + n
+							end
+							return table.concat(saida)
+						end
+
 						local function transformar(s, modo)
 							if modo == 1 then return minuscula(s) end
 							if modo == 2 then return maiuscula(s) end
+							if modo == 3 then return camel(s) end
 							return s
 						end
+						-- CASE_FUNCS>>
 
 						local modo = math.floor(ctl("TextCase", 0))
 						local atual
@@ -1896,6 +2485,248 @@
 						return string.format("%s (%d tools)", nome, escritos)
 					end
 				]],
+				GiRebuild = [[
+					return function(comp, tool, rotulo)
+
+						local function diga(linha)
+							print(linha)
+							pcall(function()
+								local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+								if not fh then return end
+								-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+								-- caminho normal isto continua sendo UM open por linha.
+								if fh:seek("end") > 2097152 then
+									fh:close()
+									fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+									if not fh then return end
+									fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+								end
+								fh:write(linha, "\n")
+								fh:close()
+							end)
+						end
+
+						local function gi_dono(comp, tool, nome)
+							local v
+							pcall(function() v = tool and tool:GetData(nome) end)
+							if v ~= nil then return tool end
+							local c = comp
+							if c == nil and tool then pcall(function() c = tool.Comp end) end
+							local tools
+							pcall(function() tools = c:GetToolList(false) end)
+							for _, t in pairs(tools or {}) do
+								pcall(function() v = t:GetData(nome) end)
+								if v ~= nil then return t end
+							end
+							return nil
+						end
+
+						local function gi_chunk(comp, tool, nome)
+							local d = gi_dono(comp, tool, nome)
+							if not d then return nil end
+							local v
+							pcall(function() v = d:GetData(nome) end)
+							return v
+						end
+
+						-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+						-- nome - o nome do macro muda de clipe pra clipe.
+						--
+						-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+						-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+						-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+						-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+						-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+						local function gi_macro(comp, tool)
+							return gi_dono(comp, tool, "InputKeys")
+						end
+
+						local ROTULO = rotulo or "Rebuild with Selected"
+						local template = comp:FindTool("Template") or tool
+						local macro = gi_macro(comp, tool)
+						if not macro then
+							diga("[GiAutoSubs] " .. ROTULO .. ": this clip has no InputKeys - it "
+								.. "carries an old copy of the macro, so there is no Meta tab to read")
+							return false
+						end
+
+						-- Le na ordem macro -> tool -> Text+, igual ao `ctl` das outras rotinas: o
+						-- Inspector do clipe grava no MacroOperator. Campo de texto VAZIO conta como
+						-- ausente - caminho em branco nao e' resposta, e' falta de resposta.
+						local function meta(nome, padrao)
+							local v
+							for _, alvo in ipairs({ macro, tool, template }) do
+								if alvo then
+									pcall(function() v = alvo:GetInput(nome) end)
+									if v ~= nil and v ~= "" then return v end
+								end
+							end
+							return padrao
+						end
+
+						local lua_atual = tostring(meta("MetaCaptionsFile", ""))
+						local corte = tostring(meta("MetaCutFolder", ""))
+						local estilo = tostring(meta("MetaStyle", ""))
+						local transcricao = tostring(meta("MetaTranscript", ""))
+						local title = tostring(meta("MetaTitle", ""))
+						local preset = tostring(meta("MetaConfig", ""))
+						local chars = math.floor(tonumber(meta("MetaCharsPerBox", 0)) or 0)
+						local linhas = math.floor(tonumber(meta("MetaLines", 1)) or 1)
+
+						-- AS OPCOES SAO AS CAIXAS MARCADAS, e nao o botao que foi clicado.
+						--
+						-- Antes eram tres botoes (um por opcao), e eles nao combinavam: "largura fixa
+						-- E sem buracos" pedia duas rodadas inteiras. Com checkbox + submit a rodada
+						-- acontece uma vez, com o que esta marcado - e o que esta marcado continua
+						-- visivel depois, em vez de sumir no clique.
+						--
+						-- `Fixed Width` na Meta e' o MESMO controle da caixa fixa no grupo Text Box
+						-- (`TextBoxFixed`), exposto duas vezes. Um controle proprio aqui seria uma
+						-- segunda verdade sobre a mesma coisa.
+						local fixa = (tonumber(meta("TextBoxFixed", 0)) or 0) == 1
+						local semBuracos = (tonumber(meta("MetaNoGaps", 0)) or 0) == 1
+
+						diga("[GiAutoSubs] ===== " .. ROTULO .. " =====")
+						diga("[GiAutoSubs] linked captions : " .. (lua_atual ~= "" and lua_atual or "(none)"))
+						diga("[GiAutoSubs] cut folder      : " .. (corte ~= "" and corte or "(none)"))
+						diga("[GiAutoSubs] style / title   : " .. estilo .. " / " .. title)
+						diga("[GiAutoSubs] config (preset) : " .. (preset ~= "" and preset or "(none)"))
+						diga(string.format("[GiAutoSubs] wrapping        : %d char(s) per box, %d line(s)",
+							chars, linhas))
+						diga("[GiAutoSubs] fixed width     : " .. (fixa and "yes - every caption "
+							.. "gets the width of a full line" or "no - the box follows the text"))
+						diga("[GiAutoSubs] gaps            : " .. (semBuracos and "filled - each "
+							.. "caption lasts until the next one starts" or "kept as the speech is"))
+
+						-- A pasta do corte e' o unico campo sem substituto: e' o argumento do
+						-- giautosubs.py. Sem ela o clipe nasceu antes da aba Meta (ou foi arrastado
+						-- da aba Effects) e nao ha' o que reconstruir.
+						if corte == "" or chars <= 0 then
+							diga("[GiAutoSubs] " .. ROTULO .. ": the Meta tab does not say which cut "
+								.. "folder this caption came from (or Characters per Box is 0). "
+								.. "Recreate the captions with the script once and it fills itself.")
+							return false
+						end
+
+						-- O nome novo. O `_c%d+` sai antes de entrar: senao um segundo clique
+						-- produziria `legendas_c25_c19.lua`.
+						local dir, arq = lua_atual:match("^(.*)[\\/]([^\\/]+)$")
+						if not dir then
+							dir = corte .. "\\legendas"
+							arq = "legendas.lua"
+						end
+						local base = (arq:gsub("%.lua$", ""))
+						base = (base:gsub("_c%d+$", ""))
+						local novo_json = dir .. "\\" .. base .. "_c" .. chars .. ".json"
+						local novo_lua = dir .. "\\" .. base .. "_c" .. chars .. ".lua"
+
+						-- Aspas em volta do comando INTEIRO, alem das de cada caminho: com o
+						-- `cmd /c` do Windows, um primeiro token entre aspas faz o resto da linha ser
+						-- lido errado. Este embrulho e' o conserto conhecido disso.
+						local cmd = string.format('""%s" "%s" "%s" --max-chars %d --max-lines %d --out "%s"',
+							"D:\\CanalYtbe\\BatataQuente\\pre_production\\.venv\\Scripts\\python.exe", "D:\\CanalYtbe\\BatataQuente\\pre_production\\src\\giautosubs.py", corte, chars, linhas, novo_json)
+						if estilo ~= "" then cmd = cmd .. ' --estilo "' .. estilo .. '"' end
+						-- A LARGURA FIXA da rodada inteira.
+						--
+						-- O checkbox `Fixed Box` vale por clipe e o Apply Style o levaria pros
+						-- outros, mas mudar os caracteres por caixa recria os clipes de qualquer
+						-- jeito - entao o lugar honesto de pedir "todas fixas" e' aqui, na geracao.
+						-- Assim as legendas NASCEM com a caixa do mesmo tamanho, e a borda colorida
+						-- orbita um retangulo parado enquanto o texto troca dentro dele.
+						-- Os DOIS sentidos, sempre explicitos: sem o `--free-box`, uma rodada que
+						-- quer a caixa livre cairia no que o estilos.json disser - e o que manda aqui
+						-- e' o clipe que esta na tela, nao o estilo no disco.
+						cmd = cmd .. (fixa and " --fixed-box" or " --free-box")
+						if semBuracos then cmd = cmd .. " --no-gaps" end
+						if transcricao ~= "" then cmd = cmd .. ' --transcript "' .. transcricao .. '"' end
+
+						-- `os.execute` com a saida redirecionada pra arquivo, e nao `io.popen`: ler
+						-- um pipe na thread da interface do Resolve e' o segundo suspeito do crash, e
+						-- nao faz nada que isto nao faca. Trava a interface pelos segundos que o
+						-- Python leva - e' sincrono, e e' o preco de nao ter onde rodar em paralelo.
+						--
+						-- O redirecionamento vai DENTRO da aspa externa. O `cmd /c` tira a primeira e
+						-- a ULTIMA aspa da linha; com o `> "relato"` depois do embrulho, a ultima era a
+						-- do relato, e o `--transcript` engolia o redirecionamento: o Python morria em
+						-- `Invalid argument: '...turnsWhisper.json" > ...'` e todo Rebuild com
+						-- transcricao falhava calado (28/09 - o "No Gaps nao funciona").
+						local relato = "D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_girebuild.txt"
+						diga("[GiAutoSubs] running (Resolve freezes for a few seconds): " .. cmd .. '"')
+						-- O relato velho sai antes: senao, com o Python morto, as linhas da rodada
+						-- ANTERIOR apareceriam aqui como se fossem desta.
+						pcall(function() os.remove(relato) end)
+						pcall(function() os.execute(cmd .. ' > "' .. relato .. '" 2>&1"') end)
+						local saida = {}
+						pcall(function()
+							local fh = io.open(relato, "r")
+							if not fh then return end
+							for linha in fh:lines() do saida[#saida + 1] = linha end
+							fh:close()
+						end)
+						-- So' as ultimas linhas: o resumo do giautosubs.py e' o que interessa, e o
+						-- log do macro nao e' lugar pra despejo (a mesma regra do `erro_curto`).
+						for i = math.max(1, #saida - 12), #saida do
+							diga("[GiAutoSubs]   | " .. tostring(saida[i]))
+						end
+
+						-- Sucesso = o Python DISSE que escreveu este arquivo. So' conferir que o .lua
+						-- existe nao prova nada: o nome e' o mesmo da rodada anterior, entao com o
+						-- Python morto o arquivo VELHO passava por novo e o botao dizia "ready".
+						local existe = false
+						for _, linha in ipairs(saida) do
+							if linha:find(novo_lua, 1, true) and linha:find("GiAutoSubs.lua reads", 1, true) then
+								existe = true
+							end
+						end
+						if not existe then
+							diga("[GiAutoSubs] " .. ROTULO .. ": " .. novo_lua .. " was NOT written - "
+								.. "nothing was changed on the timeline. Check the lines above "
+								.. "(python path, cut folder, transcript).")
+							return false
+						end
+
+						-- Relinka ANTES de recriar: se o passo seguinte falhar, o clipe pelo menos
+						-- diz qual arquivo esta valendo agora.
+						pcall(function() macro:SetInput("MetaCaptionsFile", novo_lua) end)
+						pcall(function() macro:SetData("GiCharsBuilt", chars) end)
+						diga("[GiAutoSubs] linked now: " .. novo_lua)
+
+						-- O recado pro GiAutoSubs.lua. `substituir` = REPLACE: o pedido veio de quem
+						-- estava olhando as legendas antigas e pediu outras no lugar delas, entao
+						-- perguntar o conflito de novo seria perguntar o que acabou de ser respondido.
+						local pedido = "D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gipedido.txt"
+						local escrito = false
+						pcall(function()
+							local f = io.open(pedido, "w")
+							if not f then return end
+							f:write("arquivo\t", novo_lua, "\n")
+							f:write("conflito\tsubstituir\n")
+							if title ~= "" then f:write("estilo\t", title, "\n") end
+							if preset ~= "" then f:write("preset\t", preset, "\n") end
+							f:close()
+							escrito = true
+						end)
+						if not escrito then
+							diga("[GiAutoSubs] " .. ROTULO .. ": could not write " .. pedido
+								.. " - the captions file was generated but the clips were NOT "
+								.. "recreated. Run Workspace > Scripts > GiAutoSubs and pick "
+								.. novo_lua)
+							return false
+						end
+
+						-- E PARA AQUI. Recriar daqui apagaria a legenda deste clipe - a comp que
+						-- esta' rodando este codigo - e o Resolve cai sem mensagem (ver o topo).
+						diga("[GiAutoSubs] ===== ready =====")
+						diga("[GiAutoSubs] now run:  Workspace > Scripts > GiAutoSubs")
+						diga("[GiAutoSubs] it will NOT ask anything - the file, the title, the config "
+							.. "and the REPLACE were all answered by this click.")
+						diga("[GiAutoSubs] (the button cannot recreate the clips itself: it runs "
+							.. "inside this caption's own composition, and REPLACE deletes this "
+							.. "caption - Resolve crashes when the code that is running gets "
+							.. "deleted under it.)")
+						return true
+					end
+				]],
 			},
 			Tools = ordered() {
 				Template = TextPlus {
@@ -1921,7 +2752,6 @@
 						Red1 = Input { Value = 1, },
 						Enabled1 = Input { Value = 1, },
 						Size = Input { Value = 0.09, },
-						GlobalOut = Input { Value = 149, },
 						Width = Input { Value = 1920, },
 						Height = Input { Value = 1080, },
 						UseFrameFormatSettings = Input { Value = 1, },
@@ -2485,7 +3315,7 @@
 							LINKS_Name = "GiAutoSubs (macro version)",
 							LINKID_DataType = "Number",
 							INPID_InputControl = "SliderControl",
-							INP_Default = 24,
+							INP_Default = 37,
 							INP_Integer = true,
 							INP_MinScale = 0,
 							INP_MaxScale = 9999,
@@ -2729,7 +3559,7 @@
 							LINKID_DataType = "Number",
 							INPID_InputControl = "LabelControl",
 							LBLC_DropDownButton = true,
-							LBLC_NumInputs = 10,
+							LBLC_NumInputs = 13,
 							INP_Default = 1,
 							INP_Integer = false,
 							INP_Passive = true,
@@ -2745,6 +3575,242 @@
 							CBC_TriState = false,
 							INP_External = false,
 							INP_Passive = false,
+						},
+						TextBoxFixed = {
+							LINKS_Name = "Fixed Box (Width/Height below)",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+							INPS_ExecuteOnChange = [[
+								local function diga(linha)
+									print(linha)
+									pcall(function()
+										local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+										if not fh then return end
+										-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+										-- caminho normal isto continua sendo UM open por linha.
+										if fh:seek("end") > 2097152 then
+											fh:close()
+											fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+											if not fh then return end
+											fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+										end
+										fh:write(linha, "\n")
+										fh:close()
+									end)
+								end
+
+								local function gi_dono(comp, tool, nome)
+									local v
+									pcall(function() v = tool and tool:GetData(nome) end)
+									if v ~= nil then return tool end
+									local c = comp
+									if c == nil and tool then pcall(function() c = tool.Comp end) end
+									local tools
+									pcall(function() tools = c:GetToolList(false) end)
+									for _, t in pairs(tools or {}) do
+										pcall(function() v = t:GetData(nome) end)
+										if v ~= nil then return t end
+									end
+									return nil
+								end
+
+								local function gi_chunk(comp, tool, nome)
+									local d = gi_dono(comp, tool, nome)
+									if not d then return nil end
+									local v
+									pcall(function() v = d:GetData(nome) end)
+									return v
+								end
+
+								-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+								-- nome - o nome do macro muda de clipe pra clipe.
+								--
+								-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+								-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+								-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+								-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+								-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+								local function gi_macro(comp, tool)
+									return gi_dono(comp, tool, "InputKeys")
+								end
+
+							local f = gi_chunk(comp, tool, "ApplyGiStyle")
+							if f then
+								loadstring(f)()(comp, tool, "preview", false, true)
+							elseif not _G.GI_PREVIEW_AVISADO then
+								-- UMA vez por sessao: um arrasto de slider num clipe velho imprimiria isto
+								-- quarenta vezes, e log repetido e' log que ninguem le.
+								_G.GI_PREVIEW_AVISADO = true
+								diga("[GiAutoSubs] live preview: no tool in this comp owns ApplyGiStyle - "
+									.. "this clip carries an old copy of the macro, so the box only updates "
+									.. "when you click Apply Style")
+							end
+							]],
+						},
+						TextBoxWidth = {
+							LINKS_Name = "Width (px)",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0,
+							INP_MinScale = 0,
+							INP_MaxScale = 4000,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = true,
+							INP_External = false,
+							INP_Passive = false,
+							INPS_ExecuteOnChange = [[
+								local function diga(linha)
+									print(linha)
+									pcall(function()
+										local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+										if not fh then return end
+										-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+										-- caminho normal isto continua sendo UM open por linha.
+										if fh:seek("end") > 2097152 then
+											fh:close()
+											fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+											if not fh then return end
+											fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+										end
+										fh:write(linha, "\n")
+										fh:close()
+									end)
+								end
+
+								local function gi_dono(comp, tool, nome)
+									local v
+									pcall(function() v = tool and tool:GetData(nome) end)
+									if v ~= nil then return tool end
+									local c = comp
+									if c == nil and tool then pcall(function() c = tool.Comp end) end
+									local tools
+									pcall(function() tools = c:GetToolList(false) end)
+									for _, t in pairs(tools or {}) do
+										pcall(function() v = t:GetData(nome) end)
+										if v ~= nil then return t end
+									end
+									return nil
+								end
+
+								local function gi_chunk(comp, tool, nome)
+									local d = gi_dono(comp, tool, nome)
+									if not d then return nil end
+									local v
+									pcall(function() v = d:GetData(nome) end)
+									return v
+								end
+
+								-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+								-- nome - o nome do macro muda de clipe pra clipe.
+								--
+								-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+								-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+								-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+								-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+								-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+								local function gi_macro(comp, tool)
+									return gi_dono(comp, tool, "InputKeys")
+								end
+
+							local f = gi_chunk(comp, tool, "ApplyGiStyle")
+							if f then
+								loadstring(f)()(comp, tool, "preview", false, true)
+							elseif not _G.GI_PREVIEW_AVISADO then
+								-- UMA vez por sessao: um arrasto de slider num clipe velho imprimiria isto
+								-- quarenta vezes, e log repetido e' log que ninguem le.
+								_G.GI_PREVIEW_AVISADO = true
+								diga("[GiAutoSubs] live preview: no tool in this comp owns ApplyGiStyle - "
+									.. "this clip carries an old copy of the macro, so the box only updates "
+									.. "when you click Apply Style")
+							end
+							]],
+						},
+						TextBoxHeight = {
+							LINKS_Name = "Height (px)",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0,
+							INP_MinScale = 0,
+							INP_MaxScale = 4000,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = true,
+							INP_External = false,
+							INP_Passive = false,
+							INPS_ExecuteOnChange = [[
+								local function diga(linha)
+									print(linha)
+									pcall(function()
+										local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+										if not fh then return end
+										-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+										-- caminho normal isto continua sendo UM open por linha.
+										if fh:seek("end") > 2097152 then
+											fh:close()
+											fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+											if not fh then return end
+											fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+										end
+										fh:write(linha, "\n")
+										fh:close()
+									end)
+								end
+
+								local function gi_dono(comp, tool, nome)
+									local v
+									pcall(function() v = tool and tool:GetData(nome) end)
+									if v ~= nil then return tool end
+									local c = comp
+									if c == nil and tool then pcall(function() c = tool.Comp end) end
+									local tools
+									pcall(function() tools = c:GetToolList(false) end)
+									for _, t in pairs(tools or {}) do
+										pcall(function() v = t:GetData(nome) end)
+										if v ~= nil then return t end
+									end
+									return nil
+								end
+
+								local function gi_chunk(comp, tool, nome)
+									local d = gi_dono(comp, tool, nome)
+									if not d then return nil end
+									local v
+									pcall(function() v = d:GetData(nome) end)
+									return v
+								end
+
+								-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+								-- nome - o nome do macro muda de clipe pra clipe.
+								--
+								-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+								-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+								-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+								-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+								-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+								local function gi_macro(comp, tool)
+									return gi_dono(comp, tool, "InputKeys")
+								end
+
+							local f = gi_chunk(comp, tool, "ApplyGiStyle")
+							if f then
+								loadstring(f)()(comp, tool, "preview", false, true)
+							elseif not _G.GI_PREVIEW_AVISADO then
+								-- UMA vez por sessao: um arrasto de slider num clipe velho imprimiria isto
+								-- quarenta vezes, e log repetido e' log que ninguem le.
+								_G.GI_PREVIEW_AVISADO = true
+								diga("[GiAutoSubs] live preview: no tool in this comp owns ApplyGiStyle - "
+									.. "this clip carries an old copy of the macro, so the box only updates "
+									.. "when you click Apply Style")
+							end
+							]],
 						},
 						TextBoxColorRed = {
 							LINKS_Name = "Text Box Color",
@@ -2816,7 +3882,7 @@
 							{ CCS_AddString = "Character" },
 						},
 						TextBoxExtendHorizontal = {
-							LINKS_Name = "Extend Horizontal",
+							LINKS_Name = "Extend Horizontal (free box)",
 							LINKID_DataType = "Number",
 							INPID_InputControl = "SliderControl",
 							INP_Default = 0.2,
@@ -2829,7 +3895,7 @@
 							INP_Passive = false,
 						},
 						TextBoxExtendVertical = {
-							LINKS_Name = "Extend Vertical",
+							LINKS_Name = "Extend Vertical (free box)",
 							LINKID_DataType = "Number",
 							INPID_InputControl = "SliderControl",
 							INP_Default = 0.12,
@@ -2848,6 +3914,121 @@
 							INP_Default = 0.25,
 							INP_MinScale = 0,
 							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxLayer3Label = {
+							LINKS_Name = "Box Layer 3",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 9,
+							INP_Default = 1,
+							INP_Integer = false,
+							INP_Passive = true,
+						},
+						BoxLayer3Enabled = {
+							LINKS_Name = "Enabled",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxLayer3ColorRed = {
+							LINKS_Name = "Layer 3 Color",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 1,
+							CLRC_ShowWheel = true,
+							IC_ControlID = 0,
+							IC_ControlGroup = 28,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxLayer3ColorGreen = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0.3,
+							IC_ControlID = 1,
+							IC_ControlGroup = 28,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxLayer3ColorBlue = {
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ColorControl",
+							INP_Default = 0.65,
+							IC_ControlID = 2,
+							IC_ControlGroup = 28,
+							ICS_ControlPage = "Controls",
+							CLRC_NoSliders = false,
+							IC_Visible = true,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxLayer3CenterX = {
+							LINKS_Name = "Offset X",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = -0.005,
+							INP_MinScale = -0.05,
+							INP_MaxScale = 0.05,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxLayer3CenterY = {
+							LINKS_Name = "Offset Y",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.007,
+							INP_MinScale = -0.05,
+							INP_MaxScale = 0.05,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxLayer3Alpha = {
+							LINKS_Name = "Alpha",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 1,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						BoxSpinSpeed = {
+							LINKS_Name = "Spin Speed",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0,
+							INP_MinScale = 0,
+							INP_MaxScale = 10,
 							INP_MinAllowed = -1000000,
 							INP_MaxAllowed = 1000000,
 							INP_Integer = false,
@@ -3089,15 +4270,42 @@
 								end
 								pcall(function() extras.TextPosition = template:GetInput("Center") end)
 
-								-- O nome. O AskUser do Fusion nao e' confiavel a partir da pagina Edit (ver
-								-- SpeakerSwitch.py) - ele existe como atributo e vem nil. Entao ele e' TENTADO,
-								-- e cada destino decide o que fazer quando nao vem nada (ver logo abaixo).
-								local nome
+								-- O NOME, por dialogo NATIVO do sistema.
+								--
+								-- Era um `comp:AskUser` - e o AskUser nao tem parametro de posicao: quem coloca a
+								-- janela e' o Fusion, e ela sai fora do lugar (relatado pelo usuario). Nao ha' API
+								-- pra centraliza-la.
+								--
+								-- O `fusion:RequestFile` e' a caixa de arquivo do sistema: centralizada, lembra a
+								-- pasta, e e' o mesmo dialogo que o GiAutoSubs.lua usa nas quatro perguntas dele -
+								-- pela regra que o proprio projeto escreveu, o AskUser "existe como atributo e vem
+								-- nil" fora da pagina Fusion, que e' o caso normal aqui.
+								--
+								-- O nome e' o NOME DO ARQUIVO escolhido, sem a extensao. Para o Export Config o
+								-- caminho escolhido e' o proprio destino, entao da' pra salvar em outra pasta ou
+								-- sobrescrever um preset existente vendo a lista - o que um campo de texto nao
+								-- oferece. Cancelar continua caindo no carimbo de hora (ver o destino abaixo).
+								--
+								-- `FReqB_Saving` pede a caixa de SALVAR. Se esta versao do Fusion nao conhecer o
+								-- atributo, ela abre como caixa de abrir - e ai escolher um preset existente
+								-- ainda funciona, e cancelar cai no carimbo de hora. Degradado, nao quebrado.
+								local nome, escolhido
 								pcall(function()
-									local ui = comp and comp.AskUser and comp:AskUser("Export Config", {
-										{ "Nome", Name = "Config name", "Text", Default = "" },
+									if not (fusion and fusion.RequestFile) then return end
+									local caminho = fusion:RequestFile("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\presets\\", "meu-preset.txt", {
+										FReqB_SeqGather = false,
+										FReqB_Saving = true,
+										FReqS_Title = "Export Config - Config name",
+										FReqS_Filter = "GiAutoSubs config (*.txt)|*.txt",
 									})
-									if ui then nome = ui.Nome end
+									if caminho and caminho ~= "" then
+										escolhido = caminho
+										-- Quatro barras: este trecho atravessa o parser do Python (a string do
+										-- gerador) e depois o do Lua. Duas chegariam ao Lua como `\/`, que e um
+										-- escape invalido - o macro inteiro para de compilar (armadilha do macro 25).
+										nome = caminho:match("([^\\/]+)$")
+										if nome then nome = (nome:gsub("%.[^.]*$", "")) end
+									end
 								end)
 								if nome then
 									nome = nome:gsub("^%s+", ""):gsub("%s+$", "")
@@ -3139,10 +4347,23 @@
 									linhas[#linhas + 1] = k .. "\t" .. num(fonte[k])
 								end
 
-								if not nome then nome = "preset-" .. os.date("%Y%m%d-%H%M%S") end
-								local seguro = nome:gsub("[^%w%-_ ]", "_")
-								pcall(function() bmd.createdir("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\presets") end)
-								local destino = "D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\presets" .. "\\" .. seguro .. ".txt"
+								-- O caminho que voce escolheu na caixa E' o destino: foi voce quem apontou a
+								-- pasta e o nome, e reconstruir o caminho a partir do nome jogaria a sua escolha
+								-- fora (salvar num pendrive, por exemplo).
+								--
+								-- Sem escolha (cancelou, ou o dialogo nao existe nesta forma de rodar) o preset
+								-- sai carimbado com a hora, na pasta que a rodada le. Um arquivo com nome feio
+								-- da' pra renomear; uma exportacao recusada custa o ajuste inteiro de novo.
+								-- `bmd.createdir` porque `io.open` numa pasta que nao existe falha calado.
+								local destino
+								if escolhido then
+									destino = escolhido
+									if not destino:lower():match("%.txt$") then destino = destino .. ".txt" end
+								else
+									nome = "preset-" .. os.date("%Y%m%d-%H%M%S")
+									pcall(function() bmd.createdir("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\presets") end)
+									destino = "D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\presets" .. "\\" .. nome .. ".txt"
+								end
 
 								local escrito = false
 								pcall(function()
@@ -3291,6 +4512,41 @@
 									diga("[GiAutoSubs] " .. ROTULO .. ":this clip has no InputKeys - it carries an "
 										.. "old copy of the macro, so there is no style to copy FROM")
 									return
+								end
+
+								-- CARACTERES POR CAIXA MUDOU? Entao isto nao e' trabalho de estilo.
+								--
+								-- Mudar o `Characters per Box` da aba Meta muda como as frases sao REPARTIDAS,
+								-- e com isso o numero de legendas (156 a 19 caracteres, 191 a 25). Restilizar os
+								-- clipes que existem nao produz os que faltam: e' preciso gerar o `legendas.lua`
+								-- de novo e recriar. E' o `GiRebuild` que faz isso, e este botao so' reconhece
+								-- que e' ele que foi pedido.
+								--
+								-- `GiCharsBuilt` e' o carimbo do que o arquivo LINKADO usou - `SetData` e nao
+								-- controle, porque e' registro do passado e nao escolha: um controle a mais no
+								-- Inspector convidaria a mexer justamente no numero que nao se mexe.
+								--
+								-- So' no "This Track": o outro botao alcanca a timeline inteira, onde
+								-- convivem cortes de legendas diferentes, e reconstruir a partir de um clipe
+								-- levaria a procedencia dele pra cima de todos.
+								if SO_ESTA_TRACK then
+									local pedidos, feitos = 0, 0
+									pcall(function() pedidos = math.floor(tonumber(macro:GetInput("MetaCharsPerBox")) or 0) end)
+									pcall(function() feitos = math.floor(tonumber(macro:GetData("GiCharsBuilt")) or 0) end)
+									if pedidos > 0 and feitos > 0 and pedidos ~= feitos then
+										diga(string.format("[GiAutoSubs] %s: Characters per Box went from %d to "
+											.. "%d - that changes how many captions there ARE, so restyling them "
+											.. "cannot do it. Preparing the rebuild instead.", ROTULO, feitos,
+											pedidos))
+										local f = gi_chunk(comp, tool, "GiRebuild")
+										if f then
+											loadstring(f)()(comp, tool, ROTULO)
+										else
+											diga("[GiAutoSubs] " .. ROTULO .. ": no tool in this comp owns "
+												.. "GiRebuild - the clip carries an old copy of the macro")
+										end
+										return
+									end
 								end
 
 								-- O estilo sai pelo mesmo contrato que o script usa. Nada de montar a tabela a
@@ -3510,6 +4766,41 @@
 									diga("[GiAutoSubs] " .. ROTULO .. ":this clip has no InputKeys - it carries an "
 										.. "old copy of the macro, so there is no style to copy FROM")
 									return
+								end
+
+								-- CARACTERES POR CAIXA MUDOU? Entao isto nao e' trabalho de estilo.
+								--
+								-- Mudar o `Characters per Box` da aba Meta muda como as frases sao REPARTIDAS,
+								-- e com isso o numero de legendas (156 a 19 caracteres, 191 a 25). Restilizar os
+								-- clipes que existem nao produz os que faltam: e' preciso gerar o `legendas.lua`
+								-- de novo e recriar. E' o `GiRebuild` que faz isso, e este botao so' reconhece
+								-- que e' ele que foi pedido.
+								--
+								-- `GiCharsBuilt` e' o carimbo do que o arquivo LINKADO usou - `SetData` e nao
+								-- controle, porque e' registro do passado e nao escolha: um controle a mais no
+								-- Inspector convidaria a mexer justamente no numero que nao se mexe.
+								--
+								-- So' no "This Track": o outro botao alcanca a timeline inteira, onde
+								-- convivem cortes de legendas diferentes, e reconstruir a partir de um clipe
+								-- levaria a procedencia dele pra cima de todos.
+								if SO_ESTA_TRACK then
+									local pedidos, feitos = 0, 0
+									pcall(function() pedidos = math.floor(tonumber(macro:GetInput("MetaCharsPerBox")) or 0) end)
+									pcall(function() feitos = math.floor(tonumber(macro:GetData("GiCharsBuilt")) or 0) end)
+									if pedidos > 0 and feitos > 0 and pedidos ~= feitos then
+										diga(string.format("[GiAutoSubs] %s: Characters per Box went from %d to "
+											.. "%d - that changes how many captions there ARE, so restyling them "
+											.. "cannot do it. Preparing the rebuild instead.", ROTULO, feitos,
+											pedidos))
+										local f = gi_chunk(comp, tool, "GiRebuild")
+										if f then
+											loadstring(f)()(comp, tool, ROTULO)
+										else
+											diga("[GiAutoSubs] " .. ROTULO .. ": no tool in this comp owns "
+												.. "GiRebuild - the clip carries an old copy of the macro")
+										end
+										return
+									end
 								end
 
 								-- O estilo sai pelo mesmo contrato que o script usa. Nada de montar a tabela a
@@ -3752,15 +5043,42 @@
 								end
 								pcall(function() extras.TextPosition = template:GetInput("Center") end)
 
-								-- O nome. O AskUser do Fusion nao e' confiavel a partir da pagina Edit (ver
-								-- SpeakerSwitch.py) - ele existe como atributo e vem nil. Entao ele e' TENTADO,
-								-- e cada destino decide o que fazer quando nao vem nada (ver logo abaixo).
-								local nome
+								-- O NOME, por dialogo NATIVO do sistema.
+								--
+								-- Era um `comp:AskUser` - e o AskUser nao tem parametro de posicao: quem coloca a
+								-- janela e' o Fusion, e ela sai fora do lugar (relatado pelo usuario). Nao ha' API
+								-- pra centraliza-la.
+								--
+								-- O `fusion:RequestFile` e' a caixa de arquivo do sistema: centralizada, lembra a
+								-- pasta, e e' o mesmo dialogo que o GiAutoSubs.lua usa nas quatro perguntas dele -
+								-- pela regra que o proprio projeto escreveu, o AskUser "existe como atributo e vem
+								-- nil" fora da pagina Fusion, que e' o caso normal aqui.
+								--
+								-- O nome e' o NOME DO ARQUIVO escolhido, sem a extensao. Para o Export Config o
+								-- caminho escolhido e' o proprio destino, entao da' pra salvar em outra pasta ou
+								-- sobrescrever um preset existente vendo a lista - o que um campo de texto nao
+								-- oferece. Cancelar continua caindo no carimbo de hora (ver o destino abaixo).
+								--
+								-- `FReqB_Saving` pede a caixa de SALVAR. Se esta versao do Fusion nao conhecer o
+								-- atributo, ela abre como caixa de abrir - e ai escolher um preset existente
+								-- ainda funciona, e cancelar cai no carimbo de hora. Degradado, nao quebrado.
+								local nome, escolhido
 								pcall(function()
-									local ui = comp and comp.AskUser and comp:AskUser("Generate Caption Style", {
-										{ "Nome", Name = "Style name", "Text", Default = "" },
+									if not (fusion and fusion.RequestFile) then return end
+									local caminho = fusion:RequestFile("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\presets\\", "meu-estilo.txt", {
+										FReqB_SeqGather = false,
+										FReqB_Saving = true,
+										FReqS_Title = "Generate Caption Style - Style name",
+										FReqS_Filter = "GiAutoSubs config (*.txt)|*.txt",
 									})
-									if ui then nome = ui.Nome end
+									if caminho and caminho ~= "" then
+										escolhido = caminho
+										-- Quatro barras: este trecho atravessa o parser do Python (a string do
+										-- gerador) e depois o do Lua. Duas chegariam ao Lua como `\/`, que e um
+										-- escape invalido - o macro inteiro para de compilar (armadilha do macro 25).
+										nome = caminho:match("([^\\/]+)$")
+										if nome then nome = (nome:gsub("%.[^.]*$", "")) end
+									end
 								end)
 								if nome then
 									nome = nome:gsub("^%s+", ""):gsub("%s+$", "")
@@ -3841,12 +5159,222 @@
 							INP_Integer = true,
 							INP_Default = 2,
 							INP_MinAllowed = 0,
-							INP_MaxAllowed = 2,
+							INP_MaxAllowed = 3,
 							INP_External = false,
 							INP_Passive = false,
 							{ CCS_AddString = "As typed" },
 							{ CCS_AddString = "lowercase" },
 							{ CCS_AddString = "UPPERCASE" },
+							{ CCS_AddString = "Camel Case" },
+						},
+						MetaLabel = {
+							LINKS_Name = "Meta",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 14,
+							INP_Default = 1,
+							INP_Integer = false,
+							INP_Passive = true,
+						},
+						MetaCaptionsFile = {
+							LINKS_Name = "Captions File",
+							LINKID_DataType = "Text",
+							INPID_InputControl = "TextEditControl",
+							TEC_Lines = 1,
+							TEC_ReadOnly = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaCutFolder = {
+							LINKS_Name = "Cut Folder",
+							LINKID_DataType = "Text",
+							INPID_InputControl = "TextEditControl",
+							TEC_Lines = 1,
+							TEC_ReadOnly = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaTranscript = {
+							LINKS_Name = "Transcript",
+							LINKID_DataType = "Text",
+							INPID_InputControl = "TextEditControl",
+							TEC_Lines = 1,
+							TEC_ReadOnly = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaStyle = {
+							LINKS_Name = "Style",
+							LINKID_DataType = "Text",
+							INPID_InputControl = "TextEditControl",
+							TEC_Lines = 1,
+							TEC_ReadOnly = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaStylesFile = {
+							LINKS_Name = "Styles File",
+							LINKID_DataType = "Text",
+							INPID_InputControl = "TextEditControl",
+							TEC_Lines = 1,
+							TEC_ReadOnly = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaTitle = {
+							LINKS_Name = "Title",
+							LINKID_DataType = "Text",
+							INPID_InputControl = "TextEditControl",
+							TEC_Lines = 1,
+							TEC_ReadOnly = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaConfig = {
+							LINKS_Name = "Config",
+							LINKID_DataType = "Text",
+							INPID_InputControl = "TextEditControl",
+							TEC_Lines = 1,
+							TEC_ReadOnly = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaCharsPerBox = {
+							LINKS_Name = "Characters per Box",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 19,
+							INP_MinScale = 5,
+							INP_MaxScale = 60,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaLines = {
+							LINKS_Name = "Lines",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 1,
+							INP_MinScale = 1,
+							INP_MaxScale = 3,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = true,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaCharWidth = {
+							LINKS_Name = "Char Width",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0.5,
+							INP_MinScale = 0,
+							INP_MaxScale = 2,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaPxPorUnidade = {
+							LINKS_Name = "Px per Unit (0 = auto)",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "SliderControl",
+							INP_Default = 0,
+							INP_MinScale = 0,
+							INP_MaxScale = 500,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaNoGaps = {
+							LINKS_Name = "No Gaps",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "CheckboxControl",
+							INP_Integer = true,
+							INP_Default = 0,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1,
+							CBC_TriState = false,
+							INP_External = false,
+							INP_Passive = false,
+						},
+						MetaRebuild = {
+							LINKS_Name = "Rebuild with Selected",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ButtonControl",
+							IC_NoLabel = false,
+							IC_Visible = true,
+							INP_External = false,
+							INP_Passive = true,
+							BTNCS_Execute = [[
+									local function diga(linha)
+										print(linha)
+										pcall(function()
+											local fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "a")
+											if not fh then return end
+											-- `seek("end")` devolve o tamanho sem uma segunda abertura: no
+											-- caminho normal isto continua sendo UM open por linha.
+											if fh:seek("end") > 2097152 then
+												fh:close()
+												fh = io.open("D:\\CanalYtbe\\BatataQuente\\pre_production\\giautosubs\\_gimacro.log", "w")
+												if not fh then return end
+												fh:write("-- log restarted (it had passed 2097152 bytes) --\n")
+											end
+											fh:write(linha, "\n")
+											fh:close()
+										end)
+									end
+
+									local function gi_dono(comp, tool, nome)
+										local v
+										pcall(function() v = tool and tool:GetData(nome) end)
+										if v ~= nil then return tool end
+										local c = comp
+										if c == nil and tool then pcall(function() c = tool.Comp end) end
+										local tools
+										pcall(function() tools = c:GetToolList(false) end)
+										for _, t in pairs(tools or {}) do
+											pcall(function() v = t:GetData(nome) end)
+											if v ~= nil then return t end
+										end
+										return nil
+									end
+
+									local function gi_chunk(comp, tool, nome)
+										local d = gi_dono(comp, tool, nome)
+										if not d then return nil end
+										local v
+										pcall(function() v = d:GetData(nome) end)
+										return v
+									end
+
+									-- O MacroOperator, achado pelo que ele E' (o dono do `InputKeys`) e nao pelo
+									-- nome - o nome do macro muda de clipe pra clipe.
+									--
+									-- Para que ele serve na LEITURA: o Inspector de um clipe edita os
+									-- `InstanceInput` do MACRO, nao os UserControls do Text+. Ler o valor so' do
+									-- Text+ devolve o valor VELHO de qualquer controle que o Fusion nao tenha
+									-- propagado - e o sintoma e' exatamente "clico em Apply Style e ESTE atributo
+									-- nao muda", com `0 written` no log enquanto os vizinhos mudam.
+									local function gi_macro(comp, tool)
+										return gi_dono(comp, tool, "InputKeys")
+									end
+
+								local f = gi_chunk(comp, tool, "GiRebuild")
+								if f then
+									loadstring(f)()(comp, tool, "Rebuild with Selected")
+								else
+									print("[GiAutoSubs] Rebuild with Selected: no tool in this comp owns "
+										.. "GiRebuild - the clip carries an old copy of the macro "
+										.. "(see MACRO_VERSAO)")
+								end
+							]],
 						},
 					}
 				},
@@ -3978,6 +5506,9 @@
 					CTID_DIB_ID = 'Icons.Tools.Tabs.Text'
 				},
 				Extras = ControlPage {
+					CT_Visible = true,
+				},
+				Meta = ControlPage {
 					CT_Visible = true,
 				},
 				Style = ControlPage {
@@ -4211,6 +5742,22 @@
 					Name = "Enabled",
 					Page = "Extras",
 				},
+				TextBoxFixed = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxFixed",
+					Name = "Fixed Box",
+					Page = "Extras",
+				},
+				TextBoxWidth = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxWidth",
+					Page = "Extras",
+				},
+				TextBoxHeight = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxHeight",
+					Page = "Extras",
+				},
 				TextBoxColorRed = InstanceInput {
 					SourceOp = "Template",
 					Source = "TextBoxColorRed",
@@ -4256,6 +5803,61 @@
 					Page = "Extras",
 				},
 				ApplyStyleTextBox = InstanceInput {
+					SourceOp = "Template",
+					Source = "ApplyStyle",
+					Page = "Extras",
+				},
+				BoxLayer3Label = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxLayer3Label",
+					Page = "Extras",
+				},
+				BoxLayer3Enabled = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxLayer3Enabled",
+					Name = "Enabled",
+					Page = "Extras",
+				},
+				BoxLayer3ColorRed = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxLayer3ColorRed",
+					Name = "Layer 3 Color",
+					ControlGroup = 128,
+					Page = "Extras",
+				},
+				BoxLayer3ColorGreen = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxLayer3ColorGreen",
+					ControlGroup = 128,
+					Page = "Extras",
+				},
+				BoxLayer3ColorBlue = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxLayer3ColorBlue",
+					ControlGroup = 128,
+					Page = "Extras",
+				},
+				BoxLayer3CenterX = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxLayer3CenterX",
+					Page = "Extras",
+				},
+				BoxLayer3CenterY = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxLayer3CenterY",
+					Page = "Extras",
+				},
+				BoxLayer3Alpha = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxLayer3Alpha",
+					Page = "Extras",
+				},
+				BoxSpinSpeed = InstanceInput {
+					SourceOp = "Template",
+					Source = "BoxSpinSpeed",
+					Page = "Extras",
+				},
+				ApplyStyleBoxLayer3 = InstanceInput {
 					SourceOp = "Template",
 					Source = "ApplyStyle",
 					Page = "Extras",
@@ -4468,6 +6070,83 @@
 					SourceOp = "Template",
 					Source = "ApplyStyle",
 					Page = "Extras",
+				},
+				MetaLabel = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaLabel",
+					Page = "Meta",
+				},
+				MetaCaptionsFile = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaCaptionsFile",
+					Page = "Meta",
+				},
+				MetaCutFolder = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaCutFolder",
+					Page = "Meta",
+				},
+				MetaTranscript = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaTranscript",
+					Page = "Meta",
+				},
+				MetaStyle = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaStyle",
+					Page = "Meta",
+				},
+				MetaStylesFile = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaStylesFile",
+					Page = "Meta",
+				},
+				MetaTitle = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaTitle",
+					Page = "Meta",
+				},
+				MetaConfig = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaConfig",
+					Page = "Meta",
+				},
+				MetaCharsPerBox = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaCharsPerBox",
+					Page = "Meta",
+				},
+				MetaLines = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaLines",
+					Page = "Meta",
+				},
+				MetaCharWidth = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaCharWidth",
+					Page = "Meta",
+				},
+				MetaPxPorUnidade = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaPxPorUnidade",
+					Page = "Meta",
+				},
+				MetaFixedWidth = InstanceInput {
+					SourceOp = "Template",
+					Source = "TextBoxFixed",
+					Name = "Fixed Width",
+					Page = "Meta",
+				},
+				MetaNoGaps = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaNoGaps",
+					Name = "No Gaps",
+					Page = "Meta",
+				},
+				MetaRebuild = InstanceInput {
+					SourceOp = "Template",
+					Source = "MetaRebuild",
+					Page = "Meta",
 				},
 			},
 			Outputs = {

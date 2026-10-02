@@ -5,3 +5,8 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 numpy>=1.26
+# A caixa fixa das legendas mede a largura REAL de cada legenda na fonte
+# instalada (giautosubs.py, medir_largura_em): e o que faz toda caixa sair do
+# mesmo tamanho, em vez de estimar caracteres. Sem Pillow a rodada nao quebra -
+# ela avisa e cai no palpite.
+pillow

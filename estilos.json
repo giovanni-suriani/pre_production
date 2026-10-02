@@ -9,14 +9,42 @@
     "  bordas concentricas (isso daria moldura nos quatro lados): e' a mesma caixa",
     "  desenhada tres vezes, DESLOCADA. Entao o elemento 7 (a box_shadow) vira a",
     "  segunda cor - basta dar a ela suavidade 0, opacidade 1 e um deslocamento - e o",
-    "  8 e' a terceira. Ver o estilo 'caixa_tres_cores'.",
+    "  8 e' a terceira. Ver o estilo '3_color'.",
     "  camada3 nao tem geometria propria: nivel/extend/round sao COPIADOS da caixa.",
     "  Se as tres divergirem nisso, o deslocamento vira contorno torto em vez de cor.",
+    "  camada3.giro: graus por frame - as duas cores extras ORBITAM o texto em vez de",
+    "    ficarem paradas (era o Title 'GiAutoSubs 3color_spinning', que o macro 30",
+    "    absorveu). 0 = paradas. A 30fps, 2 da uma volta a cada 6s; acima de ~6 vira",
+    "    estroboscopio. Gira o DESLOCAMENTO, nao a geometria: raio e fase saem do",
+    "    proprio 'direcao'. Ver o estilo '3_color_spinning'.",
     "  Transparencia por 'alpha', nao 'opacidade': Opacity1..4 sao o fade do AutoSubs",
     "  e os elementos 5..8 nao estao ligados nele.",
     "'destaque' e' a palavra sendo falada agora; 'base' sao todas as outras.",
-    "fonte.caixa_das_letras: 'normal' | 'minusculas' | 'maiusculas' (aplicado pelo macro, reversivel).",
+    "fonte.caixa_das_letras: 'normal' | 'minusculas' | 'maiusculas' | 'camel' (aplicado pelo macro, reversivel).",
+    "  'camel' = primeira letra de cada palavra em maiuscula, o resto minusculo:",
+    "  \"Eu Adoro Torresmo, Uhuu\". Hifen e apostrofo nao comecam palavra ('Bem-vindo').",
     "caixa.nivel: o que a caixa envolve - 'texto' (a legenda inteira) | 'linha' | 'palavra' | 'caractere'.",
+    "caixa.fixa: a caixa NAO cresce com o texto - ela tem sempre a largura de uma",
+    "  linha cheia (quebra.max_chars), dada por tamanho + extend_h + extend_v.",
+    "  O Text+ nao tem largura fixa (toda caixa de borda acompanha o texto), entao",
+    "  quem a realiza e' o macro, por COMPENSACAO: ele soma no extend_h o que falta",
+    "  pra legenda curta chegar ao alvo. Legenda MAIS larga que o alvo nao encolhe -",
+    "  caixa que vaza e' sintoma de max_chars alto, e esconder isso seria pior.",
+    "  No Inspector: Extras > Text Box > Fixed Box, com o alvo na aba Meta.",
+    "caixa.largura_caractere: quanto UM caractere vale na unidade do extend (0.5).",
+    "  E' a regua da caixa fixa, e e' calibravel (Meta > Char Width) porque a unidade",
+    "caixa.largura_px / caixa.altura_px: o tamanho da caixa fixa em PIXELS (0 = nao pedi).",
+    "  Com largura_px, o alvo deixa de ser 'uma linha cheia' e passa a ser esse tamanho;",
+    "  os dois extend_h/extend_v deixam de valer (o Inspector nao consegue cinzar um",
+    "  controle conforme outro - isso exigia os callbacks que sairam no macro 11).",
+    "  Com o Title 'GiAutoSubs Fixo' esses dois sao o tamanho EXATO da caixa, em px:",
+    "  la' a caixa e um retangulo de verdade (Background + mascara) e nao olha o texto.",
+    "  Ver o estilo '3_color_fixo'. Preco: um render constante por frame.",
+    "caixa.px_por_unidade: quantos pixels vale UMA unidade de extend (0 = o macro estima,",
+    "  Size x altura do frame). E' a regua que traduz px para o que o Text+ entende, e ela",
+    "  e' palpite ate' alguem ver a tela - por isso e' corrigivel aqui e no Inspector",
+    "  (Meta > Px per Unit), em vez de estar escondida no gerador.",
+    "  do extend e' relativa ao tamanho da fonte e nao ha como medi-la fora do Resolve.",
     "  (a tabela estava com 'linha' e 'caractere' trocados ate' o macro 22; estilos antigos com",
     "   'linha' desenhavam por LETRA. 'palavra' sempre esteve certo.)",
     "destaque.fill: o 'Spoken Word' - a COR da letra na palavra falada (elemento 1).",
@@ -176,7 +204,7 @@
       "_e": "Clone do capcut_bolha, para os cortes divergirem sem mexer no padrao.",
       "herda": "capcut_bolha"
     },
-    "caixa_tres_cores": {
+    "3_color": {
       "_e": "A mesma caixa desenhada tres vezes, deslocada: preta centrada (el 6), ciano pra cima-esquerda (el 7) e rosa pra baixo-direita (el 8). NAO sao bordas concentricas - por isso cada cor aparece de um lado so'.",
       "herda": "batata_shorts",
       "base": {
@@ -318,7 +346,28 @@
         }
       },
       "_e": "Exportado do Resolve pelo botao Generate Caption Style em 29/08/2026 17:26."
-    }
+    },
+    "3_color_spinning": {
+      "_e": "O '3_color' com as duas cores extras ORBITANDO o texto - e' o que o Title 'GiAutoSubs 3color_spinning' fazia antes de o macro 30 absorver a variante. Herda tudo e so' liga o giro.",
+      "herda": "3_color",
+      "base": {
+        "camada3": {
+          "giro": 2
+        }
+      }
+    },
+    "3_color_fixo": {
+      "_e": "O 3_color com a caixa de tamanho FIXO, em pixels - a caixa nao muda com o texto. Exige o Title 'GiAutoSubs Fixo', que desenha a caixa como retangulo de verdade; no macro normal a caixa e' borda do Text+ e sempre acompanha o texto.",
+      "herda": "3_color",
+      "base": {
+        "caixa": {
+          "fixa": true,
+          "largura_px": 1000,
+          "altura_px": 200
+        }
+      }
+    },
+    "3_color_spinning_fixo": {"_e": "O 3_color_fixo GIRANDO: caixa de tamanho fixo em px (Title GiAutoSubs Fixo) e as duas cores extras orbitando, como no 3_color_spinning. O giro vai no centro dos retangulos.", "herda": "3_color_fixo", "base": {"camada3": {"giro": 2}}}
   },
   "falantes": {
     "Cupertino": {

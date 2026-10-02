@@ -13,6 +13,14 @@ errada no video inteiro.
 local aqui = debug.getinfo(1, "S").source:match("@(.*[\\/])") or ""
 local M = dofile(aqui .. "GiAutoSubs.lua")
 
+-- As escolhas da suite vao pra um arquivo DESCARTAVEL.
+--
+-- Sem isto cada rodada de teste gravava `arquivo = amostra_legendas.lua` no
+-- `_giescolhas.txt` de verdade, e o dialogo da rodada seguinte - a de verdade,
+-- dentro do Resolve - abria no fixture. Mesmo motivo do `definir_bin` mais
+-- abaixo: um teste que estraga o estado do projeto e' pior que nenhum.
+M.definir_escolhas(aqui .. "_giescolhas.teste.txt")
+
 local falhas = 0
 local function checa(cond, msg)
 	if not cond then falhas = falhas + 1; print("  FAILED: " .. msg) end
@@ -435,6 +443,17 @@ local function resolve_falso(versao_do_macro, versao_apos_troca)
 		end,
 		AppendToTimeline = function(_, clipes)
 			reg.pedidos_de_append = (reg.pedidos_de_append or 0) + 1
+			-- O PEDIDO, e nao so' a contagem: `recordFrame` e `endFrame` sao o
+			-- que decide se dois clipes vizinhos vao ocupar o mesmo frame da
+			-- mesma track - o que derruba o Resolve de verdade.
+			reg.appends = reg.appends or {}
+			for k = 1, #clipes do
+				local c = clipes[k]
+				reg.appends[#reg.appends + 1] = {
+					recordFrame = c.recordFrame, endFrame = c.endFrame,
+					startFrame = c.startFrame, trackIndex = c.trackIndex,
+				}
+			end
 			local itens = {}
 			for k = 1, #clipes do
 				local comp = comp_falsa()
@@ -806,17 +825,19 @@ local function roda_falso(alvo_lua)
 				os.remove(none_teste)
 			end
 
-			-- TITLE ERRADO: o estilo pede caixa de tres cores e o macro do
-			-- clipe nao tem esse controle.
+			-- A TERCEIRA COR CHEGA. Ate' o macro 29 este teste era o contrario:
+			-- exigia o aviso `WRONG TITLE`, porque `BoxLayer3Enabled` existia
+			-- so' na variante `--camada3` e o carimbo era UM numero para as
+			-- quatro - escolher o Title errado era silencioso, e a cor sumia no
+			-- primeiro Apply Style.
 			--
-			-- O carimbo (`GiAutoSubsVersao`) e' UM numero para as DUAS variantes,
-			-- entao um clipe do Caption passa na conferencia de um legendas.lua
-			-- que pede a terceira cor - e ela some no primeiro Apply Style, sem
-			-- uma linha dizendo por que. O preset e' o caminho mais curto pra
-			-- por `BoxLayer3Enabled` em `dados.controles` sem outro fixture.
+			-- No macro 30 existe um Title so' e o controle mora em todo clipe,
+			-- entao o que vale provar e' que um preset pedindo a terceira cor
+			-- ATRAVESSA ate' o clipe. O preset e' o caminho mais curto pra por
+			-- `BoxLayer3Enabled` em `dados.controles` sem outro fixture.
 			local c3_teste = aqui .. "_teste_camada3.txt"
 			local fh_c3 = io.open(c3_teste, "w")
-			checa(fh_c3 ~= nil, "could not write the test 3color config")
+			checa(fh_c3 ~= nil, "could not write the test three-colour config")
 			if fh_c3 then
 				fh_c3:write("#nome\tpede3cores\n")
 				fh_c3:write("BoxLayer3Enabled\t1\n")
@@ -827,16 +848,28 @@ local function roda_falso(alvo_lua)
 				_G.print = function(...) capturado[#capturado + 1] =
 					table.concat({ ... }, " ") end
 				M.definir_preset(c3_teste)
-				local r_c3 = resolve_falso(d.macro_versao)
+				-- `com_contrato` e' o que faz o SetInputValues falso guardar o
+				-- preset que recebeu; sem ele nao ha o que conferir.
+				local r_c3, reg_c3 = resolve_falso(d.macro_versao)
+				reg_c3.com_contrato = true
 				pcall(M.main, r_c3)
 				M.definir_preset(nil)
 				_G.print = print_real
 
+				local c_c3 = reg_c3.comps and reg_c3.comps[1]
+				local p_c3 = c_c3 and c_c3.tool.dados._preset_recebido
+				checa(p_c3 and p_c3.BoxLayer3Enabled == 1,
+					"a preset asking for the three-colour box has to reach the clip "
+					.. "- since the single macro there is nowhere for it to get "
+					.. "lost (BoxLayer3Enabled came as "
+					.. tostring(p_c3 and p_c3.BoxLayer3Enabled) .. ")")
+
+				-- E nao pode sobrar queixa: o aviso que existia aqui morreu com
+				-- as variantes, e um aviso orfao seria pior que nenhum.
 				local texto = table.concat(capturado, "\n")
-				checa(texto:find("WRONG TITLE", 1, true) ~= nil,
-					"a style asking for the three-colour box on a Title without "
-					.. "the 'Box Layer 3' group has to say so - otherwise the "
-					.. "colour just disappears at the first Apply Style")
+				checa(texto:find("WRONG TITLE", 1, true) == nil,
+					"there is a single Title now - nothing can ask for the wrong "
+					.. "one, so the old WRONG TITLE warning must be gone")
 				os.remove(c3_teste)
 			end
 		end
@@ -863,6 +896,100 @@ local function roda_falso(alvo_lua)
 				string.format("substituir should reuse the emptied track, but the "
 					.. "timeline went from %d tracks to %d", tracks_antes,
 					reg_sub.tracks))
+
+			-- E O CASO QUE DOEU: legendas em DUAS tracks.
+			--
+			-- Um clipe perdido numa track de baixo (restinho de uma rodada
+			-- antiga, um Title arrastado a mao) e a leva toda na de cima. O
+			-- criterio antigo era a MENOR track ocupada, entao o REPLACE apagava
+			-- as duas levas e recriava tudo na track do clipe perdido - trocando
+			-- a track do usuario por causa de um clipe. Com uma track so' o teste
+			-- anterior nao ve isso: la' a menor e a certa sao a mesma.
+			do
+				local r2, reg2 = resolve_falso(d.macro_versao)
+				pcall(M.main, r2)
+				reg2.na_timeline = {}
+				for k, item in ipairs(reg2.itens_criados) do
+					-- a primeira legenda vai pra uma track ABAIXO; o resto fica
+					-- na track onde nasceu (a dominante)
+					item._track = (k == 1) and (reg2.tracks - 1) or reg2.tracks
+					reg2.na_timeline[#reg2.na_timeline + 1] = item
+				end
+				local dominante = reg2.tracks
+				reg2.apagados = 0
+				reg2.itens_criados = {}
+
+				M.definir_conflito("substituir")
+				local ok2 = pcall(M.main, r2)
+				M.definir_conflito("substituir")
+				checa(ok2, "main blew up replacing captions spread over two tracks")
+				checa(reg2.apagados == #d.segments,
+					string.format("substituir should delete all %d captions on "
+						.. "both tracks, it deleted %d", #d.segments,
+						reg2.apagados))
+				local erradas = 0
+				for _, item in ipairs(reg2.itens_criados) do
+					if item._track ~= dominante then erradas = erradas + 1 end
+				end
+				checa(#reg2.itens_criados > 0,
+					"substituir created nothing on the second pass")
+				checa(erradas == 0,
+					string.format("substituir put %d of %d new caption(s) on "
+						.. "another track: the captions lived on V%d and one "
+						.. "stray clip on V%d was enough to move them",
+						erradas, #reg2.itens_criados, dominante, dominante - 1))
+			end
+
+			-- SEM BURACOS: cada clipe termina EXATAMENTE onde o vizinho comeca -
+			-- nem invade (dois clipes num frame derrubam o Resolve) nem deixa
+			-- frame vazio (a caixa pisca).
+			--
+			-- `endFrame` e' EXCLUSIVO, MEDIDO no Resolve em 28/09 (GiDiagGaps:
+			-- endFrame 55 -> GetDuration 55). O clipe ocupa f0 .. f0+endFrame-1.
+			-- Antes o codigo supunha inclusivo e aparava 1 frame de cada: 121
+			-- buracos de 1 frame no `sabrina_espresso`, e este teste passava,
+			-- porque so' cacava invasao.
+			do
+				local r3, reg3 = resolve_falso(4)
+				local antes = M.definir_arquivo(aqui .. "amostra_sem_buracos.lua")
+				local ok3 = pcall(M.main, r3)
+				M.definir_arquivo(antes or "")
+				checa(ok3, "main blew up on a no-gaps captions file")
+
+				local por_track = {}
+				for _, c in ipairs(reg3.appends or {}) do
+					local ti = c.trackIndex or 1
+					por_track[ti] = por_track[ti] or {}
+					local l = por_track[ti]
+					l[#l + 1] = c
+				end
+				local invasoes, buracos = 0, 0
+				for _, lista in pairs(por_track) do
+					table.sort(lista, function(a, b)
+						return a.recordFrame < b.recordFrame
+					end)
+					for n = 1, #lista - 1 do
+						-- o primeiro frame DEPOIS do clipe n
+						local fim = lista[n].recordFrame + lista[n].endFrame
+						if fim > lista[n + 1].recordFrame then
+							invasoes = invasoes + 1
+						elseif fim < lista[n + 1].recordFrame then
+							buracos = buracos + 1
+						end
+					end
+				end
+				checa(#(reg3.appends or {}) == 3,
+					"the no-gaps run asked for " .. #(reg3.appends or {})
+					.. " clip(s), expected 3")
+				checa(invasoes == 0,
+					string.format("%d clip(s) reach the frame where the next one "
+						.. "starts on the same track - two clips on one frame of "
+						.. "a track crash Resolve", invasoes))
+				checa(buracos == 0,
+					string.format("%d empty frame gap(s) between no-gaps captions - "
+						.. "endFrame is EXCLUSIVE (measured 28/09), trimming it by "
+						.. "one leaves the box blinking", buracos))
+			end
 
 			-- "contornar": nao apaga nada, e nao cria legenda onde ja existe uma.
 			local r_ct, reg_ct = resolve_falso(d.macro_versao)
@@ -1013,6 +1140,42 @@ local function roda_falso(alvo_lua)
 								tostring(tem_words),
 								tostring(comp.tool.valores["Enabled" .. el])))
 					end
+				end
+			end
+
+			-- A ABA META tem que chegar ao CLIPE.
+			--
+			-- Ela e' o unico dado do projeto que nao viaja pelo `SetInputValues`
+			-- (nao e' estilo, e um campo dela e' texto), entao ninguem mais
+			-- cobriria este caminho: sem estes campos o botao "Rebuild Captions"
+			-- clica e diz que nao sabe de que corte a legenda veio - e isso so'
+			-- apareceria dentro do Resolve.
+			if d.meta then
+				for k, comp in ipairs(reg.comps) do
+					local v = comp.tool.valores
+					checa(v.MetaCaptionsFile == d.meta.captions_file,
+						string.format("caption %d: MetaCaptionsFile should be "
+							.. "%s, it is %s", k, tostring(d.meta.captions_file),
+							tostring(v.MetaCaptionsFile)))
+					checa(v.MetaCutFolder == d.meta.cut_folder,
+						string.format("caption %d: MetaCutFolder should be %s, "
+							.. "it is %s", k, tostring(d.meta.cut_folder),
+							tostring(v.MetaCutFolder)))
+					-- O numero que o Fixed Box e o Rebuild leem. Sem ele a caixa
+					-- fixa nao tem alvo e o Rebuild nao tem o que comparar.
+					-- A opcao "sem buracos" e' CHECKBOX desde o desenho de
+					-- checkbox + submit: ela tem que contar a verdade sobre as
+					-- legendas que acabaram de ser criadas, senao o proximo
+					-- "Rebuild with Selected" devolve os buracos sem ninguem
+					-- pedir. 0 tambem e' valor - e' o caso desta amostra.
+					checa(v.MetaNoGaps == (d.meta.no_gaps and 1 or 0),
+						string.format("caption %d: MetaNoGaps should be %s, it "
+							.. "is %s", k, tostring(d.meta.no_gaps and 1 or 0),
+							tostring(v.MetaNoGaps)))
+					checa(v.MetaCharsPerBox == d.meta.chars_per_box,
+						string.format("caption %d: MetaCharsPerBox should be %s, "
+							.. "it is %s", k, tostring(d.meta.chars_per_box),
+							tostring(v.MetaCharsPerBox)))
 				end
 			end
 

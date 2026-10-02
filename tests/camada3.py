@@ -32,7 +32,7 @@ def checa(cond, msg):
 
 
 est = G.carregar_estilos(os.path.join(_RAIZ, "estilos.json"))
-inputs, controles, _ = G.compilar_estilo(est["estilos"]["caixa_tres_cores"])
+inputs, controles, _ = G.compilar_estilo(est["estilos"]["3_color"])
 
 CAIXA, CIANO, ROSA = (G.ELEM_CX_BASE, G.ELEM_CX_BASE_SOMBRA,
                       G.ELEM_CX_BASE_CAMADA3)
@@ -102,19 +102,34 @@ print("estilo sem camada3 nao liga o elemento 8")
 inputs2, controles2, _ = G.compilar_estilo(est["estilos"]["capcut_bolha"])
 checa(inputs2.get(f"Enabled{ROSA}") == 0,
       "o capcut_bolha nao pede terceira cor; o elemento 8 tem que ficar off")
-# E nao pode escrever CONTROLE nenhum: os `BoxLayer3*` so' existem na variante
-# `--camada3` do macro. Um estilo sem `camada3` que os escrevesse quebraria a
-# geracao do macro PADRAO - "the style asks for it, but there is nowhere to
-# store it". O `Enabled8` cru continua indo, porque e' input do Text+.
-checa(not [k for k in controles2 if k.startswith("BoxLayer3")],
-      "um estilo sem camada3 nao pode escrever controles BoxLayer3*: "
-      "o macro padrao nao tem onde guardar")
+# Ate' o macro 29 isto exigia o CONTRARIO - nenhum `BoxLayer3*` -, porque esses
+# controles so' existiam na variante `--camada3` e escrever num controle
+# inexistente quebrava a geracao do macro padrao ("there is nowhere to store
+# it"). No macro 30 o controle existe em todo clipe, e ai a regra se inverte:
+# escrever `BoxLayer3Enabled = 0` e' DIZER que esta desligada, em vez de deixar
+# quem le adivinhar pelo silencio. Era essa assimetria - omitir na ida e nao ter
+# como saber na volta - que obrigava o aviso "WRONG TITLE".
+checa(controles2.get("BoxLayer3Enabled") == 0,
+      "um estilo sem camada3 tem que dizer BoxLayer3Enabled = 0, "
+      f"nao omitir (achei {controles2.get('BoxLayer3Enabled')!r})")
+# Mas so' o interruptor: cor, offset e alpha nao tem o que dizer sobre uma
+# camada desligada, e escrever valor neles seria inventar estilo.
+extras = sorted(k for k in controles2
+                if k.startswith("BoxLayer3") and k != "BoxLayer3Enabled")
+checa(not extras,
+      f"camada desligada nao escreve cor/offset/alpha; escreveu {extras}")
 
-# ... e a exportacao segue a mesma regra, senao um estilo lido de um clipe comum
-# passaria a exigir um controle que o macro dele nao tem.
+# A exportacao agora sempre traz o bloco - e traz HONESTO: `ativo` falso. O que
+# nao pode e' um clipe comum voltar como estilo de tres cores.
 volta2 = G.estilo_de_controles(controles2, inputs2)
-checa("camada3" not in volta2["base"],
-      "a volta nao pode inventar um bloco camada3 num clipe sem esses controles")
+checa(volta2["base"].get("camada3", {}).get("ativo") is False,
+      "a volta de um clipe comum tem que trazer camada3 com ativo=False, "
+      f"achou {volta2['base'].get('camada3')!r}")
+# E o ciclo tem que fechar: reimportar esse estilo nao pode acender nada.
+inputs3, controles3, _ = G.compilar_estilo(volta2)
+checa(inputs3.get(f"Enabled{ROSA}") == 0
+      and controles3.get("BoxLayer3Enabled") == 0,
+      "ida-e-volta de um clipe comum nao pode acender a terceira cor")
 
 print()
 if falhas:

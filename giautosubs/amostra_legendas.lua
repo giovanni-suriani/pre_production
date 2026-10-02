@@ -58,6 +58,20 @@ return {
       },
     },
   },
+  -- De onde estas legendas vieram: a aba Meta do Inspector (macro 25).
+  --
+  -- Caminhos INVENTADOS de proposito - nada aqui e' aberto. O que o teste prova
+  -- e' que os campos chegam ao clipe; o dia em que alguem os ler de verdade,
+  -- lera' do arquivo do corte, nao deste.
+  meta = {
+    captions_file = [[Z:\fixture\legendas.lua]],
+    cut_folder = [[Z:\fixture]],
+    transcript = [[Z:\fixture\amostra.giautosubs.json]],
+    style = "amostra_com_words",
+    styles_file = [[Z:\fixture\estilos.json]],
+    chars_per_box = 19,
+    lines = 1,
+  },
   speakers = {
     { nome = "Cupertino", cor = { 1.0, 0.847059, 0.301961 }, aplicar_em = "fill", track = 1 },
     { nome = "Heitor", cor = { 0.301961, 0.882353, 1.0 }, aplicar_em = "fill", track = 2 },

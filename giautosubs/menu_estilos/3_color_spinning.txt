@@ -1,0 +1,4 @@
+3_color_spinning
+
+Pick this file in the GiAutoSubs run to use this style.
+The captions file is regenerated with it.

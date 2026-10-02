@@ -1347,3 +1347,711 @@ Fio solto assumido: o carimbo e' UM numero para DUAS variantes. Um clipe do
 Caption carimbado 23 passa no `conferir_macro` de um `legendas.lua` que pede
 camada 3 (`atual >= esperado`), e a terceira cor simplesmente nao aparece no
 Inspector — sem aviso. Escolher o Title errado na pergunta 1 e' silencioso.
+
+
+## Macro 25 — a aba Meta (a ponte de volta pro Python) e a caixa fixa
+
+Pedido do usuário em duas frases: uma configuração global nova, **Meta**, ao lado
+de Text e Extras; e, no grupo Text Box, uma **caixa fixa** que não cresce com as
+palavras.
+
+**A aba Meta é a procedência do clipe.** Sete caminhos e três números:
+`Captions File` (o `legendas.lua` linkado), `Cut Folder`, `Transcript`, `Style`,
+`Styles File`, `Title`, `Config` (o preset da rodada), `Characters per Box`,
+`Lines` e `Char Width`. Antes isso não morava em lugar nenhum: o clipe na
+timeline não sabia de que arquivo tinha nascido, e descobrir era abrir os
+candidatos e comparar o texto. Quem carimba é o `GiAutoSubs.lua`
+(`escrever_meta`), a cada rodada, a partir do bloco `meta` novo do
+`legendas.lua`.
+
+**A Meta é o primeiro controle de TEXTO do projeto** (`TextEditControl`,
+`LINKID_DataType = "Text"`) — todo o resto é `Number`. E a aba inteira fica
+**fora do `InputKeys`**: no schema do preset, o *Apply Style to All Captions*
+carimbaria a procedência do clipe de origem em cima de todos os outros, e o
+*Export Config* gravaria caminhos de máquina dentro de um estilo. Por isso ela
+**não** viaja pelo `SetInputValues` — é escrita direto, no macro e no Text+.
+
+**`GiRebuild`: mudar os caracteres por caixa é refazer, não restilizar.** O
+número reparte as frases (`repartir()`), então ele muda a QUANTIDADE de legendas
+— 479 a 19 caracteres, 391 a 25, medido no `rank_surpresa`. Restilizar 479 clipes
+não produz os 391. A rotina roda o `giautosubs.py` com o `--max-chars` novo,
+grava um `.lua` de **nome novo** (`legendas_c25.lua`, decisão do usuário: o
+anterior fica no disco e o campo da Meta passa a dizer qual vale), relinka,
+carimba `GiCharsBuilt` e só então chama o `GiAutoSubs.lua` por `dofile` para
+recriar os clipes. **Nada é destruído antes de o arquivo novo existir** — na
+ordem trocada, um erro no Python deixaria a track vazia e sem arquivo pra
+recriar dela.
+
+Dois chamadores, um corpo: o botão **Rebuild Captions** da Meta e o **Apply Style
+to This Track**, que compara `MetaCharsPerBox` com o `GiCharsBuilt` do clipe e,
+se diferirem, reconstrói em vez de restilizar (foi o que o usuário pediu: mudar o
+campo e mandar aplicar na track). Só no "This Track": o "All Captions" alcança a
+timeline inteira, onde convivem cortes diferentes.
+
+O `dofile` não passa argumento, então as respostas viajam num arquivo —
+`_gipedido.txt`, `chave<TAB>valor` — e ele **preenche os escapes que já
+existem** (`ARQUIVO`, `ESTILO_FIXO`, `PRESET_FIXO`, `CONFLITO_FIXO`) em vez de
+abrir um segundo caminho de resposta. Lido UMA vez e apagado na leitura: senão a
+próxima rodada manual herdaria, calada, as respostas de um clique antigo.
+
+**A caixa fixa (`Fixed Box`) é compensação, não um input novo.** O Text+ não tem
+largura fixa — toda caixa em forma de borda acompanha o texto no `Level`
+escolhido, e não há input que desligue isso. Então o `extend_h` do
+`ApplyGiStyle` soma no `Extend Horizontal` o que falta para a legenda curta
+chegar à largura de uma linha CHEIA: `(Characters per Box − caracteres da linha
+mais larga) × Char Width / 2`. O tamanho na tela continua sendo dado por `Size` +
+`Extend Horizontal` + `Extend Vertical`, que foi como o usuário definiu; o que
+sai da conta é o comprimento do texto. Legenda **mais larga** que o alvo não
+encolhe: caixa que vaza é sintoma de `max_chars` alto, e encolher aqui deixaria a
+caixa menor que o próprio texto.
+
+Por isso os dois pedidos são um trabalho só: o alvo da caixa fixa **é** o campo
+novo da Meta. `Char Width` (quanto um caractere vale na unidade do `Extend`) é
+controle calibrável e não constante no código, porque a unidade é relativa ao
+tamanho da fonte e não há como medi-la fora do Resolve — um número errado
+escondido no gerador seria um número que ninguém consegue corrigir sem
+reinstalar o macro. Só o Text Box: a bolha abraça a palavra falada (é a graça
+dela) e a sombra e a camada 3 **copiam** a geometria da caixa base, então ficam
+fixas junto.
+
+**Duas armadilhas pegas antes do Resolve.** (a) O Lua destes chunks atravessa
+DOIS parsers — o do Python (a string do gerador) e o do Lua dentro do `[[ ]]` —
+e um `\r` escrito uma vez só chega ao Lua como carriage return de verdade:
+`unfinished string`. O `fuscript` acusou; `_RECONSTRUIR` virou string RAW e as
+classes de caractere levam a barra dobrada. (b) `ipairs({ macro, tool })` com
+`macro` nil **não itera nada** — para no índice 1 e escreve ZERO campos, sem
+erro. Acontece no clipe arrastado da aba Effects e no Resolve falso dos testes, e
+foi o teste novo do `testes.lua` que pegou.
+
+Verificação: `MACRO OK` nas quatro variantes (Caption, 3color, 3color_spinning,
+TikTokNovo), `testes.lua` ALL OK com a asserção nova (a Meta chega ao clipe,
+`meta stamped 8 field(s)` no resumo), `tests\meta.py` novo, e o comando que o
+botão monta rodado à mão no `cmd.exe` — 479 → 391 legendas, com o `meta` do
+arquivo novo apontando pra ele mesmo. **O que nunca rodou dentro do Resolve:** os
+dois botões, o `dofile`, o `io.popen` e a conta da caixa fixa (é onde o número do
+`Char Width` vai ser calibrado). **Falta reiniciar o Resolve, apagar o Title do
+Media Pool e arrastá-lo de novo** — o carimbo subiu 24 → 25.
+
+
+## Macro 26 — `Rebuild with Fixed Width`, e por que NÃO um clipe só
+
+Pedido do usuário: um botão de largura fixa na Meta. A vontade por trás dele era
+**um clipe `3color_spinning` só, com as legendas trocando dentro da caixa** — ou,
+na alternativa que ele mesmo ofereceu, as várias legendas acompanhando o
+movimento da última. Ele perguntou qual era melhor.
+
+**Um clipe só não funciona, e o motivo é do Text+:** ele faz o layout de TODO o
+texto que está nele de uma vez. Um clipe com o corte inteiro dentro não mostra uma
+legenda por vez — mostra o texto todo, com a caixa envolvendo tudo. E o array de
+estilo por caractere é quadrático nas palavras (31/08): partir as legendas foi o
+que baixou a pior de 136 para 20 entradas por frame, e um clipe com ~1.500
+palavras desfaz isso ao quadrado.
+
+**A continuidade do giro já existe.** A expressão do spin lê `time`, e é por isso
+que cada legenda hoje começa numa fase diferente (macro 23, decisão deliberada):
+o tempo que ela lê é o da timeline, não um zero por clipe. Duas legendas seguidas
+continuam a MESMA órbita. O que quebra a ilusão de uma caixa só é a **caixa
+mudando de tamanho** a cada legenda — e é exatamente isso que a largura fixa
+resolve. Ressalva mantida: a expressão nunca rodou dentro do Resolve.
+
+Então o botão é a resposta às duas vontades: `Rebuild with Fixed Width` regera com
+`--fixed-box` e **todas** as legendas nascem com a caixa de uma linha cheia, em
+vez de ligar o checkbox clipe a clipe. Dois botões e não um checkbox lido na hora
+do rebuild: o estado que decide ficaria no Extras e o clique no Meta, e com os
+dois dá pra voltar atrás rodando o outro. Um corpo só (`GiRebuild`, agora com o
+argumento `fixa`) — e o validador passou a exigir que os DOIS botões passem por
+esse chunk.
+
+Escolha do usuário, por pergunta direta: a largura-alvo é o `Characters per Box`
+(a mesma régua que reparte as frases), e não a legenda mais larga do corte nem um
+valor em fração de tela. Um campo governa as duas coisas, e não há um segundo
+número pra sair de sincronia. `meta.fixed_box` passou a registrar se a rodada
+fixou a largura.
+
+Verificação: `MACRO OK` nas quatro variantes (instaladas), `testes.lua` ALL OK,
+`tests\meta.py` com quatro asserções novas (a flag não vaza pro estilo em
+memória), e o comando com `--fixed-box` rodado à mão no `cmd.exe`. Carimbo 25 →
+26, então vale de novo: reiniciar o Resolve e trocar o Title do Media Pool.
+
+### Dois silêncios consertados junto (o sintoma que o usuário trouxe)
+
+Ele rodou o `3color_spinning` e a aba Meta veio VAZIA. Causa, com prova: o
+`legendas.lua` daquele corte (`AudioStocks\sabrina_espresso`) era de 05:01, com
+`macro_versao = 24` e **zero** blocos `meta`. O script só carimba o que está no
+arquivo. Dois consertos, os dois sobre silêncio:
+
+- **o contador mentia.** Ele somava TENTATIVAS de `SetInput`, e escrever num
+  controle que o clipe não tem é aceito e descartado (armadilha nº 3: cada clipe
+  carrega a própria cópia do macro). O log dizia `meta stamped 8 field(s)`
+  justamente quando a aba ficava vazia. Agora lê de volta e conta o que COLOU,
+  com aviso próprio pra cada causa (arquivo sem bloco `meta` / clipe com cópia
+  velha do macro).
+- **a suíte escrevia no `_giescolhas.txt` de verdade.** `definir_escolhas` existe
+  desde 05/09 pra isso e o `testes.lua` nunca o chamava: cada rodada de teste
+  gravava `arquivo = amostra_legendas.lua` no arquivo real, e o diálogo da rodada
+  seguinte — a de verdade — abriria no fixture. É a armadilha de 05/09 outra vez,
+  agora causada pelo próprio teste.
+
+
+## Macro 27 — `Rebuild without Gaps`, e os botões que não desfazem o anterior
+
+Pedido: um `Rebuild without Gaps` que pega a ponta direita de um clipe e estica
+até o próximo. É o par natural da largura fixa — uma caixa parada não serve de
+nada se ela **pisca** entre duas legendas.
+
+**É geração, não timeline.** A duração de um clipe de legenda é o `end` do
+segmento (é dele que sai o frame final na criação), a API gratuita não estica
+clipe existente de forma confiável, e mesmo que esticasse o arquivo continuaria
+dizendo outra coisa — duas fontes para a mesma duração. Então quem estica é o
+`esticar_ate_a_proxima` do `giautosubs.py` (`--no-gaps`).
+
+Três regras que não são detalhe:
+
+- **por TRACK, não pela lista toda.** Com uma track por falante as legendas se
+  intercalam no tempo; esticar cada uma até a próxima da lista faria duas
+  legendas da MESMA track se sobreporem — o único estado impossível numa track de
+  vídeo — e a legenda do Heitor terminar onde a do Pedro começa, numa track onde
+  a do Pedro nem está.
+- **nunca encolhe.** `end` que já passa do início da próxima (sobreposição vinda
+  da transcrição) fica como está: encurtar aqui seria consertar calado um
+  problema de outra etapa.
+- **a última de cada track fica com o fim dela.** Não há próxima, e inventar um
+  fim seria inventar quanto tempo a legenda sobra depois da fala.
+
+Roda DEPOIS do laço, com a lista final: uma frase repartida em duas tem um buraco
+novo entre elas, e uma legenda pulada (`--pular`) deixaria a caixa parada num
+tempo sem texto. Medido no `rank_surpresa` (479 legendas, duas tracks): 153
+esticadas, 0 sobreposições, 0 buracos — e **o maior esticão soma 21,4s a uma
+legenda**, que é o preço honesto: um silêncio longo mantém as últimas palavras na
+tela. O resumo imprime esse número.
+
+**E a decisão de UX que veio junto:** `nil` num argumento do `GiRebuild` passou a
+querer dizer *"mantenha o que este clipe já é"*, não *"desligue"*. Sem isso,
+clicar em `Rebuild Captions` depois de um `Rebuild with Fixed Width` desfazia a
+largura fixa sem avisar — o botão mais genérico seria uma armadilha. Cada botão
+liga só o que o nome dele promete; os outros carregam o estado atual. A caixa fixa
+vem do controle `TextBoxFixed`; o sem-buracos não tem controle, então viaja no
+carimbo `GiNoGaps` do clipe, como o `GiCharsBuilt` (registro do passado não é
+escolha). E o comando passa os dois sentidos explícitos (`--fixed-box` /
+`--free-box`), porque o que manda é o clipe na tela, não o `estilos.json` no
+disco.
+
+Verificação: `MACRO OK` nas quatro variantes (instaladas), `testes.lua` ALL OK,
+`tests\meta.py` com o invariante por track (sobreposição, buraco, encurtamento e
+a última de cada track), e os três corpos de botão conferidos no `.setting`
+(`"Rebuild Captions", nil, nil` / `"...Fixed Width", true, nil` /
+`"...without Gaps", nil, true`). Carimbo 26 → 27.
+
+
+### O clique que morria: `attempt to call global 'gi_chunk' (a nil value)`
+
+Relatado pelo usuário no primeiro clique: os **três** botões de Rebuild nunca
+funcionaram. O corpo deles chama `gi_chunk`, e as ajudantes da casa (`diga`,
+`gi_chunk`, `gi_macro`) vêm de um trecho que o gerador injeta no marcador
+`__LOG_LUA__` — que eu esqueci de pôr na string `_BOTAO_RECONSTRUIR`. O
+`_com_log` não tinha onde substituir e não reclamou: o botão compila, aparece,
+clica e morre.
+
+**Um botão roda num escopo NU** — o Fusion entrega `comp` e `tool` e mais nada.
+Isso não dá pra descobrir sem clicar, e clicar é justamente o que não se testa sem
+o Resolve. Então virou checagem do `valida_macro.lua`: todo `ButtonControl` que
+chama uma ajudante tem que trazer a definição dela no próprio corpo, e todo corpo
+de botão tem que passar por um `loadstring`.
+
+E a checagem nasceu errada, o que também vale registrar: `corpo:find("function
+gi_chunk", 1, true)` casa dentro de `function gi_chunk_NOPE`. Só descobri porque
+**estraguei o `.setting` à mão pra ver a checagem falhar** — e ela passou. Com o
+parêntese (`"function gi_chunk("`) ela pega. Checagem nova que nunca viu o defeito
+que veio caçar é checagem não testada.
+
+
+## Macro 28 — o REPLACE voltando na track certa, Camel Case, e o submit
+
+Três coisas, a primeira grave.
+
+### O REPLACE trocava a track do usuário
+
+Relatado como *"quando substitui, não substitui na mesma track"*. O log mostra a
+conta: as antigas estavam em **V5: 1, V6: 122**, e as novas foram todas pra V5.
+Causa: `trackLivre = conf.menorTrack` — o REPLACE reusava a **menor** track
+ocupada. Um único clipe perdido numa track de baixo (restinho de rodada antiga,
+Title arrastado à mão) mudava a track das outras 122.
+
+Agora a base é a track **dominante** (a que tinha mais legendas) quando tudo vai
+numa track só; com uma track por falante continua sendo a menor, porque as faixas
+foram criadas subindo a partir dela (`trackLivre + faixa - 1`). Empate resolve
+pela mais baixa, só pra ser determinístico. O log passou a dizer qual track foi
+reusada e quantas legendas ela tinha.
+
+**O teste que existia não podia pegar isso:** ele só conferia que a contagem de
+tracks não crescia, e com as legendas todas numa track a menor e a certa são a
+mesma. O teste novo espalha as legendas em duas tracks (uma perdida embaixo) e
+exige que as novas voltem na dominante. Verifiquei que ele **falha** com o
+critério antigo e passa com o novo — teste que nunca viu o defeito não é teste.
+
+### `Camel Case` no combo Case
+
+Pedido: *"a primeira letra sempre maiúscula e a próxima também: Eu Adoro
+Torresmo, Uhuu"*. Quarta opção do combo, com o nome que o usuário usa
+(tecnicamente é title case; camelCase de programador não tem espaço — fica o nome
+dele, que é o que ele vai procurar no Inspector).
+
+Começa **minusculando tudo**: o padrão deste projeto é texto em caixa alta
+(`capcut_bolha`), e sem isso "ELES SÓ SÃO MEIO TÍMIDOS" sairia igual ao que
+entrou. Anda de **caractere**, não de byte (acentuado latino ocupa dois em UTF-8 —
+o mesmo motivo do `utf8_len` do Fixed Box). Hífen e apostrofo não começam palavra
+nova ("Bem-vindo", "D'água") e dígito faz parte dela ("3d" não vira "3D").
+
+E ganhou o que faltava em todas as versões anteriores: **as três funções de caixa
+agora são TESTADAS**, não só compiladas. Elas moram entre marcadores
+(`<<CASE_FUNCS`) e o `valida_macro.lua` extrai o trecho do `.setting` e roda sete
+exemplos, incluindo o do usuário e os dois sentidos do acento. Extrair em vez de
+reescrever: uma segunda cópia da regra no validador testaria a cópia. Provado
+sabotando o `.setting` à mão — a checagem falha com a mensagem certa.
+
+### Os três botões de Rebuild viraram checkbox + submit
+
+Pedido do usuário: poder combinar as opções. Três botões não combinam — "largura
+fixa E sem buracos" exigia duas rodadas inteiras. Agora a aba Meta tem
+`Fixed Width`, `No Gaps` e **`Rebuild with Selected`**, e a rodada acontece uma vez
+com o que está marcado. De quebra, o que está selecionado continua **visível**
+depois, em vez de desaparecer no clique.
+
+`Fixed Width` é o MESMO controle `TextBoxFixed` do grupo Text Box, exposto duas
+vezes (`InstanceInput` apontando pro mesmo UserControl, como os nove `Apply Style`
+de rodapé) — um checkbox próprio seria uma segunda verdade sobre a mesma coisa, e
+o validador passou a exigir esse apontamento. O carimbo `GiNoGaps` do macro 27
+saiu: com um checkbox de verdade, carimbo escondido E controle seriam dois estados
+pra mesma opção, e o escondido venceria sem aparecer. Quem preenche os dois na
+criação é o `escrever_meta`, do `meta.no_gaps` do arquivo — `0` também é valor,
+senão o checkbox ficaria marcado de uma rodada anterior mentindo sobre o que está
+na tela.
+
+Verificação: `MACRO OK` nas quatro variantes instaladas, `testes.lua` ALL OK (com
+`meta stamped 9 field(s)`), cinco testes Python ALL OK, cópia do Resolve em
+sincronia. Carimbo 27 → 28.
+
+
+## Macro 29 — o Rebuild PREPARA: recriar de dentro do botão derrubava o Resolve
+
+Relatado pelo usuário: *"está crashando o Resolve quando faço o rebuild"*. Sem
+mensagem, sem log — o processo cai.
+
+**A causa é estrutural, não um bug de digitação.** Um botão do Inspector roda
+DENTRO da composição do clipe clicado. O `GiRebuild` terminava chamando o
+`GiAutoSubs.lua` por `dofile`, e o modo `substituir` faz `DeleteClips` em todas as
+legendas — **inclusive a deste clipe**. O código apagava a comp que estava
+executando ele. Não há como contornar mantendo o mesmo clique: o REPLACE tem que
+apagar a legenda de onde o clique saiu.
+
+Então o botão passou a **preparar**: roda o `giautosubs.py`, grava o `.lua` novo,
+relinka o clipe, escreve o `_gipedido.txt` e para, dizendo no log o que fazer.
+A rodada acontece em **Workspace > Scripts > GiAutoSubs** e não pergunta nada — o
+pedido já respondeu as quatro perguntas. Custou um clique a mais do que o usuário
+pediu, e é o que a plataforma permite.
+
+Saiu junto o `io.popen`: ler um pipe na thread da interface do Resolve era o
+segundo suspeito do crash, e `os.execute` com a saída redirecionada pra
+`_girebuild.txt` faz o mesmo trabalho (o log do botão mostra as últimas linhas de
+lá).
+
+**E virou guarda-corpo no validador:** o chunk `GiRebuild` não pode conter
+`dofile`, `DeleteClips`, `io.popen` nem `AppendToTimeline`. A checagem ignora
+linhas de comentário — a primeira versão dela acusou o próprio comentário que
+explica por que o `io.popen` saiu, e uma checagem que acusa a explicação ensina a
+apagar a explicação. Provado injetando um `dofile` num `.setting` à mão: recusa
+com a mensagem certa.
+
+Carimbo 28 → 29.
+
+## Macro 30 — as quatro variantes viraram UMA (27/09/2026)
+
+Pedido do usuário: *"avalie a possibilidade de deixar um macro universal ao
+invés de ter vários macros"*. A avaliação virou medição, e a medição decidiu.
+
+**As quatro eram uma cadeia de superconjuntos estritos** — nenhuma tirava nada
+da anterior:
+
+| variante | InstanceInput | InputKeys | grupos | delta |
+|---|---|---|---|---|
+| Caption | 99 | 59 | 13 | base |
+| TikTokNovo | 99 | 59 | 13 | os **mesmos** controles do Caption |
+| 3color | 108 | 66 | 14 | +9 (`BoxLayer3*`, `ApplyStyleBoxLayer3`) |
+| 3color_spinning | 109 | 67 | 14 | +1 (`BoxSpinSpeed`) |
+
+**O `TikTokNovo` nunca foi um macro.** Comparando os `.setting` instalados, ele
+difere do Caption em **40 linhas, todas valor de `Input`** (`Enabled6`,
+`Round6`, `ExtendVertical`, cores, `ElementShape6`). Era um preset assado num
+Title — e o estilo dele já existia no `estilos.json`.
+
+**Só duas coisas dependiam de haver variante:** `BoxLayer3Enabled`, exigido por
+um único estilo (`caixa_tres_cores`), e `BoxSpinSpeed`, que nenhum estilo exige.
+
+**O argumento pró-unificação já estava escrito aqui**, antes da separação:
+*"Custo pra quem nao usa: zero. Estilo sem `camada3` nao liga o elemento 8 [...]
+é configuração por estilo, não mudança estrutural."* A separação de 05/09 está
+registrada como pedido do usuário e **não tem razão técnica anotada**. O que ela
+cobrava: cinco recortes por marcador (a família do `str.replace` silencioso que
+custou o macro 16), quatro instalações e validações por versão, e **um carimbo
+para quatro variantes** — escolher o Title errado era silencioso.
+
+Morreram: `_publicar_controles`, `_NOMES_CAMADA3`/`_NOMES_SPIN`, `_recortar` e os
+cinco pares de marcador, os flags `--camada3`/`--spin`, o `camada3Ausente` e o
+aviso `WRONG TITLE`. O ramo `__SEM_SPIN_*` saiu inteiro: `deslocar()` já cai em
+`pin()` quando a velocidade é 0, então ele não tinha o que fazer.
+
+### Duas inversões de invariante
+
+`_camada3` agora **escreve** `BoxLayer3Enabled = 0` em vez de omitir. O controle
+existe sempre, e o silêncio era justamente o que obrigava o aviso: omitir na ida
+não deixava ninguém saber na volta. `estilo_de_controles` passa a emitir
+`camada3` sempre, com `ativo` honesto — um clipe comum volta como
+`ativo: false`, e o ciclo fecha sem acender nada (teste novo).
+
+### A regressão que a verificação pegou
+
+O default do `BoxSpinSpeed` era **2**. Fazia sentido enquanto escolher aquele
+Title *já era* pedir o giro; com todo clipe nascendo com o controle, poria
+**toda legenda pra girar sem ninguém pedir**. Virou 0, e o `tests\spin.py` agora
+guarda esse número — é a asserção mais importante do arquivo.
+
+### Ganho de cobertura
+
+Os dez controles **nunca tinham sido validados por ninguém**: o validador roda um
+`.setting` por vez e a lista `NOVOS` do `valida_macro.lua` não os citava. Entraram
+na lista, com a contagem do grupo `BoxLayer3Label` (9). Honrando a regra da casa
+— *checagem nova que nunca viu o defeito que veio caçar é checagem não testada* —
+a checagem foi provada removendo a `InstanceInput` do `BoxSpinSpeed` de um
+`.setting` de propósito: `FAILED: BoxSpinSpeed does not exist as an InstanceInput`.
+
+### A pergunta 1
+
+`GiAutoSubs.lua:82-85` dizia *"escolher o Title é escolher o estilo padrão"*. Com
+um Title só isso deixou de ser verdade, e a pergunta virou um diálogo de uma
+opção. Ela **some quando há um único Title instalado** — e volta sozinha se
+aparecer um segundo, porque o gatilho é o que está no disco e não uma constante.
+O estilo da rodada continua vindo do `legendas.lua` (`--estilo` do
+`giautosubs.py`), e o preset da pergunta 2 segue sendo o override dentro do
+Resolve. *Foi um desvio consciente do plano*, que previa transformar a pergunta 1
+em seletor de estilo: fazer isso exigiria o Lua saber converter estilo→controles,
+que é trabalho do Python, e duplicaria a pergunta 2.
+
+### Verificação
+
+`MACRO OK`; o conjunto de controles do macro único é **exatamente a união** dos
+quatro antigos; `testes.lua` ALL OK; `tests\spin.py` reescrito; `tests\camada3.py`
+com os dois testes invertidos; suíte `todos.py` **9/10** — a falha é o `ui.py`, e
+é **pré-existente**: reproduz igual com os arquivos originais restaurados (mesma
+asserção de scroll do editor de turnos). Contra um `legendas.lua` **real** sobram
+só as falhas já conhecidas e dependentes de estilo: `keyframes missing` /
+`GiWordTiming holds 0` com `caixa_tres_cores` (a suíte assume que todo estilo tem
+destaque) e `Offset3 ... overwritten` com `capcut_bolha`.
+
+Titles aposentados, com os 25 `.bak` acumulados, em
+`backups_giautosubs\titles-aposentados-20260927`.
+
+**Falta o usuário reiniciar o Resolve e, porque o carimbo subiu 29 → 30, apagar o
+Title do Media Pool e arrastar de novo.**
+
+**Nunca rodou dentro do Resolve:** a pergunta 1 sumindo, o Inspector com os 109
+controles nas três abas (o risco registrado de a `ControlPage` não desenhar
+agrava com o macro maior), e a terceira cor vinda do macro único.
+
+
+## O crash do "sem buracos": UM frame de sobreposição
+
+Segundo relato de crash do usuário, e este **não** era o botão: *"após rebuild e
+clicar no script de novo"*. O botão preparou sem cair (o macro 29 tirou o `dofile`
+de lá); quem derrubava era a rodada.
+
+**`endFrame` é INCLUSIVO.** Um clipe pedido com `recordFrame = f0` e
+`endFrame = f1 - f0` ocupa f0..f1 — ou seja, toda legenda sempre ocupou um frame
+mais do que a transcrição diz. Enquanto houve **buraco** entre as legendas isso
+nunca esbarrou em nada, e atravessou 29 versões. O `--no-gaps` põe a próxima
+legenda exatamente em f1: medido no `legendas_c19.lua` do `sabrina_espresso`,
+**121 dos 122 clipes se sobrepõem em um frame** ao vizinho, na mesma track. Dois
+clipes no mesmo frame de uma track de vídeo derrubam o Resolve.
+
+Conserto na CRIAÇÃO, não no `esticar_ate_a_proxima` do Python: quem conhece o fps
+e o frame de entrada é este lado, e a regra "não invadir o vizinho" vale para
+qualquer arquivo — inclusive um com segmentos que se sobrepõem na transcrição (o
+Gemini produz 114 num corte, §Gemini). Por track e por frame de entrada: tracks
+diferentes podem se sobrepor à vontade, que é o caso normal da tela dividida. O
+log diz quantas legendas foram aparadas, e avisa à parte quando duas começam no
+MESMO frame (aí não há espaço, e a de cima é a que se vê — é a legenda de duração
+zero de 05/09 reaparecendo por outro caminho).
+
+**Só o `GiAutoSubs.lua` mudou — não precisa reinstalar macro nem reiniciar o
+Resolve.**
+
+Teste novo, com fixture próprio (`amostra_sem_buracos.lua`, escrito à mão): o
+Resolve falso passou a guardar o PEDIDO de append (`recordFrame`/`endFrame`, não
+só a contagem) e a suíte prova que clipe nenhum alcança o frame do vizinho.
+Verificado que ele **falha** com o clamp desligado. De quebra, `definir_arquivo`
+passou a devolver o valor anterior (como o `definir_bin` sempre fez): sem isso o
+teste novo deixava as seções seguintes da suíte rodando sem arquivo — e elas
+falhavam por um motivo que não era delas.
+
+
+## A pergunta de ESTILO volta — e agora ela regenera
+
+Queixa do usuário, em maiúsculas: *"A pergunta de style ainda É EXTREMAMENTE
+RELEVANTE, o macro em si é universal até então, mas o style não pode ser perdido,
+recupere se tiver perdido o TikTokNovo, 3color e o 3color spinning"*.
+
+Ele está certo, e o diagnóstico é este: o macro 30 juntou as variantes num macro
+único — a MAQUINARIA é a mesma para todos, e isso está certo — mas a pergunta 1,
+que escolhia o Title, era a única forma de escolher o **look** da rodada. Com um
+Title instalado ela se cala (e o código dela diz isso por escrito), e o look
+passou a ser decidido só na linha de comando do Python.
+
+**Os três não estavam perdidos, estavam sem porta de entrada:**
+
+| Title de antes | estilo hoje |
+|---|---|
+| `GiAutoSubs TikTokNovo` | `TikTokNovo` |
+| `GiAutoSubs 3color` | `caixa_tres_cores` |
+| `GiAutoSubs 3color_spinning` | `caixa_tres_cores_girando` (**novo**) |
+
+O terceiro precisou existir: o giro era a variante `--spin` do gerador, e no macro
+30 virou o controle `BoxSpinSpeed` de todo clipe — só que **nenhum estilo tinha
+como ligá-lo**. Agora `base.camada3.giro` (graus por frame) chega ao controle, e o
+estilo novo é um `herda: caixa_tres_cores` com `giro: 2`. E zero também é
+resposta: todo estilo declara `BoxSpinSpeed`, senão um clipe que já girava
+continuaria girando — com a expressão na SOMBRA da caixa, que existe em qualquer
+estilo.
+
+**A pergunta nova:** logo depois de ler o arquivo, a rodada pergunta o estilo
+(`Cancel` = o que está no arquivo). O menu é feito de arquivos em
+`giautosubs\menu_estilos\`, um por estilo, mantidos pelo `giautosubs.py` a cada
+rodada — o `fusion:RequestFile` é o único diálogo que funciona na página Edit e ele
+lista arquivos, e o Lua do Resolve não tem parser de JSON. Estilo que sai do
+`estilos.json` tem o arquivo apagado, senão o diálogo ofereceria um nome que
+quebraria a rodada no `cfg["estilos"][nome]`.
+
+Escolher um estilo diferente **regenera** o `legendas.lua` (quem compila estilo é
+o Python) e a rodada segue com o arquivo novo, cujo `meta` aponta pra ele mesmo. É
+a mesma ponte do botão Rebuild, agora do lado que pode: `regerar()` roda no
+script, que não está dentro de comp nenhuma. Sem `meta` no arquivo (anterior ao
+macro 25) não há como chamar o Python — a rodada diz isso e segue com o estilo que
+já estava lá.
+
+**E um conserto que só apareceu por causa disso:** com o giro ligado, o passo 6
+escrevia `Offset7`/`Offset8` como NÚMERO logo depois de o macro pôr a EXPRESSÃO do
+giro nesses inputs — número em cima de expressão é aceito e ignorado, ou derruba a
+conexão sem erro. O script desfazia o giro que acabara de pedir. Agora o passo 6
+pula os dois elementos que o giro conduz (a sombra da bolha, que não gira,
+continua recebendo). Isso nunca tinha aparecido porque a expressão nunca rodou
+dentro do Resolve: era variante, e a variante nunca foi usada numa rodada de
+verdade.
+
+**Fio solto assumido:** o comando do Python agora existe em DOIS lugares — o
+`regerar()` do script e o `_RECONSTRUIR` do macro. Eles vão divergir. O conserto é
+o botão escrever as opções no `_gipedido.txt` e deixar o script regenerar (ele já
+sabe), e isso vale um macro novo — não foi feito aqui para não cobrar do usuário
+outra reinstalação no mesmo dia.
+
+Só o `GiAutoSubs.lua` e o Python mudaram: **não precisa reinstalar macro nem
+reiniciar o Resolve.**
+
+
+### Os estilos da caixa de três cores ganharam os nomes dos Titles
+
+A pedido do usuário: `caixa_tres_cores` → **`3_color`** e
+`caixa_tres_cores_girando` → **`3_color_spinning`** — os mesmos nomes dos Titles
+que o macro 30 absorveu, que é como ele os chama. As entradas históricas acima
+ficam com os nomes da época, de propósito: elas contam o que aconteceu.
+
+O que o rename cobrou não foi a chave: o nome do estilo **viaja gravado**. Está no
+`estilo` de cada `legendas.lua` já escrito (6 nos cortes), no `meta.style`, e no
+controle `MetaStyle` dos clipes que estão na timeline — que é de onde o botão
+*Rebuild with Selected* tira o `--estilo`. Sem tradução, clicar em Rebuild num
+clipe antigo morreria com *"style does not exist"*, e o usuário não teria como
+ligar isso a um rename.
+
+Daí o `ESTILOS_RENOMEADOS` + `resolver_estilo` no `giautosubs.py`: o nome de ontem
+resolve para o de hoje, **avisando** (`[i] style 'x' was renamed to 'y'`). Traduzir
+calado seria pior que o erro — ninguém atualizaria o que está no disco. Ele só age
+quando o nome pedido não existe, então um estilo novo que reuse um nome antigo
+continua sendo ele mesmo. Fica nos DOIS pontos por onde nome de fora entra: o
+`main` (CLI, e portanto o botão Rebuild) e o `montar` (o caminho do `app.py`).
+
+O menu de `menu_estilos\` se reescreveu sozinho na primeira rodada — é o que a
+função já fazia: escreve os atuais e apaga os que saíram.
+
+
+## Macro 31 — `Width`/`Height` em px na caixa fixa, e o diálogo que saiu do lugar
+
+Dois pedidos do usuário no mesmo dia, e os dois cobravam macro novo — então foram
+juntos.
+
+### O diálogo do Export Config não estava centralizado
+
+Era o último `comp:AskUser` do projeto, e **AskUser não tem parâmetro de
+posição**: quem coloca a janela é o Fusion, e não há API para movê-la. O que havia
+era o diálogo que o resto do projeto já usa e que o próprio `GiAutoSubs.lua`
+declara como o único confiável fora da página Fusion: `fusion:RequestFile`, a caixa
+nativa do sistema — centralizada, redimensionável, e lembra a pasta.
+
+Trocar matou duas coisas: a janela fora de lugar e o caminho *"o AskUser veio nil,
+então carimba a hora no nome"*. E ficou melhor do que era: o caminho **escolhido**
+é o destino, então dá para salvar em outra pasta ou sobrescrever um preset da lista
+— coisas que um campo de texto não oferece. Cancelar continua caindo no nome com
+hora. `FReqB_Saving` pede a caixa de salvar; se esta versão do Fusion ignorar o
+atributo, ela abre como caixa de abrir e escolher um preset existente ainda
+funciona (degradado, não quebrado).
+
+### A caixa fixa ganhou `Width (px)` e `Height (px)`
+
+Pedido: com `Fixed Box` ligado, a caixa passa a ter largura e altura, e os dois
+`Extend` deixam de valer. **Não dá para desabilitar nem esconder um controle
+conforme outro** num Inspector de macro — isso dependia dos callbacks por controle,
+que saíram no macro 11. Então o `Fixed Box` diz no rótulo o que ele faz
+(`Fixed Box (Width/Height below)`), os dois Extend são ignorados quando ele está
+ligado, e o log diz qual par está valendo.
+
+A conta, por unidade: **uma unidade de `Extend` é a altura da fonte**, e o `Size`
+do Text+ é fração da altura do frame — então `px / (Size × altura)` dá o alvo em
+unidades, a largura do texto é `caracteres × Char Width`, e o que entra no
+`ExtendHorizontal` é metade da diferença (a caixa cresce para os dois lados). A
+altura do texto não depende do texto: é `Lines` unidades.
+
+**E aqui entra a parte honesta.** A FORMA da conta é certa; o FATOR é palpite — no
+papel, `Size 0.09` em 1920 dá 173px por unidade, e aí uma linha cheia de 19
+caracteres daria 1644px, largo demais para um frame de 1080. Pode ser o fator, pode
+ser o `Char Width`: os dois só se resolvem olhando a tela, e este projeto não tem
+licença Studio para medir de fora. Levei isso ao usuário, e a escolha dele foi a
+que eu recomendei: **a escala vira controle** (`Meta > Px per Unit`, `0` = estimar),
+porque um número errado num controle se corrige em dois segundos, e um número
+errado no gerador custa reinstalar o macro, reiniciar o Resolve e trocar o Title do
+Media Pool.
+
+`largura_px`, `altura_px` e `px_por_unidade` entraram no `estilos.json` (bloco
+`base.caixa`) para uma calibragem feita uma vez valer nas próximas rodadas, em vez
+de morar só no clipe que foi ajustado.
+
+Verificação: `MACRO OK`, `testes.lua` ALL OK, e `tests\meta.py` com a aritmética
+coberta — metade para cada lado, largura final IGUAL em legendas de tamanhos
+diferentes, legenda mais larga que o alvo não encolhe, `Width = 0` cai no alvo por
+caracteres, e mudar `Px per Unit` muda o resultado (senão a calibragem não serviria
+para nada). Carimbo 30 → 31.
+
+
+## Macro 32 — o Extend realmente desligado, e a caixa seguindo o slider
+
+### O que eu entreguei errado no 31
+
+O usuário pediu, em maiúsculas, que o `Extend` fosse **desabilitado** com o
+`Fixed Box` ativo. Eu tratei isso como assunto de UI — expliquei que o Inspector não
+cinza controle — e deixei o valor do Extend **dentro da conta**: ele era somado no
+caminho por caracteres (`return base + falta * em / 2`) e voltava inteiro em quatro
+`return base` (legenda mais larga que o alvo, escala ilegível, `Height` zero). Ou
+seja: a caixa "fixa" mudava de tamanho junto com um slider que o próprio rótulo diz
+que não vale. Ele estava certo, e a queixa era de função, não de aparência.
+
+Agora, com o `Fixed Box` ligado, o Extend vale **zero** em todos os ramos. Legenda
+mais larga que o alvo continua não encolhendo — fica sem folga, que é o zero, e não
+com a folga do controle desligado. Rótulos passaram a dizer
+`Extend Horizontal (free box)`.
+
+### E a metade que faltava: `Width`/`Height` empurram a camada 3
+
+Também cobrado por ele. Eu tinha trocado o `ExtendHorizontal` nas três camadas mas o
+`ExtendVertical` só na caixa base — então, com a caixa fixa, a sombra e a camada 3
+ficariam com a altura do controle desligado, de tamanho diferente da caixa. É
+exatamente o "contorno torto" que o macro 23 proíbe (geometria idêntica nos elementos
+6, 7 e 8), e nada reclamaria: o Text+ aceita geometria diferente em cada elemento.
+
+O teste que fecha isso não conta ocorrências (esse número mudou quando o preview
+entrou): ele exige que **toda** escrita de Extend passe pela conta. Verifiquei que
+falha com uma escrita fora dela.
+
+### O preview ao vivo — e o custo, que foi o que decidiu
+
+Ideia do usuário: ver o tamanho enquanto arrasta, porque acertar clicando
+`Apply Style` a cada tentativa é impraticável. Ele perguntou o custo antes de
+decidir, e decidiu quando soube que **não há custo de playback**.
+
+| | custo |
+|---|---|
+| **por frame (playback)** | **zero** — nada entra no array de estilo por caractere; o callback passa `spline = false` e o modo "só a caixa", que não chama o `GiBubblePop` nem toca em keyframe |
+| **por arrasto de slider** | ~40 disparos (número medido neste projeto no macro 11), cada um com ~10 leituras para achar o chunk, ~8 de controle e até 12 escritas de geometria — o resto o `um()` pula por comparação. ~1.200 chamadas de API |
+
+O mecanismo é um `INPS_ExecuteOnChange` em **três** controles: `Fixed Box`, `Width`
+e `Height`. Isso vai contra a regra da casa ("nenhum controle reage sozinho", macro
+11) — então a regra não virou "alguns podem", virou uma **lista fechada**: o
+validador exige exatamente esses três e mais nenhum, e confere que o corpo de cada
+um passa por `ApplyGiStyle` (a conta vive num lugar só: um chunk próprio de preview
+poderia mostrar um tamanho e o Apply Style produzir outro) com `("preview", false,
+true)` — o par que mantém o custo por frame em zero.
+
+O que fazia o callback ser caro no macro 11 não era existir: era fazer o trabalho
+inteiro, incluindo reconstruir o array quadrático, quarenta vezes por arrasto, e
+encher o log de linhas iguais. Este não escreve log nenhum, e o
+`_injetar_preview` roda **depois** do `_desautomatizar` de propósito — ele varre o
+macro e tira todo callback, inclusive um que tivesse sido posto antes.
+
+Carimbo 31 → 32. `MACRO OK` (44 rotinas), `testes.lua` ALL OK, cinco testes Python
+ALL OK.
+
+
+## Macros 33 e 34 — a caixa fixa que de fato ignora o texto
+
+O usuário voltou com dois fatos medidos na tela: pediu uma caixa de **2551x346** e
+saiu **1080x200**, e a caixa continuava **contando o tamanho do texto** — "que era
+justamente o ponto do tamanho ser FIXO". Ele fechou o requisito numa frase:
+*"quando eu der apply all com a box fixed, independente de quantos
+caracteres/tamanho do texto, a caixa mantenha o mesmo tamanho"*.
+
+### O que os números dele disseram
+
+- **2551px de largura num frame de 1080** — não foi erro de conta, foi a tela
+  cortando: não havia como caber.
+- **346px pedidos, 200px na tela** — essa é a calibragem que faltava: a escala real
+  é **~100px por unidade de `Extend`**, fator **0.578** da minha estimativa
+  (`Size` × altura do frame). A altura de uma unidade não é o `Size` cheio, é a
+  altura do olho da fonte. O padrão passou a trazer o fator; `Px per Unit` continua
+  vencendo, porque outra fonte dá outro número.
+
+### A parte que era conceitual, não de número
+
+A caixa do Text+ é **borda em volta do texto** — e não é limitação nossa: abri os
+417 `.setting` do `Templates.drfx` e o próprio título de caixa da BMD
+(`Simple Box 1 Line Lower Third`) faz igual, `ElementShape` de borda +
+`ExtendHorizontal/Vertical`. Então "caixa fixa" só existe como **compensação**: a
+folga de cada lado é o que falta para chegar ao alvo. E se a largura do texto é
+palpite, a folga erra e cada legenda sai de um tamanho — exatamente a queixa.
+
+Com a autorização dele ("pode calcular usando python o tamanho total"), o palpite
+morreu: o `giautosubs.py` agora **mede** cada legenda na fonte instalada (Pillow,
+`medir_largura_em`), em **em** — a única unidade do projeto que não precisa de
+calibragem, porque não depende do `Size` nem da resolução. O quanto o palpite errava:
+`19 × 0.5 = 9.5 em` contra **10.61 em** medidos numa legenda de 19 caracteres, e
+`13.57 em` em "ELES SO SAO MEIO TIMIDOS".
+
+A medida viaja por `SetData("GiTextEm")` — é medida, não escolha (mesma razão do
+`GiCharsBuilt`) — e sem ela o macro cai no palpite **avisando uma vez**, porque é ela
+que faz as caixas saírem iguais. A fonte é procurada nas duas pastas: a do sistema e
+a do **usuário** (`%LOCALAPPDATA%\Microsoft\Windows\Fonts`), que é onde a Open Sans
+deste projeto está — procurar só em `C:\Windows\Fonts` não acharia a fonte que o
+Resolve está usando.
+
+O teste é a frase dele virada asserção: sete textos diferentes, uma largura final só.
+E ele achou um limite que virou aviso na rodada: **legenda mais larga que o `Width`
+não encolhe** (caixa menor que o próprio texto seria pior que caixa que vaza), então
+o resumo agora imprime a **maior legenda medida** — é o mínimo que o `Width` pode
+pedir para a promessa valer.
+
+### E a UI do Extend
+
+Ele mandou olhar como os macros de fábrica fazem. Olhei: **nenhum** dos 417 tem
+`IC_Visible` ou `INP_Disabled`; os que têm UI reativa usam `INPS_ExecuteOnChange`
+(44 ocorrências, todas `tool:UpdateWordAnimation()`). Ou seja, nem a BMD faz isso
+declarativamente. O caminho que resta é `SetAttrs` em tempo de execução, e o macro 33
+o tenta — do mesmo callback do preview, então no instante em que o checkbox muda.
+Como isso não dá para testar daqui, o macro **lê o atributo de volta** e diz no log,
+uma vez por sessão, se colou ou se este build ignora — para a próxima rodada dele
+responder em vez de eu adivinhar.
+
+Dependência nova: **Pillow** no `requirements.txt`. Sem ela a rodada não quebra —
+avisa e cai no palpite. Carimbos 32 → 33 → 34.

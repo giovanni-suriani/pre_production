@@ -26,9 +26,6 @@ Ver também a memória `project-giautosubs` e `feedback-resolve-scripting-gotcha
 | `vendor/autosubs-macro.setting` | macro original do AutoSubs, **intocado** |
 | `../src/gerar_macro.py` | patcheia o vendor → `GiAutoSubs Caption.setting`; `--instalar` copia pra `%APPDATA%\...\Fusion\Templates\Edit\Titles` |
 | `GiAutoSubs Caption.setting` | o resultado — **nunca editar na mão** |
-| `GiAutoSubs 3color.setting` | variante com o grupo `Box Layer 3` (elemento 8); `gerar_macro.py --camada3` |
-| `GiAutoSubs 3color_spinning.setting` | a mesma, com as duas cores extras **orbitando** (`Spin Speed`); `gerar_macro.py --spin` |
-| `GiAutoSubs TikTokNovo.setting` | Title alternativo, importado de um estilo exportado pelo usuário |
 | `valida_macro.lua` | valida o `.setting` fora do Resolve (via `fuscript`) |
 | `GiAutoSubs.lua` | roda **dentro** do Resolve (Workspace > Scripts); cria e estiliza os clipes |
 | `GiDiag.lua` | diagnóstico somente-leitura (Scripts/Utility) |
@@ -60,6 +57,87 @@ THESE** = restilizar o que já está lá).
 
 ## Regras que não são opcionais
 
+- **O LOOK é o estilo, não o Title.** Desde o macro 30 há um macro só; o que era
+  `3color` / `3color_spinning` / `TikTokNovo` vive no `estilos.json` como
+  `3_color` / `3_color_spinning` / `TikTokNovo` (os dois primeiros se chamavam
+  `caixa_tres_cores*` até 27/09; `ESTILOS_RENOMEADOS` traduz o nome antigo, que
+  está gravado nos arquivos e nos clipes, e avisa ao traduzir). A rodada
+  pergunta qual estilo (menu em `giautosubs\menu_estilos\`, mantido pelo
+  `giautosubs.py`) e REGENERA o `legendas.lua` quando você troca.
+- **`camada3.giro` liga o spin** (graus por frame). Todo estilo declara
+  `BoxSpinSpeed`, inclusive com 0: sem isso um clipe que já girava continua, e a
+  expressão vai pra sombra da caixa. E o script NÃO escreve `Offset7`/`Offset8`
+  quando há giro — número em cima de expressão mata a expressão.
+- **A aba Meta não é estilo.** Ela diz de onde o clipe veio (qual
+  `legendas.lua`, qual corte, quantos caracteres por caixa) e fica **fora do
+  `InputKeys`**: no preset, o "Apply Style to All Captions" carimbaria a
+  procedência de um clipe em cima de todos. Quem a escreve é o `escrever_meta`.
+- **Mudar `Characters per Box` é REFAZER as legendas, não restilizar** — o número
+  reparte as frases, então muda quantas legendas existem. Quem faz é o chunk
+  `GiRebuild` (botão Rebuild Captions, e o Apply Style to This Track quando o
+  número mudou); ele grava um `.lua` de nome novo (`legendas_c25.lua`) e só
+  destrói clipe depois que o arquivo novo existe.
+- **Botão de macro NÃO mexe na timeline.** Ele roda dentro da comp do clipe
+  clicado; apagar clipes de lá (o REPLACE apaga esse clipe também) derruba o
+  Resolve sem mensagem. O `Rebuild with Selected` PREPARA — gera o `.lua`,
+  relinka e escreve o `_gipedido.txt`; a rodada é em Workspace > Scripts >
+  GiAutoSubs, e ela não pergunta nada. Idem `io.popen`: use `os.execute` com
+  redirecionamento.
+- **O rebuild é checkbox + submit.** As opções (`Fixed Width`, `No Gaps`) são
+  controles que ficam visíveis, e o `Rebuild with Selected` roda uma vez com o
+  que está marcado. `Fixed Width` é o MESMO `TextBoxFixed` do grupo Text Box,
+  exposto duas vezes — nunca um segundo checkbox.
+- **O REPLACE volta na track DOMINANTE** (a que tinha mais legendas), não na
+  menor ocupada: um clipe perdido numa track de baixo mudava a track de todas as
+  outras. Com uma track por falante a base é a menor, porque as faixas sobem a
+  partir dela.
+- **`endFrame` é INCLUSIVO.** `recordFrame = f0` + `endFrame = f1 - f0` ocupa
+  f0..f1, então a legenda dura um frame mais do que a transcrição diz. Com
+  buraco entre as legendas isso nunca esbarrou em nada; com "sem buracos" todo
+  par vizinho se sobrepõe em um frame, e dois clipes num frame da mesma track
+  DERRUBAM o Resolve. O clamp por track, na criação, é o que impede.
+- **"Sem buracos" é por TRACK.** Esticar pela lista toda sobrepõe duas legendas
+  da mesma track (impossível num vídeo) e termina a legenda de um falante onde a
+  de outro começa. Nunca encolhe, e a última de cada track fica como está.
+- **Legenda por legenda, nunca um clipe só.** O Text+ faz o layout de todo o
+  texto que está nele de uma vez, e o array por caractere é quadrático nas
+  palavras. "Um clipe com as legendas trocando dentro" se faz com `Rebuild with
+  Fixed Width`: a caixa para de mudar de tamanho e a órbita do spin (que já lê o
+  tempo da TIMELINE) atravessa as legendas.
+- **Diálogo dentro do macro é `fusion:RequestFile`, nunca `AskUser`.** O AskUser
+  vem nil fora da página Fusion E não tem como ser posicionado na tela (saiu no
+  macro 31). O RequestFile é a caixa nativa: centralizada e lembra a pasta.
+- **Diga sempre se a feature custa PLAYBACK.** É por esse número que o usuário
+  decide (ver `MACRO.md` §5, passo 0): o que custa é entrar no array de estilo por
+  caractere, que é quadrático nas palavras. Custo por clique ou por arrasto é o
+  barato — diga o número, mas diga que é o barato.
+- **Com `Fixed Box` ligado, o Extend vale ZERO em todos os ramos** — inclusive
+  quando a legenda é mais larga que o alvo ou quando `Height` é 0. "Desabilitado"
+  é de função, não de aparência.
+- **Três controles reagem sozinhos, e são uma lista fechada:** `Fixed Box`,
+  `Width`, `Height` (o preview da caixa fixa, macro 32). O validador exige
+  exatamente esses três, que o corpo passe por `ApplyGiStyle` e que passe
+  `("preview", false, true)` — sem isso o preview reconstruiria o array por
+  caractere a cada valor de slider, que é o que matou os callbacks no macro 11.
+- **Não existe controle condicional no Inspector de um macro.** Não dá para cinzar
+  o `Extend` quando o `Fixed Box` está ligado — dependia dos callbacks que saíram
+  no macro 11. O rótulo e o log é que carregam a regra.
+- **A caixa fixa usa a largura MEDIDA do texto** (`GiTextEm`, medido com Pillow na
+  fonte instalada, em em). É o que faz toda caixa sair do mesmo tamanho. Sem o
+  carimbo, o macro cai no palpite `caracteres × Char Width` e avisa — e aí as
+  larguras divergem. A fonte é procurada TAMBÉM em
+  `%LOCALAPPDATA%\Microsoft\Windows\Fonts` (é onde a Open Sans deste projeto está).
+- **Legenda mais larga que o `Width` não encolhe.** O resumo da rodada imprime a
+  maior legenda medida: é o mínimo que o `Width` pode pedir para todas saírem
+  iguais.
+- **`Width (px)`/`Height (px)` vs `Px per Unit`:** uma unidade de `Extend` é a
+  altura da fonte (`Size` × altura do frame). Esse fator é ESTIMADO e corrigível
+  no Inspector (`Meta > Px per Unit`, 0 = estimar) porque ninguém consegue medi-lo
+  fora do Resolve. `Width = 0` volta ao alvo por `Characters per Box`.
+- **`Fixed Box` não é um input do Text+.** Não existe largura fixa lá: o macro
+  COMPENSA no `Extend Horizontal` o que falta pra chegar à largura de uma linha
+  cheia (`Characters per Box` × `Char Width`). Legenda mais larga que o alvo não
+  encolhe de propósito.
 - **Nenhum controle reage sozinho.** Os callbacks por controle saíram no macro
   11. Ajuste o que quiser no Inspector e clique **Apply Style**.
 - **`Enabled{n}` primeiro.** Os inputs de um elemento do Text+ só existem depois
@@ -93,13 +171,12 @@ THESE** = restilizar o que já está lá).
 8 terceira cor da caixa
 ```
 
-A **caixa de tres cores** vive num Title **separado** (`GiAutoSubs 3color`,
-gerado com `--camada3`); o `GiAutoSubs Caption` continua sendo o macro de sempre,
-sem o grupo `Box Layer 3`, sem a rotina `camada3` e sem `LIGA[8]`. Consequência:
-um estilo com `base.camada3` só fica editável no Inspector se o clipe tiver
-nascido do Title **3color** — no Caption o elemento 8 chega desenhado pelo
-`legendas.lua` (é input cru do Text+), mas o primeiro **Apply Style** não o
-reconhece. Escolha o Title certo na pergunta 1.
+A **caixa de tres cores** faz parte do macro desde o **30**: há um Title só
+(`GiAutoSubs Caption`) e ele traz o grupo `Box Layer 3`, a rotina `camada3` e o
+`LIGA[8]` sempre. Um estilo sem `base.camada3` escreve `BoxLayer3Enabled = 0` e
+o elemento 8 fica apagado — **custo zero por frame** pra quem não usa (o
+elemento 8 está fora do fade, e o custo medido do projeto é o array por
+caractere). Não há mais Title certo ou errado a escolher.
 
 O efeito e' a mesma caixa desenhada tres vezes,
 **deslocada** — nao tres bordas concentricas. Por isso o elemento 7 vira a
@@ -108,14 +185,13 @@ so' a terceira precisou de slot. Geometria copiada da caixa base nos tres,
 offsets em lados opostos, transparencia por `Alpha8` e nunca `Opacity8`. Ver
 `MACRO.md` §3.4 e `tests\camada3.py`.
 
-O carimbo `GiAutoSubsVersao` é **um número para as duas variantes**, então ele
-não distingue Caption de 3color e a escolha errada passaria calada. Quem avisa é
-o `GiAutoSubs.lua`: estilo pedindo `BoxLayer3Enabled` num Title sem esse controle
-imprime **`WRONG TITLE`** no resumo. A busca é em `comp:GetToolList(false)`, não
-no `tool` — o controle mora no MacroOperator, e perguntar só ao Text+ acusaria os
-dois Titles.
+O aviso **`WRONG TITLE`** existiu entre 05/09 e 27/09 e **saiu no macro 30**:
+ele cobria o buraco de o carimbo `GiAutoSubsVersao` ser um número só para quatro
+variantes, o que tornava silenciosa a escolha do Title errado. Com um Title só
+não há escolha errada a fazer, e o `testes.lua` agora exige o contrário — que um
+preset pedindo `BoxLayer3Enabled` **chegue** ao clipe, sem queixa nenhuma.
 
-### O spin (`--spin`)
+### O spin (`Spin Speed`)
 
 Gira o **deslocamento**, não a geometria: as três caixas ficam alinhadas e o
 vetor de offset percorre um círculo, então a borda colorida **orbita** o texto.
@@ -123,8 +199,11 @@ Rotacionar o retângulo deixaria a caixa base reta e as coloridas em losango —
 como defeito, não como estilo.
 
 Um controle só, **`Spin Speed`** (graus por frame): raio e fase saem do offset
-que já está no Inspector, porque `(x,y)` é um vetor e traz os dois dentro. Em
-**0** o macro se comporta como o 3color parado. Os 180° entre a 2ª e a 3ª cor vêm
+que já está no Inspector, porque `(x,y)` é um vetor e traz os dois dentro. O
+default é **0**, e em 0 `deslocar()` cai em `pin()`: nenhuma expressão é escrita
+e a caixa fica parada, exatamente como antes de o spin existir. (Enquanto o spin
+era um Title próprio o default era 2 — escolher aquele Title já era pedir o giro.
+No macro único isso poria toda legenda pra girar sem ninguém pedir.) Os 180° entre a 2ª e a 3ª cor vêm
 de graça — os offsets já nascem em lados opostos, então meia volta *é* as duas
 cores trocando de lado.
 

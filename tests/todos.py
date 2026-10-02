@@ -72,6 +72,7 @@ SUITE = [
     ("preprod_speakerswitch.py", VENV,    False),
     ("dialogo_speakerswitch.py", SISTEMA, False),
     ("spin.py",                  VENV,    False),
+    ("meta.py",                  VENV,    False),
     ("smoke.py",                 VENV,    True),
     ("ui.py",                    SISTEMA, True),
 ]

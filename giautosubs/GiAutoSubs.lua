@@ -39,12 +39,15 @@ c) A cor tem CINCO origens possiveis, e vence a ultima (ver MACRO.md):
    tempo por palavra.
 ]]
 
--- As tres perguntas da rodada
--- ---------------------------
+-- As perguntas da rodada
+-- ----------------------
 -- Toda rodada pergunta, nesta ordem:
 --
 --   1) QUAL LEGENDA PADRAO   o Title instalado em Templates/Edit/Titles
---                            (`ESTILO_FIXO`, mais abaixo)
+--                            (`ESTILO_FIXO`, mais abaixo). Desde o macro
+--                            30 existe um Title so', entao esta pergunta
+--                            NAO ABRE - ela volta sozinha se aparecer um
+--                            segundo Title instalado.
 --   2) QUAL CONFIGURACAO     um preset exportado pelo botao "Export Config" do
 --                            Inspector (`PRESET_FIXO`)
 --   3) QUAL ARQUIVO          o legendas.lua que o giautosubs.py escreveu
@@ -79,10 +82,11 @@ local TEMPLATES_PADRAO = { "GiAutoSubs Caption", "AutoSubs Caption" }
 -- Qual legenda padrao (Title) usar. Vazio = PERGUNTA; com um nome dentro, usa
 -- esse e nao pergunta nada.
 --
--- Cada Title carrega o proprio estilo assado dentro - e' o que o
--- `gerar_macro.py --nome <estilo>` produz. Entao ESCOLHER O TITLE E' ESCOLHER O
--- ESTILO PADRAO desta rodada; o preset abaixo e' o que muda esse padrao sem
--- gerar Title nenhum.
+-- Cada Title carrega um estilo assado dentro como DEFAULT - o que o
+-- `gerar_macro.py` bake do estilos.json. Isso importa pouco na pratica: o
+-- estilo da rodada vem do `legendas.lua` (quem manda e' o `--estilo` do
+-- giautosubs.py), e o preset da pergunta 2 e' o que muda estilo sem regerar
+-- nada. Desde o macro 30 nao existe mais um Title por estilo.
 local ESTILO_FIXO = ""
 
 -- Qual configuracao de legenda aplicar por cima do padrao. Vazio = PERGUNTA
@@ -106,6 +110,19 @@ local PRESET_FIXO = ""
 -- `gerar_macro.py` conhece por `PRESETS_DIR`.
 local PRESETS_DIR = [[D:\CanalYtbe\BatataQuente\pre_production\giautosubs\presets]]
 
+-- O RECADO do botao "Rebuild Captions" (aba Meta do Inspector, macro 25).
+--
+-- O botao regera o `legendas.lua` com os caracteres por caixa novos e chama este
+-- script por `dofile` - que nao passa argumento nenhum. Entao as respostas
+-- viajam por arquivo, no mesmo `chave<TAB>valor` do `_giescolhas.txt`.
+--
+-- Ele preenche os ESCAPES que ja existem (`ARQUIVO`, `ESTILO_FIXO`,
+-- `PRESET_FIXO`, `CONFLITO_FIXO`) em vez de abrir um segundo caminho de
+-- resposta: tudo que o pedido faz e' responder de antemao as mesmas quatro
+-- perguntas. E e' lido UMA vez e apagado - senao a proxima rodada manual
+-- herdaria as respostas de um clique antigo, sem dialogo e sem aviso.
+local PEDIDO = [[D:\CanalYtbe\BatataQuente\pre_production\giautosubs\_gipedido.txt]]
+
 -- A pasta com as tres opcoes da pergunta de conflito, uma por arquivo.
 --
 -- Sim, e' um menu feito de arquivos. O motivo: o unico dialogo que comprovada-
@@ -115,6 +132,27 @@ local PRESETS_DIR = [[D:\CanalYtbe\BatataQuente\pre_production\giautosubs\preset
 -- opcoes nao eram arquivos, entao viraram. Os tres sao reescritos a cada
 -- rodada, e' so' apagar a pasta pra ela voltar.
 local CONFLITO_DIR = [[D:\CanalYtbe\BatataQuente\pre_production\giautosubs\conflito]]
+
+-- O MENU DE ESTILOS: um arquivo vazio por estilo do `estilos.json`.
+--
+-- Existe porque o unico dialogo que funciona a partir da pagina Edit e' o
+-- `fusion:RequestFile`, que lista ARQUIVOS - e o Lua do Resolve nao tem parser de
+-- JSON pra ler o estilos.json direto. Quem mantem a pasta em dia e' o
+-- `giautosubs.py`, a cada rodada: a lista de estilos e' dele.
+--
+-- Mesmo truque da pasta `conflito`.
+local ESTILOS_DIR = [[D:\CanalYtbe\BatataQuente\pre_production\giautosubs\menu_estilos]]
+
+-- Escolher estilo quer dizer REGERAR o legendas.lua: quem compila estilo e' o
+-- Python (e' ele que le o estilos.json). Estes tres caminhos sao o que permite
+-- chamar de volta.
+local PYTHON_EXE = [[D:\CanalYtbe\BatataQuente\pre_production\.venv\Scripts\python.exe]]
+local GIAUTOSUBS_PY = [[D:\CanalYtbe\BatataQuente\pre_production\src\giautosubs.py]]
+local RELATO = [[D:\CanalYtbe\BatataQuente\pre_production\giautosubs\_girebuild.txt]]
+
+-- Escape da pergunta de estilo, irmao do ESTILO_FIXO (que e' do Title): com um
+-- nome aqui, a rodada usa esse estilo e nao pergunta.
+local ESTILO_DA_RODADA = ""
 
 -- Onde o Fusion procura os Titles - a mesma pasta em que o
 -- `gerar_macro.py --instalar` escreve.
@@ -392,6 +430,12 @@ local OFFSET_CANDIDATOS = { "Offset", "Position", "Translate" }
 -- versao anterior "calibrava" lendo o elemento 4 e pegava 3 - contorno de
 -- caixa, nao caixa. Calibragem saiu: o numero agora esta escrito, e o dump
 -- imprime os rotulos do combo pra qualquer duvida ser resolvida lendo o log.
+-- Os dois elementos que o GIRO conduz: a segunda cor da caixa (que e' a sombra
+-- dela, com suavidade 0) e a terceira. Escritos aqui porque o passo 6 precisa
+-- pula-los quando ha giro - a numeracao e' a mesma do gerar_macro.py
+-- (`EL_CAIXA_SOMBRA`, `EL_CAMADA3`).
+local EL_CAIXA_SOMBRA, EL_CAMADA3 = 7, 8
+
 local FORMA = { TEXTO = 0, TEXTO_CONTORNO = 1, BORDA = 2, BORDA_CONTORNO = 3 }
 
 function aplicar_offset(tool, n, xy, logar)
@@ -439,6 +483,25 @@ local function dado_do_macro(comp, tool, nome)
 	for _, t in pairs(tools or {}) do
 		pcall(function() v = t:GetData(nome) end)
 		if v ~= nil then return v end
+	end
+	return nil
+end
+
+-- O TOOL do macro, nao o dado dele: e' onde o Inspector do clipe grava, e e'
+-- nele que a aba Meta tem que ser escrita (o `ctl` das rotinas do macro le na
+-- ordem macro -> tool -> Text+).
+--
+-- Achado pelo que ele E' - o dono do `InputKeys` - e nao pelo nome: o nome do
+-- macro muda de clipe pra clipe. Mesma regra do `gi_macro` do gerador.
+local function tool_do_macro(comp, tool)
+	local v
+	pcall(function() v = tool:GetData("InputKeys") end)
+	if v ~= nil then return tool end
+	local tools
+	pcall(function() tools = comp:GetToolList(false) end)
+	for _, t in pairs(tools or {}) do
+		pcall(function() v = t:GetData("InputKeys") end)
+		if v ~= nil then return t end
 	end
 	return nil
 end
@@ -494,6 +557,119 @@ local function aplicar_preset(comp, tool, preset, refazerSpline)
 		pcall(function() tool:SetInput(chave, valor) end)
 	end
 	return "one by one (" .. porque .. ")"
+end
+
+--------------------------------------------------------------------------
+-- A aba META: de onde esta legenda veio.
+--
+-- Sete caminhos e tres numeros carimbados no clipe a cada rodada. Nao e' enfeite
+-- de log: sem eles o clipe na timeline nao sabia de que `legendas.lua` tinha
+-- nascido, e a unica forma de descobrir era abrir os candidatos e comparar o
+-- texto. E' esse dado que faz o botao "Rebuild Captions" existir - sem a pasta do
+-- corte nao ha como chamar o giautosubs.py de volta.
+--
+-- Por que NAO vai pelo `SetInputValues` como o resto: a Meta nao e' estilo. No
+-- `InputKeys` ela viajaria no preset, e ai o "Apply Style to All Captions"
+-- carimbaria a procedencia do clipe de origem em cima de todos os outros, e o
+-- "Export Config" gravaria caminhos de maquina dentro de um estilo.
+--
+-- Escreve no MACRO e no Text+, a mesma regra do `SetInputValues`: o Inspector
+-- edita o macro, e o `ctl` das rotinas le os dois - um valor em um so' deles
+-- deixaria "qual dos dois esta em dia" como pergunta aberta.
+--
+-- `GiCharsBuilt` e' `SetData` e nao controle: e' o carimbo de quantos caracteres
+-- por caixa o arquivo LINKADO usou, e e' com ele que o "Apply Style to This
+-- Track" percebe que o numero mudou no Inspector e reconstroi em vez de
+-- restilizar. Registro do passado nao e' escolha - como controle, convidaria a
+-- mexer justamente no numero que nao se mexe.
+-- Um aviso por rodada, nao por clipe (ver o fim do `escrever_meta`).
+local META_AVISADA = false
+
+local function escrever_meta(comp, tool, meta, title, config)
+	-- `legendas.lua` gerado antes da aba Meta existir. Sem aviso, o sintoma seria
+	-- a aba vazia sem nada explicando - e o arquivo e' de um minuto de trabalho.
+	if not meta then
+		if not META_AVISADA then
+			META_AVISADA = true
+			log("      WARNING: this legendas.lua has no `meta` block, so the Meta")
+			log("      tab stays empty and the Rebuild button has nothing to read.")
+			log("      Generate it again with giautosubs.py (same arguments) - the")
+			log("      block is written by every run since macro 25.")
+		end
+		return 0
+	end
+	local valores = {
+		MetaCaptionsFile = meta.captions_file,
+		MetaCutFolder = meta.cut_folder,
+		MetaTranscript = meta.transcript,
+		MetaStyle = meta.style,
+		MetaStylesFile = meta.styles_file,
+		MetaTitle = title,
+		MetaConfig = config,
+		MetaCharsPerBox = meta.chars_per_box,
+		MetaLines = meta.lines,
+		-- A opcao "sem buracos" DESTA rodada. E' checkbox e nao carimbo escondido
+		-- (era `SetData("GiNoGaps")` no macro 27): quem reconstroi precisa VER o
+		-- que esta selecionado antes de clicar em "Rebuild with Selected".
+		--
+		-- `0` tambem e' valor: sem o `or 0`, uma rodada com buracos nao escreveria
+		-- nada e o checkbox ficaria marcado de uma rodada anterior, mentindo
+		-- sobre as legendas que estao na tela.
+		MetaNoGaps = meta.no_gaps and 1 or 0,
+	}
+	-- A lista montada, e nao `{ macro, tool }`: com o macro nil o `ipairs`
+	-- pararia no indice 1 e escreveria ZERO campos, sem erro nenhum. Clipe
+	-- arrastado da aba Effects (e o Resolve falso dos testes) nao tem
+	-- MacroOperator - e' o caso em que isso acontece.
+	local alvos = {}
+	local macro = tool_do_macro(comp, tool)
+	if macro then alvos[#alvos + 1] = macro end
+	if tool and tool ~= macro then alvos[#alvos + 1] = tool end
+
+	-- CONFERE O QUE COLOU, e nao o que foi tentado.
+	--
+	-- Escrever num controle que este clipe nao tem e' aceito e DESCARTADO em
+	-- silencio - e' o caso normal de um clipe criado com uma copia mais velha do
+	-- macro (a aba Meta nasceu no 25). Contando tentativas, o resumo dizia
+	-- "8 field(s) stamped" justamente quando a aba ficava vazia: o numero mentia
+	-- no unico caso em que ele importava.
+	local escritos, pedidos = 0, 0
+	for chave, valor in pairs(valores) do
+		if valor ~= nil and valor ~= "" then
+			pedidos = pedidos + 1
+			local colou = false
+			for _, alvo in ipairs(alvos) do
+				pcall(function() alvo:SetInput(chave, valor) end)
+				local atual
+				pcall(function() atual = alvo:GetInput(chave) end)
+				-- Comparacao frouxa de proposito: numero volta como numero,
+				-- caminho volta como string, e o que se quer saber e' so' se o
+				-- controle EXISTE pra guardar o valor.
+				if atual ~= nil and tostring(atual) == tostring(valor) then
+					colou = true
+				end
+			end
+			if colou then escritos = escritos + 1 end
+		end
+	end
+	if meta.chars_per_box and macro then
+		pcall(function() macro:SetData("GiCharsBuilt", meta.chars_per_box) end)
+	end
+	-- O `GiNoGaps` saiu: no desenho de checkbox + submit, quem guarda essa escolha
+	-- e' o controle `MetaNoGaps` acima. Carimbo escondido E controle seriam dois
+	-- estados pra mesma opcao, e o escondido venceria sem aparecer.
+
+	-- Uma vez por rodada, nao por clipe: 391 legendas dariam 391 avisos iguais.
+	if escritos == 0 and pedidos > 0 and not META_AVISADA then
+		META_AVISADA = true
+		log("      WARNING: the Meta tab did not take on this clip - none of the "
+			.. pedidos .. " fields stuck.")
+		log("      This clip carries an OLDER copy of the macro: the Meta tab was")
+		log("      born in macro 25, and each clip carries its own copy. Restart")
+		log("      Resolve, delete the GiAutoSubs Title from the MEDIA POOL, drag")
+		log("      it in again from Effects > Titles, and run this once more.")
+	end
+	return escritos
 end
 
 --------------------------------------------------------------------------
@@ -798,6 +974,20 @@ local function templates_preferidos()
 	end
 
 	local instalados = titles_instalados()
+	-- Um Title so' instalado: nao existe escolha a fazer, e um dialogo de
+	-- uma opcao e' so' um clique a mais antes do trabalho. Desde o macro
+	-- 30 e' o caso normal - o `3color`, o `3color_spinning` e o
+	-- `TikTokNovo` foram absorvidos pelo macro unico. A pergunta volta
+	-- sozinha se aparecer um segundo Title no disco, porque o gatilho e' o
+	-- que esta' instalado e nao uma constante aqui.
+	if #instalados == 1 then
+		log("      one caption style installed: '" .. instalados[1]
+			.. "' - nothing to pick, using it")
+		poe(instalados[1])
+		for _, n in ipairs(TEMPLATES_PADRAO) do poe(n) end
+		return lista
+	end
+
 	if #instalados > 0 then
 		log("      " .. #instalados .. " caption style(s) installed:")
 		for _, n in ipairs(instalados) do log("        - " .. n) end
@@ -901,9 +1091,13 @@ local function escolher_preset()
 		return nil
 	end
 	if PRESET_FIXO == "" then lembrar("preset", caminho) end
+	-- O CAMINHO tambem, como terceiro retorno: o rotulo e' pra ler ("arquivo (58
+	-- values, 'nome')") e a aba Meta precisa do caminho puro, que e' o que o
+	-- botao Rebuild devolve pro `PRESET_FIXO` da rodada seguinte.
 	return preset.valores,
 		string.format("%s (%d values%s)", caminho, preset.n,
-			preset.nome and (", '" .. preset.nome .. "'") or "")
+			preset.nome and (", '" .. preset.nome .. "'") or ""),
+		caminho
 end
 
 -- PERGUNTA 4: o que fazer com as legendas da rodada anterior.
@@ -946,6 +1140,162 @@ local OPCOES_CONFLITO = {
 		.. "longer matches.\nCaptions in the file with no clip here are listed "
 		.. "at the end and left out." },
 }
+
+-- REGERA o legendas.lua com outro estilo (ou outras opcoes), chamando o Python.
+--
+-- Um lugar so' monta este comando. O botao "Rebuild with Selected" da aba Meta
+-- escreve um PEDIDO e deixa a rodada fazer o trabalho - ele nao pode: botao roda
+-- dentro da comp do clipe, e de la' nem timeline se toca (ver ESTADO.md, macro
+-- 29). Aqui, no script, e' seguro.
+--
+-- Tudo vem do `dados.meta`: a pasta do corte, a transcricao e as opcoes da rodada
+-- que gerou o arquivo. Sem meta (arquivo anterior ao macro 25) nao ha' o que
+-- chamar, e a funcao diz isso em vez de chutar caminhos.
+--
+-- As aspas em volta do comando INTEIRO sao o conserto conhecido do `cmd /c` do
+-- Windows com o primeiro token entre aspas. `os.execute` e nao `io.popen`: pipe
+-- lido na thread da interface e' suspeito de travar o Resolve, e o redirecionamento
+-- pra arquivo faz o mesmo.
+local function regerar(meta, estilo, opcoes)
+	meta = meta or {}
+	opcoes = opcoes or {}
+	local corte = meta.cut_folder
+	if not corte or corte == "" then
+		return nil, "the captions file does not say which cut folder it came "
+			.. "from (it was generated before the Meta tab existed) - generate it "
+			.. "again with giautosubs.py and this works from then on"
+	end
+
+	local base = meta.captions_file or ""
+	local dir, arq = base:match("^(.*)[\\/]([^\\/]+)$")
+	if not dir then
+		dir = corte .. [[\legendas]]
+		arq = "legendas.lua"
+	end
+	-- Tira os sufixos que rodadas anteriores puseram, senao o nome cresce a cada
+	-- troca de estilo: `legendas__TikTokNovo_c19__outro_c25.lua`.
+	local nome = (arq:gsub("%.lua$", ""))
+	nome = (nome:gsub("__.*$", ""))
+	nome = (nome:gsub("_c%d+$", ""))
+
+	local chars = math.floor(tonumber(opcoes.chars or meta.chars_per_box) or 0)
+	local linhas = math.floor(tonumber(opcoes.lines or meta.lines) or 1)
+	-- `nil` = NAO OPINE. So' entra no comando o que foi pedido de forma explicita.
+	--
+	-- Antes isto caia no `meta.fixed_box` do arquivo anterior e virava
+	-- `--free-box` - que e' explicito e FORCA `TextBoxFixed = 0`, vencendo o
+	-- `fixa` do estilo que o usuario acabou de escolher. O sintoma foi exatamente
+	-- isso: escolher `3_color_fixo` (que pede caixa fixa) e receber um arquivo com
+	-- a caixa livre, por causa do estado de um clipe velho.
+	--
+	-- Quem escolhe um ESTILO escolhe o pacote inteiro; o estilo decide a caixa.
+	local fixa = opcoes.fixed
+	local semBuracos = opcoes.no_gaps
+	if semBuracos == nil then semBuracos = meta.no_gaps end
+
+	local seguro = tostring(estilo):gsub("[^%w%-_]", "_")
+	local destino = string.format([[%s\%s__%s_c%d.json]], dir, nome, seguro, chars)
+	local novo_lua = (destino:gsub("%.json$", ".lua"))
+
+	local cmd = string.format([[""%s" "%s" "%s" --estilo "%s" --out "%s"]],
+		PYTHON_EXE, GIAUTOSUBS_PY, corte, estilo, destino)
+	if chars > 0 then cmd = cmd .. " --max-chars " .. chars end
+	if linhas > 0 then cmd = cmd .. " --max-lines " .. linhas end
+	-- Sem `fixa` pedido, o comando NAO fala de caixa: o estilo decide (ver acima).
+	if fixa ~= nil then
+		cmd = cmd .. (fixa and " --fixed-box" or " --free-box")
+	end
+	if semBuracos then cmd = cmd .. " --no-gaps" end
+	if meta.transcript and meta.transcript ~= "" then
+		cmd = cmd .. ' --transcript "' .. meta.transcript .. '"'
+	end
+	cmd = cmd .. ' > "' .. RELATO .. '" 2>&1"'
+
+	log("      running (this takes a few seconds):")
+	log("        " .. cmd)
+	pcall(function() os.execute(cmd) end)
+
+	local linhas_saida = {}
+	pcall(function()
+		local fh = io.open(RELATO, "r")
+		if not fh then return end
+		for l in fh:lines() do linhas_saida[#linhas_saida + 1] = l end
+		fh:close()
+	end)
+	for k = math.max(1, #linhas_saida - 8), #linhas_saida do
+		log("        | " .. tostring(linhas_saida[k]))
+	end
+
+	local existe = false
+	pcall(function()
+		local fh = io.open(novo_lua, "r")
+		if fh then existe = true fh:close() end
+	end)
+	if not existe then
+		return nil, novo_lua .. " was not written (see the lines above)"
+	end
+	return novo_lua
+end
+
+
+-- PERGUNTA: qual ESTILO (do estilos.json) esta rodada usa.
+--
+-- Era a pergunta 1 do Title enquanto cada look tinha um Title proprio
+-- (`3color`, `3color_spinning`, `TikTokNovo`). O macro 30 juntou os macros num so'
+-- - e' a mesma maquinaria pra todos - mas o LOOK continua sendo escolha de cada
+-- rodada, e sem esta pergunta a unica forma de troca-lo era editar a linha de
+-- comando do Python.
+--
+-- O menu e' feito de ARQUIVOS (`menu_estilos\<nome>.txt`, mantidos pelo
+-- giautosubs.py) pelo mesmo motivo da pergunta de conflito: o `fusion:RequestFile`
+-- e' o unico dialogo que funciona da pagina Edit, e ele lista arquivos.
+local function escolher_estilo_json(atual)
+	if ESTILO_DA_RODADA ~= "" then
+		log("      style fixed in the script: '" .. ESTILO_DA_RODADA .. "'")
+		return ESTILO_DA_RODADA
+	end
+
+	local nomes = {}
+	pcall(function()
+		for _, item in ipairs(bmd.readdir(ESTILOS_DIR .. [[\*.txt]]) or {}) do
+			if not item.IsDir then
+				nomes[#nomes + 1] = (item.Name:gsub("%.txt$", ""))
+			end
+		end
+	end)
+	if #nomes == 0 then
+		log("      no style menu in " .. ESTILOS_DIR .. " - run giautosubs.py "
+			.. "once and it fills itself. Using the style in the file: '"
+			.. tostring(atual) .. "'")
+		return nil
+	end
+
+	-- O dialogo abre marcado no ULTIMO estilo escolhido, nao no que esta' gravado
+	-- no arquivo: o arquivo pode ser de antes da troca (e ate' guardar um nome
+	-- que saiu do menu, como `caixa_tres_cores`, e ai nada vinha marcado).
+	-- So' vale se ainda existe no menu; senao, o do arquivo, como antes.
+	local no_menu = {}
+	for _, n in ipairs(nomes) do no_menu[n] = true end
+	local ultimo = escolhas_lidas().estilo_json
+	local sugerido = (ultimo and no_menu[ultimo]) and ultimo or tostring(atual)
+
+	log("      " .. #nomes .. " style(s) available, current: '"
+		.. tostring(atual) .. "'" .. (sugerido ~= tostring(atual)
+			and (", last picked: '" .. sugerido .. "'") or ""))
+	local caminho = perguntar_arquivo(
+		"Pick the STYLE for this run (Cancel = keep '" .. tostring(atual) .. "')",
+		ESTILOS_DIR .. [[\]], sugerido .. ".txt",
+		"GiAutoSubs styles (*.txt)|*.txt")
+	local escolhido = caminho and caminho:match("([^\\/]+)%.txt$")
+	if not escolhido then
+		log("      no style chosen (cancelled or unavailable) - keeping '"
+			.. tostring(atual) .. "'")
+		return nil
+	end
+	lembrar("estilo_json", escolhido)
+	return escolhido
+end
+
 
 local function escolher_conflito(quantas, resumo)
 	if CONFLITO_FIXO ~= "" then
@@ -1167,7 +1517,7 @@ end
 -- elemento so: "fill rosa na palavra falada + caixa atras dela + sombra da
 -- caixa" sao tres elementos animados no mesmo keyframe.
 local function montar_keyframes(tempos, destaque, fps)
-	-- Estilo SEM destaque nenhum (o `caixa_tres_cores` e' um: a graca dele e' a
+	-- Estilo SEM destaque nenhum (o `3_color` e' um: a graca dele e' a
 	-- caixa, nao a palavra falada) serializa `destaque = nil`, e em Lua isso
 	-- quer dizer que a chave nem existe. Indexar direto quebrava a rodada
 	-- inteira com "attempt to index local 'destaque'" antes de criar um clipe.
@@ -1720,6 +2070,25 @@ local function conferir_conflitos(timeline)
 	end
 	table.sort(tracks)
 
+	-- A track DOMINANTE: a que tem mais legendas, e nao a mais baixa.
+	--
+	-- E' ela que o "substituir" reusa quando as legendas vao todas numa track so'
+	-- (ver o `trackLivre` no main). Um unico clipe perdido numa track de baixo -
+	-- restinho de uma rodada antiga, um titulo arrastado a mao - fazia a MENOR
+	-- track ganhar, e as 122 legendas voltavam uma track abaixo de onde estavam.
+	-- Trocar a track do usuario por causa de um clipe perdido e' pior que
+	-- qualquer escada.
+	--
+	-- Empate resolve pela mais BAIXA, so' pra a escolha ser deterministica: duas
+	-- tracks com a mesma contagem nao tem uma "certa", e sortear faria a mesma
+	-- rodada dar resultados diferentes.
+	local trackDominante, maior = nil, -1
+	for _, t in ipairs(tracks) do
+		if porTrack[t] > maior then
+			trackDominante, maior = t, porTrack[t]
+		end
+	end
+
 	local partes = {}
 	for _, t in ipairs(tracks) do
 		partes[#partes + 1] = string.format("V%d: %d", t, porTrack[t])
@@ -1729,6 +2098,8 @@ local function conferir_conflitos(timeline)
 		quantas = #existentes,
 		tracks = tracks,
 		menorTrack = menorTrack,
+		trackDominante = trackDominante,
+		porTrack = porTrack,
 		resumo = table.concat(partes, ", "),
 	}
 end
@@ -1804,8 +2175,56 @@ end
 -- segunda passada (template atualizado) abriria os tres dialogos de novo, e a
 -- resposta que interessa - a que acabou de ser dada - seria perguntada duas
 -- vezes seguidas.
+-- O recado do botao "Rebuild Captions" (ver PEDIDO).
+--
+-- Preenche os escapes que ja existem e SAI DO CAMINHO: depois desta funcao a
+-- rodada e' a rodada normal, com as quatro perguntas respondidas de antemao.
+local function ler_pedido()
+	local fh = io.open(PEDIDO, "r")
+	if not fh then return nil end
+	local t = {}
+	for linha in fh:lines() do
+		local k, v = linha:match("^([^\t]+)\t(.*)$")
+		if k then t[k] = (v:gsub("%s+$", "")) end
+	end
+	fh:close()
+	-- Apagado na LEITURA, nao no fim: se a rodada falhar no meio, o proximo
+	-- run manual tem que voltar a perguntar em vez de repetir calado um pedido
+	-- que ninguem fez agora.
+	pcall(function() os.remove(PEDIDO) end)
+	if not next(t) then return nil end
+	return t
+end
+
 local function main(resolve, jaTentou, respostas)
 	respostas = respostas or {}
+
+	-- O pedido so' no primeiro passe: o `main` roda duas vezes quando o template
+	-- e' atualizado, e na segunda o arquivo ja foi apagado - os escapes abaixo
+	-- sao locais do modulo e continuam valendo.
+	if not jaTentou then
+		local pedido = ler_pedido()
+		if pedido then
+			log("      asked for by the Rebuild Captions button:")
+			if pedido.arquivo and pedido.arquivo ~= "" then
+				ARQUIVO = pedido.arquivo
+				log("        captions : " .. pedido.arquivo)
+			end
+			if pedido.estilo and pedido.estilo ~= "" then
+				ESTILO_FIXO = pedido.estilo
+				log("        title    : " .. pedido.estilo)
+			end
+			if pedido.preset and pedido.preset ~= "" then
+				PRESET_FIXO = pedido.preset
+				log("        config   : " .. pedido.preset)
+			end
+			if pedido.conflito and pedido.conflito ~= "" then
+				CONFLITO_FIXO = pedido.conflito
+				log("        conflict : " .. pedido.conflito)
+			end
+			log("      no dialog opens this run - these were answered by the button.")
+		end
+	end
 	local project = resolve:GetProjectManager():GetCurrentProject()
 	local mediaPool = project:GetMediaPool()
 
@@ -1816,9 +2235,14 @@ local function main(resolve, jaTentou, respostas)
 	local caminho = respostas.arquivo or ARQUIVO
 	if not caminho or caminho == "" then
 		local anterior = escolhas_lidas().arquivo
+		-- Abre no ARQUIVO da rodada anterior, nao so' na pasta dele. Com o nome
+		-- fixo em `legendas.lua`, o OK direto pegava o arquivo mais VELHO do
+		-- corte (o de antes de trocar estilo/caracteres), e com ele o estilo
+		-- velho - "escolhi 3_color_fixo e veio o de 3 cores".
 		caminho = perguntar_arquivo(
 			"3/3  Pick the legendas.lua with the caption text",
-			pasta_de(anterior) or "", "legendas.lua",
+			pasta_de(anterior) or "",
+			anterior and anterior:match("([^\\/]+)$") or "legendas.lua",
 			"GiAutoSubs captions (*.lua)|*.lua")
 		-- O `lembrar` NAO acontece aqui: so' depois de o arquivo carregar como
 		-- legendas de verdade (logo abaixo do `ler_dados`). Gravando na escolha,
@@ -1848,6 +2272,44 @@ local function main(resolve, jaTentou, respostas)
 	end
 	-- Carregou e e' legendas: agora sim vale como "onde o dialogo abre".
 	lembrar("arquivo", caminho)
+
+	-- QUAL ESTILO esta rodada usa.
+	--
+	-- Aqui, e nao antes: a pergunta precisa dizer qual estilo esta' no arquivo, e
+	-- pra isso o arquivo tem que estar lido. Trocar de estilo quer dizer REGERAR
+	-- (quem compila estilo e' o Python), e o arquivo novo vira o arquivo desta
+	-- rodada - com o `meta` dele apontando pra ele mesmo.
+	--
+	-- A escolha viaja no `respostas` como as outras: o `main` roda duas vezes
+	-- quando o template precisa ser atualizado, e sem isso a segunda passada
+	-- perguntaria de novo - e regeraria de novo.
+	if not respostas.estiloFeito then
+		respostas.estiloJson = escolher_estilo_json(dados.estilo)
+		respostas.estiloFeito = true
+	end
+	if respostas.estiloJson and respostas.estiloJson ~= dados.estilo then
+		log("      style for this run: '" .. respostas.estiloJson
+			.. "' (the file was built with '" .. tostring(dados.estilo) .. "')")
+		local novo_arquivo, porque = regerar(dados.meta, respostas.estiloJson)
+		if novo_arquivo then
+			local novos, err2 = ler_dados(novo_arquivo)
+			if novos then
+				dados, caminho = novos, novo_arquivo
+				respostas.arquivo = caminho
+				lembrar("arquivo", caminho)
+				log(string.format("      rebuilt with '%s': %d captions | %s",
+					tostring(dados.estilo), #dados.segments, caminho))
+			else
+				log("      WARNING: the new file did not load (" .. tostring(err2)
+					.. ") - going on with the style already in " .. caminho)
+			end
+		else
+			log("      WARNING: could not rebuild with that style: "
+				.. tostring(porque))
+			log("      going on with '" .. tostring(dados.estilo)
+				.. "', the style already in the file.")
+		end
+	end
 	log(string.format("      %d captions | style '%s'",
 		#dados.segments, tostring(dados.estilo)))
 
@@ -1994,7 +2456,8 @@ local function main(resolve, jaTentou, respostas)
 	-- chegou ate' aqui, e perguntar antes seria abrir um dialogo pra depois
 	-- descobrir que nao ha timeline.
 	if not respostas.presetFeito then
-		respostas.preset, respostas.rotuloPreset = escolher_preset()
+		respostas.preset, respostas.rotuloPreset, respostas.presetCaminho =
+			escolher_preset()
 		respostas.presetFeito = true
 	end
 	local configUsada = "none (the style baked into legendas.lua)"
@@ -2175,8 +2638,25 @@ local function main(resolve, jaTentou, respostas)
 						.. "Only clips carrying the GiAutoSubs stamp were touched.",
 						#alvos))
 					-- A track deles ficou vazia; usar ela evita a escada.
-					if conf.menorTrack and conf.menorTrack <= tracksAntes then
-						trackLivre = conf.menorTrack
+					--
+					-- Com TODAS as legendas numa track (o caso normal), a que
+					-- vale e' a DOMINANTE - onde elas de fato estavam. A menor
+					-- ocupada era o criterio antigo, e um clipe perdido numa
+					-- track de baixo mudava a track de todas as outras.
+					--
+					-- Com uma track por falante, a base continua sendo a MENOR:
+					-- as faixas foram criadas subindo a partir dela
+					-- (`trackLivre + faixa - 1`), entao e' ela que reconstroi o
+					-- mesmo empilhamento.
+					local base = trackUnica and conf.trackDominante
+						or conf.menorTrack
+					if base and base <= tracksAntes then
+						trackLivre = base
+						log(string.format("      reusing video track %d - it held "
+							.. "%d of the %d captions that were just removed%s",
+							base, (conf.porTrack or {})[base] or 0, #alvos,
+							(#conf.tracks > 1 and not trackUnica)
+								and " (lane 1; the others stack above it)" or ""))
 					end
 				else
 					log("      WARNING: DeleteClips refused - the old captions are")
@@ -2232,6 +2712,62 @@ local function main(resolve, jaTentou, respostas)
 				.. "exist at that frame and were left as they are", #contornados))
 		end
 
+		-- NENHUMA legenda alcanca o frame em que a proxima da MESMA track comeca.
+		--
+		-- `endFrame` e' EXCLUSIVO - MEDIDO no Resolve em 28/09 pelo GiDiagGaps:
+		-- `endFrame = 55` deu `GetDuration() = 55`, entao o clipe ocupa
+		-- recordFrame .. recordFrame+endFrame-1. Ate' ali o codigo supunha
+		-- INCLUSIVO (palpite de 27/09, nunca medido) e aparava 1 frame de cada
+		-- legenda: com o `--no-gaps` isso deixava 1 frame VAZIO em todas as 121
+		-- trocas, e a caixa piscava - o "sem buracos nao funciona".
+		--
+		-- O clamp continua porque sobreposicao DE VERDADE existe (transcricao
+		-- com segmentos sobrepostos, que o --no-gaps nunca encolhe), e inserir
+		-- clipe onde ja ha clipe, na mesma track, derruba o Resolve.
+		--
+		-- Por track, e por frame de entrada: duas legendas de tracks diferentes
+		-- podem se sobrepor a vontade (e' o caso normal da tela dividida).
+		local por_track = {}
+		for k, c in ipairs(clipes) do
+			por_track[c.trackIndex] = por_track[c.trackIndex] or {}
+			local l = por_track[c.trackIndex]
+			l[#l + 1] = k
+		end
+		local aparados, colados = 0, 0
+		for _, indices in pairs(por_track) do
+			table.sort(indices, function(a, b)
+				return clipes[a].recordFrame < clipes[b].recordFrame
+			end)
+			for n = 1, #indices - 1 do
+				local atual, prox = clipes[indices[n]], clipes[indices[n + 1]]
+				-- a DURACAO maxima: ate' o frame em que a proxima entra, sem ele
+				local teto = prox.recordFrame - atual.recordFrame
+				if atual.endFrame > teto then
+					-- Piso ZERO: duas legendas no mesmo frame nao cabem, e um
+					-- clipe sem duracao o Resolve descarta - recusa UM clipe e o
+					-- log diz, melhor que derrubar o programa.
+					atual.endFrame = math.max(0, teto)
+					aparados = aparados + 1
+					if teto < 1 then colados = colados + 1 end
+				end
+			end
+		end
+		if aparados > 0 then
+			log(string.format("      %d caption(s) trimmed so they end where the "
+				.. "next one starts (they overlapped in the file - overlapping "
+				.. "clips on one track crash Resolve)", aparados))
+		end
+		if colados > 0 then
+			log(string.format("      WARNING: %d caption(s) start on the same "
+				.. "frame as the next one, so there is no room for them at all.",
+				colados))
+			log("      Resolve DROPS a clip with no span, without saying anything "
+				.. "(a 1-frame append fails silently) - expect that many fewer")
+			log("      captions than the file has. The cause is upstream: two "
+				.. "captions with the same start frame (a zero-length segment in")
+			log("      the transcript).")
+		end
+
 		-- `seg` nao e' campo do AppendToTimeline; ele so' viaja aqui dentro. Se
 		-- sobrar na tabela o Resolve ignora, mas mandar lixo pra API e' como se
 		-- descobre, meses depois, que ela nao ignorava tanto assim.
@@ -2261,10 +2797,15 @@ local function main(resolve, jaTentou, respostas)
 	-- ou perdeu palavra (so' no modo "use these")
 	local reajustados = {}
 	local nomesOffset, viaTexto, viaPreset = {}, "?", "?"
-	-- O estilo pede terceira cor de caixa e o Title escolhido nao tem esse
-	-- controle? `nil` = ainda nao foi possivel olhar (ver `conferir_camada3`).
-	local camada3Ausente = nil
-
+	-- Quantos campos da aba Meta foram carimbados no ULTIMO clipe. Entra no
+	-- resumo porque um ZERO aqui quer dizer "os clipes nao sabem de que arquivo
+	-- nasceram", e o botao Rebuild nao vai funcionar neles - o tipo de coisa que
+	-- so' se descobre clicando, se ninguem contar.
+	local metaEscritos = 0
+	-- O estilo pede caixa de tamanho FIXO em px, mas o Title usado nao sabe
+	-- desenhar uma? (so' o `GiAutoSubs Fixo` sabe: nele a caixa e' um retangulo de
+	-- verdade). `nil` = ainda nao olhei; e' respondido no primeiro clipe.
+	local fixoAusente
 	-- `esperar` aqui e' laco quente de CPU (nao existe `bmd.wait` no host de
 	-- Scripts). Na primeira passada nao vale a pena esperar clipe nenhum: o
 	-- tempo gasto estilizando os outros ja da' ao Resolve o que ele precisa, e
@@ -2541,25 +3082,6 @@ local function main(resolve, jaTentou, respostas)
 		-- precisa estar no PRESET. (De quebra, o Inspector passa a dizer a
 		-- verdade sobre essa legenda em vez de mostrar uma bolha ligada que nao
 		-- aparece.)
-		-- O carimbo de versao (`GiAutoSubsVersao`) e' UM numero para as DUAS
-		-- variantes do macro, entao um clipe do `GiAutoSubs Caption` passa na
-		-- conferencia de um `legendas.lua` que pede caixa de tres cores. A
-		-- terceira cor ate' aparece (o elemento 8 e' input cru do Text+, escrito
-		-- no passo 5), mas ela nao existe no Inspector e o primeiro Apply Style
-		-- a apaga. Escolher o Title errado na pergunta 1 era silencioso.
-		--
-		-- Procura em TODOS os tools do comp: o controle mora no MacroOperator e
-		-- nao no Text+, e perguntar so' ao `tool` daria "ausente" nos dois Titles.
-		if camada3Ausente == nil and (dados.controles or {}).BoxLayer3Enabled then
-			local achou = false
-			pcall(function()
-				for _, t in pairs(comp:GetToolList(false) or {}) do
-					if t:GetInput("BoxLayer3Enabled") ~= nil then achou = true end
-				end
-			end)
-			camada3Ausente = not achou
-		end
-
 		local preset = dados.controles
 		if not tempos and next(so_no_destaque) then
 			preset = {}
@@ -2583,12 +3105,69 @@ local function main(resolve, jaTentou, respostas)
 		-- tela - voce teria que clicar Apply Style clipe a clipe.
 		viaPreset = aplicar_preset(comp, tool, preset, manterTempos)
 
+		-- O Title usado sabe desenhar a caixa de tamanho fixo?
+		--
+		-- Pergunta ao CLIPE, e nao ao nome do Title: o carimbo de versao e' UM
+		-- numero pros dois macros, entao um clipe do `Caption` passa por novo.
+		-- Quem responde e' a presencia do retangulo.
+		if fixoAusente == nil
+			and ((dados.controles or {}).TextBoxWidth or 0) > 0 then
+			local achou = false
+			pcall(function() achou = comp:FindTool("GiBoxMask1") ~= nil end)
+			fixoAusente = not achou
+		end
+
+		-- 5b2) A LARGURA MEDIDA desta legenda, em em.
+		--
+		-- Vem do giautosubs.py, que a mede na fonte de verdade (Pillow). E' o que
+		-- faz a caixa fixa sair do mesmo tamanho em toda legenda - a folga e' o que
+		-- falta pro alvo, e com a largura certa a soma fecha sempre no alvo.
+		--
+		-- `SetData` e nao controle: e' medida, nao escolha (mesma razao do
+		-- `GiCharsBuilt`). Sem ela, o macro cai no palpite e avisa.
+		if seg.largura_em then
+			pcall(function() tool:SetData("GiTextEm", seg.largura_em) end)
+		end
+
+		-- 5c) a aba Meta: de onde esta legenda veio (ver `escrever_meta`).
+		--
+		-- DEPOIS do preset de proposito. O `aplicar_preset` escreve pelo
+		-- `SetInputValues`, e um dia em que a Meta entrasse no `InputKeys` por
+		-- engano ela seria sobrescrita ali - nesta ordem, quem fica por cima e'
+		-- o valor desta rodada.
+		metaEscritos = escrever_meta(comp, tool, dados.meta, nomeTemplate,
+			respostas.presetCaminho)
+
 		-- 6) direcao das sombras / do outline
+		--
+		-- MENOS os elementos que o GIRO conduz. Com `BoxSpinSpeed ~= 0` o
+		-- `deslocar()` do ApplyGiStyle poe uma EXPRESSAO no `Offset` da segunda e
+		-- da terceira cor da caixa (elementos 7 e 8), e escrever numero num input
+		-- que carrega expressao e' aceito e ignorado - ou derruba a conexao, sem
+		-- erro. Como o passo 6 roda logo depois do 5b, o script desfazia o giro
+		-- que o macro tinha acabado de montar.
+		--
+		-- O raio e a fase do giro saem justamente desse offset, que o macro leu do
+		-- controle - entao nao se perde nada deixando de escrever o input aqui.
+		--
+		-- A sombra da BOLHA (elemento 5) nao gira: ela acompanha a palavra falada
+		-- e continua recebendo o numero.
+		local giro = tonumber((dados.controles or {}).BoxSpinSpeed) or 0
+		local GIRAM = { [EL_CAIXA_SOMBRA] = true, [EL_CAMADA3] = true }
 		for n, xy in pairs(offsets) do
-			local usado = aplicar_offset(tool, n, xy, i == tarefas[1].i)
-			-- `false` e nao nil: com nil a chave nem existe, e o `pairs` do
-			-- resumo passava batido.
-			if i == tarefas[1].i then nomesOffset[n] = usado or false end
+			if giro ~= 0 and GIRAM[n] then
+				if i == tarefas[1].i then
+					nomesOffset[n] = false
+					log(string.format("      element %d offset left to the SPIN "
+						.. "expression (Spin Speed %.4g) - writing a number over "
+						.. "an expression would kill it", n, giro))
+				end
+			else
+				local usado = aplicar_offset(tool, n, xy, i == tarefas[1].i)
+				-- `false` e nao nil: com nil a chave nem existe, e o `pairs` do
+				-- resumo passava batido.
+				if i == tarefas[1].i then nomesOffset[n] = usado or false end
+			end
 		end
 
 		-- 7) (vago) - aqui morava a COR DO FALANTE, tirada no macro 22.
@@ -2720,7 +3299,11 @@ local function main(resolve, jaTentou, respostas)
 		end
 	end
 	if template then
-		log(string.format("  template          %s", tostring(template:GetName())))
+		-- pcall: no fim da rodada o MediaPoolItem pode ja nao responder (o
+		-- metodo vem nil) e o resumo morria DEPOIS de os clipes estarem prontos.
+		local nomeT = nomeTemplate
+		pcall(function() nomeT = template:GetName() or nomeT end)
+		log(string.format("  template          %s", tostring(nomeT)))
 	end
 	log(string.format("  caption file      %s", tostring(caminho)))
 	log(string.format("  config            %s", tostring(configUsada)))
@@ -2754,6 +3337,30 @@ local function main(resolve, jaTentou, respostas)
 	end
 	log(string.format("  text applied      via %s", viaTexto))
 	log(string.format("  style applied     via %s", viaPreset))
+	if fixoAusente then
+		log("")
+		log("  ==================================================================")
+		log("  THE FIXED BOX DID NOT HAPPEN")
+		log("")
+		log("  This style asks for a box of a fixed size in pixels, and that only")
+		log("  exists in the Title 'GiAutoSubs Fixo' - there the box is a real")
+		log("  rectangle. The clips just made do NOT have it, so their box is a")
+		log("  border around the text and follows the text, as always.")
+		log("")
+		log("  Why it happens even when you pick 'GiAutoSubs Fixo': this script")
+		log("  takes the Title from the MEDIA POOL, not from Effects > Titles. If")
+		log("  it is not in the Media Pool of this project, the run falls back to")
+		log("  'GiAutoSubs Caption'.")
+		log("")
+		log("  Fix it once, and it sticks:")
+		log("    1. Effects > Titles, find 'GiAutoSubs Fixo'")
+		log("    2. drag it into the MEDIA POOL (not onto the timeline)")
+		log("    3. run this script again")
+		log("  ==================================================================")
+	end
+	log(string.format("  meta stamped      %d field(s) per clip%s", metaEscritos,
+		metaEscritos == 0 and " - the Rebuild button has nothing to read"
+			or " (the Meta tab: where these captions came from)"))
 	log(string.format("  word highlight    %d clips with per-word keyframes",
 		contar(comDestaque)))
 	log(string.format("  spline cleared    %d clips (removes the macro's sample "
@@ -2800,13 +3407,6 @@ local function main(resolve, jaTentou, respostas)
 			.. " --out turnsWhisper_words.json")
 		log("                      giautosubs.py <folder> --transcript"
 			.. " turnsWhisper_words.json")
-	end
-
-	if camada3Ausente then
-		log("  WRONG TITLE       the style asks for the three-colour box, but this")
-		log("                    Title has no 'Box Layer 3' group. The third colour")
-		log("                    is drawn, and the first Apply Style wipes it.")
-		log("                    Pick 'GiAutoSubs 3color' in question 1 and run again.")
 	end
 
 	local semOffset = {}
@@ -2869,7 +3469,14 @@ if not app then
 		main = main,
 		ler_preset = ler_preset,
 		fundir_preset = fundir_preset,
-		definir_arquivo = function(caminho) ARQUIVO = caminho end,
+		-- Devolve o anterior, como o `definir_bin`: sem isso quem troca o arquivo
+		-- num teste nao tem como devolve-lo, e as secoes seguintes da suite
+		-- rodam sem arquivo nenhum.
+		definir_arquivo = function(caminho)
+			local antes = ARQUIVO
+			ARQUIVO = caminho
+			return antes
+		end,
 		-- Mesmo motivo do `definir_bin` abaixo: uma rodada de teste nao pode
 		-- escolher o preset da rodada de verdade nem carimbar o `_giescolhas`
 		-- que guarda onde os dialogos abrem.
